@@ -3,18 +3,19 @@
 ## classification.R
 ## -----------------
 
-## The code below was executed using "R version 3.5.2 (2018-12-20) -- Eggshell Igloo 64-bit"
 
 rm(list = ls(all = TRUE))  # clear environment
 
 ## Load packages
-## First, install "RTools34.exe" (https://cran.r-project.org/bin/windows/Rtools/history.html)
 library(here)
 library(tm)
 library(stringr)
 library(dplyr)
 library(tidyr)
 library(readxl)
+
+## Ensure generated classification files can be written on a fresh checkout.
+dir.create(here("data"), recursive = TRUE, showWarnings = FALSE)
 
 ## Import meta-articles. Note that 32 articles were dropped as they don't have list of references when imported from Scopus
 my_data <- read_excel(here("data", "meta-articles imported from scopus.xlsx"), sheet = "original")

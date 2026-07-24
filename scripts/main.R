@@ -14,13 +14,26 @@ library(gridExtra); library(ggeasy)
 library(gt); library(gtExtras); library(orchaRd)
 library(scales); library(here)
 
+## User-adjustable analysis settings.
+## n_cores controls parallel analyses: use 1 on low-memory laptops, 2-4 on
+## typical 4-8 core laptops/desktops, and 6-8 or more on workstations/HPC nodes.
+## Keep at least one core free for the operating system.
+n_cores <- 7
+
+## Number of Monte Carlo/bootstrap iterations for confidence intervals. The paper
+## uses 1000; smaller values are useful only for quick code checks.
+n_iterations <- 1000
+
 ## Functions
 source(here("scripts", "functions.R")) 
 
-## Ensure all documented output directories exist before writing files.
-dir.create(here("results", "main"), recursive = TRUE, showWarnings = FALSE)
-dir.create(here("results", "main", "pet_peese_rstandard"), recursive = TRUE, showWarnings = FALSE)
-dir.create(here("results", "robustness"), recursive = TRUE, showWarnings = FALSE)
+## Ensure generated outputs can be written on a fresh checkout.
+output_dirs <- list(
+  here("results", "main"),
+  here("results", "main", "pet_peese_rstandard"),
+  here("results", "robustness")
+)
+invisible(lapply(output_dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
 
 ## Import the data
 meta <- read_excel(here("data","MasterData.xlsx"))
@@ -71,7 +84,7 @@ etype <- guide <- prere <- subfd <- sdesn <- list()
 pkg <- c("metafor","dplyr","clubSandwich","orchaRd", "here")
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 pet_peese_rstud <- foreach(i = 1:length(summary(myDat)[,1]),.packages=pkg,.combine="rbind") %dopar% {  
   
@@ -965,7 +978,7 @@ for (a in 1:(length(p.grid.plot2)-1)) {
 
 ## Simulating the counterfactual z-values
 
-cl <- makeCluster(7)
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot <- cf(dat=myDat, z.grid=z.grid.plot)
 stopCluster(cl)
@@ -973,12 +986,12 @@ saveRDS(z.plot, file=here("results","main","z_plot_pet_peese_rstandard_half.rds"
 
 
 ## Confidence interval for the counterfactuals
-it <- 1000                          #bootstrap size
+it <- n_iterations                  #bootstrap size
 clu <- unique(pps_rstandard$cID)    #cluster id
 length(clu)                         #704
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.ci <- cf.ci.cluster(dat=myDat, z.grid=z.grid.plot, iters=it, cluster=clu)
 stopCluster(cl)
@@ -1037,7 +1050,7 @@ dev.off()
 
 ## Functions
 source(here("scripts", "functions.R")) 
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab <- cf(dat=myDat, z.grid=p.grid.tab) #VERY IMPORTANT: Make sure sure that you're using the appropriate function for each case.
 stopCluster(cl)
@@ -1048,10 +1061,10 @@ saveRDS(p.tab, file=here("results","main","p_tab_pps_rstandard_half.rds"))
 
 clu <- unique(pps_rstandard$cID)
 length(clu) #704
-it <- 1000
+it <- n_iterations
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.ci <- cf.ci.cluster(dat=myDat, z.grid=p.grid.tab, iters=it, cluster=clu) #VERY IMPORTANT: Make sure sure that you're using the appropriate function for each case.
 #p.tab.ci <- cf.ci.cluster.se(dat=myDat, z.grid=p.grid.tab, iters=it, cluster=clu) #for 1.5*se
@@ -1133,14 +1146,14 @@ write.csv(p.table, here("results","main","p.table.ci_pet_peese_rstandard_half_Ta
 ## -------------
 
 ## Ecology
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.eco <- cf(dat=mydat.eco, z.grid=z.grid.plot)
 stopCluster(cl)
 save(z.plot.eco, file=here("results","robustness","pet_peese_rstandard_z_plot.eco.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.ci.eco <- cf.ci.cluster(dat=mydat.eco, z.grid=z.grid.plot,iters=it, cluster=clu[i.eco])
 stopCluster(cl)
@@ -1149,14 +1162,14 @@ print(e.time - s.time) #about 33 mins
 save(z.plot.ci.eco,file=here("results","robustness","pet_peese_rstandard_z_plot_ci.eco.rds"))
 
 ## Environmental Chemistry
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.enc <- cf(dat=mydat.enc, z.grid=z.grid.plot)
 stopCluster(cl)
 save(z.plot.enc, file=here("results","robustness","pet_peese_rstandard_z_plot.enc.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.ci.enc <- cf.ci.cluster(dat=mydat.enc,z.grid=z.grid.plot,iters=it, cluster=clu[i.enc])
 stopCluster(cl)
@@ -1165,14 +1178,14 @@ print(e.time - s.time)
 save(z.plot.ci.enc,file=here("results","robustness","pet_peese_rstandard_z_plot_ci.enc.rds"))
 
 ## Environmental Engineering
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.ene <- cf(dat=mydat.ene, z.grid=z.grid.plot)
 stopCluster(cl)
 save(z.plot.ene, file=here("results","robustness","pet_peese_rstandard_z_plot.ene.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.ci.ene <- cf.ci.cluster(dat=mydat.ene, z.grid=z.grid.plot, iters=it, cluster=clu[i.ene])
 stopCluster(cl)
@@ -1181,14 +1194,14 @@ print(e.time - s.time)
 save(z.plot.ci.ene,file=here("results","robustness","pet_peese_rstandard_z_plot_ci.ene.rds"))
 
 ## Nature and Landscape Conservation
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.nlc <- cf(dat=mydat.nlc, z.grid=z.grid.plot)
 stopCluster(cl)
 save(z.plot.nlc, file=here("results","robustness","pet_peese_rstandard_z_plot.nlc.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.ci.nlc <- cf.ci.cluster(dat=mydat.nlc, z.grid=z.grid.plot,iters=it, cluster=clu[i.nlc])
 stopCluster(cl)
@@ -1197,14 +1210,14 @@ print(e.time - s.time)
 save(z.plot.ci.nlc,file=here("results","robustness","pet_peese_rstandard_z_plot_ci.nlc.rds"))
 
 ## Management
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.mpl <- cf(dat=mydat.mpl, z.grid=z.grid.plot)
 stopCluster(cl)
 save(z.plot.mpl, file=here("results","robustness","pet_peese_rstandard_z_plot.mpl.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.ci.mpl <- cf.ci.cluster(dat=mydat.mpl, z.grid=z.grid.plot,iters=it, cluster=clu[i.mpl])
 stopCluster(cl)
@@ -1213,14 +1226,14 @@ print(e.time - s.time)
 save(z.plot.ci.mpl,file=here("results","robustness","pet_peese_rstandard_z_plot_ci.mpl.rds"))
 
 ## Water Science and Technology
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.wst <- cf(dat=mydat.wst, z.grid=z.grid.plot)
 stopCluster(cl)
 save(z.plot.wst, file=here("results","robustness","pet_peese_rstandard_z_plot.wst.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.ci.wst <- cf.ci.cluster(dat=mydat.wst, z.grid=z.grid.plot,iters=it, cluster=clu[i.wst])
 stopCluster(cl)
@@ -1229,14 +1242,14 @@ print(e.time - s.time)
 save(z.plot.ci.wst,file=here("results","robustness","pet_peese_rstandard_z_plot_ci.wst.rds"))
 
 ## Health, Toxicology and Mutagenesis
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.htm <- cf(dat=mydat.htm, z.grid=z.grid.plot)
 stopCluster(cl)
 save(z.plot.htm, file=here("results","robustness","pet_peese_rstandard_z_plot.htm.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 z.plot.ci.htm <- cf.ci.cluster(dat=mydat.htm, z.grid=z.grid.plot,iters=it, cluster=clu[i.htm])
 stopCluster(cl)
@@ -1454,14 +1467,14 @@ dev.off()
 
 ## ESR table for each subfield
 # eco
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.eco <- cf(dat = mydat.eco, z.grid = p.grid.tab)
 stopCluster(cl)
 save(p.tab.eco, file=here("results","robustness","pet_peese_rstandard_p_tab.eco.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.ci.eco <- cf.ci.cluster(dat = mydat.eco, z.grid = p.grid.tab, iters = it, cluster = clu[i.eco])
 stopCluster(cl)
@@ -1470,14 +1483,14 @@ print(e.time - s.time)  #about 44 mins for 1000 iterations.
 save(p.tab.ci.eco, file=here("results","robustness","pet_peese_rstandard_p_tab_ci.eco.rds"))
 
 # enc
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.enc <- cf(dat = mydat.enc, z.grid = p.grid.tab)
 stopCluster(cl)
 save(p.tab.enc, file=here("results","robustness","pet_peese_rstandard_p_tab.enc.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.ci.enc <- cf.ci.cluster(dat = mydat.enc, z.grid = p.grid.tab, iters = it, cluster = clu[i.enc])
 stopCluster(cl)
@@ -1486,14 +1499,14 @@ print(e.time - s.time)  #about 18 mins for 1000 iterations.
 save(p.tab.ci.enc, file=here("results","robustness","pet_peese_rstandard_p_tab_ci.enc.rds"))
 
 # ene
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.ene <- cf(dat = mydat.ene, z.grid = p.grid.tab)
 stopCluster(cl)
 save(p.tab.ene, file=here("results","robustness","pet_peese_rstandard_p_tab.ene.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.ci.ene <- cf.ci.cluster(dat = mydat.ene, z.grid = p.grid.tab,iters = it, cluster = clu[i.ene])
 stopCluster(cl)
@@ -1502,14 +1515,14 @@ print(e.time - s.time)  #about 4 mins for 1000 iterations.
 save(p.tab.ci.ene, file=here("results","robustness","pet_peese_rstandard_p_tab_ci.ene.rds"))
 
 # nlc
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.nlc <- cf(dat = mydat.nlc, z.grid = p.grid.tab)
 stopCluster(cl)
 save(p.tab.nlc, file=here("results","robustness","pet_peese_rstandard_p_tab.nlc.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.ci.nlc <- cf.ci.cluster(dat = mydat.nlc, z.grid = p.grid.tab, iters = it, cluster = clu[i.nlc])
 stopCluster(cl)
@@ -1518,14 +1531,14 @@ print(e.time - s.time)  #about 22 mins for 1000 iterations.
 save(p.tab.ci.nlc, file=here("results","robustness","pet_peese_rstandard_p_tab_ci.nlc.rds"))
 
 # mpl
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.mpl <- cf(dat = mydat.mpl, z.grid = p.grid.tab)
 stopCluster(cl)
 save(p.tab.mpl, file=here("results","robustness","pet_peese_rstandard_p_tab.mpl.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.ci.mpl <- cf.ci.cluster(dat = mydat.mpl, z.grid = p.grid.tab, iters = it, cluster = clu[i.mpl])
 stopCluster(cl)
@@ -1534,14 +1547,14 @@ print(e.time - s.time)  #about 2 mins for 1000 iterations.
 save(p.tab.ci.mpl, file=here("results","robustness","pet_peese_rstandard_p_tab_ci.mpl.rds"))
 
 # wst
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.wst <- cf(dat = mydat.wst, z.grid = p.grid.tab)
 stopCluster(cl)
 save(p.tab.wst, file=here("results","robustness","pet_peese_rstandard_p_tab.wst.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.ci.wst <- cf.ci.cluster(dat = mydat.wst, z.grid = p.grid.tab,iters = it, cluster = clu[i.wst])
 stopCluster(cl)
@@ -1550,14 +1563,14 @@ print(e.time - s.time)  #about 1 min for 1000 iterations.
 save(p.tab.ci.wst, file=here("results","robustness","pet_peese_rstandard_p_tab_ci.wst.rds"))
 
 # htm
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.htm <- cf(dat = mydat.htm, z.grid = p.grid.tab)
 stopCluster(cl)
 save(p.tab.htm, file=here("results","robustness","pet_peese_rstandard_p_tab.htm.rds"))
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 p.tab.ci.htm <- cf.ci.cluster(dat = mydat.htm, z.grid = p.grid.tab, iters = it, cluster = clu[i.htm])
 stopCluster(cl)
@@ -2024,7 +2037,7 @@ for (ii in 1:dim(summary(myDat))[1]) {
 source(here("scripts", "functions.R")) #functions
 
 s.time <- Sys.time()
-cl <- makeCluster(7) 
+cl <- makeCluster(n_cores)
 registerDoParallel(cl)
 cf.per.meta <- cf.disagg(dat=myDat, z.grid=p.grid.tab)
 stopCluster(cl)
