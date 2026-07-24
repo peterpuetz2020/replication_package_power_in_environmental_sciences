@@ -424,13 +424,16 @@ gtsave(het_distrubtion,file=here("results","robustness","pet_peese_rstandard_het
 ## for the following two cases.
 
 ## Excluding null MAs (Nord et al 2017; Yang et al. 2023)
-pps_rstandard <- pps_rstandard %>% filter(sig_overall < 0.05)
-dim(pps_rstandard)
+## Keep these robustness samples in separate objects so the main analysis below
+## continues to use the full 704-cluster data set.
+pps_rstandard_sig_overall <- pps_rstandard %>% filter(sig_overall < 0.05)
+dim(pps_rstandard_sig_overall)
 
 ## Excluding statistically non-significant estimates (Lamberink et al. 2018)
-pps_rstandard$abs.z <- abs(pps_rstandard$yi/pps_rstandard$sei)
-pps_rstandard <- pps_rstandard %>% filter(abs.z > 1.96)
-dim(pps_rstandard)
+pps_rstandard_sig_estimates <- pps_rstandard %>%
+  mutate(abs.z = abs(yi/sei)) %>%
+  filter(abs.z > 1.96)
+dim(pps_rstandard_sig_estimates)
 
 ## -----------------------------------------------------------------------------
 
