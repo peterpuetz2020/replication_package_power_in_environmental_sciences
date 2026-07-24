@@ -24,8 +24,18 @@ n_cores <- 7
 ## uses 1000; smaller values are useful only for quick code checks.
 n_iterations <- 1000
 
+## Multiplier applied to genuine-effect estimates before power analyses. The
+## default 0.5 uses half of the meta-average; change to 1 for the full
+## meta-average or 0.25 for one fourth of the meta-average.
+meta_average_multiplier <- 0.5
+
+## Multiplier applied to the between-study variance (tau^2) in counterfactual
+## z-/p-value simulations. The manuscript sensitivity analyses use 0, 0.25,
+## and 0.5; set one value here to choose the degree of heterogeneity.
+heterogeneity_multiplier <- 0.25
+
 ## Functions
-source(here("scripts", "functions.R")) 
+source(here("scripts", "functions.R"))
 
 ## Ensure generated outputs can be written on a fresh checkout.
 output_dirs <- list(
@@ -52,21 +62,21 @@ for (i in unique(meta$cID)){
 
 ## check
 mss <- NULL
-for (i in 1:dim(summary(myDat))[1]) { 
+for (i in 1:dim(summary(myDat))[1]) {
   mss[i] <- length(myDat[[i]]$sei)
 }
-length(mss) #704   
+length(mss) #704
 sum(mss)    #64711
 
 
 ## -----------------------------------------------------------------------------
 
 ## Implementing extended PET-PEESE to estimate genuine effect
-## This approach takes into account the non-independence of 
+## This approach takes into account the non-independence of
 ## effect sizes & correct for publication bias (Nakagawa et al. 2021)
 
 ## Note that influential observations are excluded using standardized residuals (aka internally studentized residuals)
-## Trouble makers when fitting PEESE ("Error: Model matrix not of full rank 
+## Trouble makers when fitting PEESE ("Error: Model matrix not of full rank
 ## (the columns are perfectly correlated). Cannot fit model ("259-1"  "259-2"  "2204-2" "850-1"). For this, these meta-analyses are dropped.
 
 petStud <- petStud.CR2 <- petStud.rob <- petGE1Stud <- pet.pv1.rob.stud <- petpeeseGE2 <- petpeese.pv2.rob <- list()
@@ -86,12 +96,12 @@ pkg <- c("metafor","dplyr","clubSandwich","orchaRd", "here")
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-pet_peese_rstud <- foreach(i = 1:length(summary(myDat)[,1]),.packages=pkg,.combine="rbind") %dopar% {  
-  
-  petMod[[i]] <- rma.mv(yi, vi, data=myDat[[i]], mods = ~1 + sei, method="REML", test="t", random=list(~1 | eID, ~1 | sID), control=list(rel.tol=1e-8)) 
-  rstud[[i]] <- as.data.frame(rstandard.rma.mv(petMod[[i]])) 
+pet_peese_rstud <- foreach(i = 1:length(summary(myDat)[,1]),.packages=pkg,.combine="rbind") %dopar% {
+
+  petMod[[i]] <- rma.mv(yi, vi, data=myDat[[i]], mods = ~1 + sei, method="REML", test="t", random=list(~1 | eID, ~1 | sID), control=list(rel.tol=1e-8))
+  rstud[[i]] <- as.data.frame(rstandard.rma.mv(petMod[[i]]))
   n_outliers[[i]] <- length(which(abs(rstud[[i]]$resid) >= 3)) #reference: page 97 of Gareth, Daniela, Trevor, & Robert (2013)
-  
+
   if(n_outliers[[i]] >= 1){  #when at least one influential observation is identified
     outliers_dropped[[i]] <- myDat[[i]] %>%
       cbind(rstud[[i]]) %>%
@@ -99,16 +109,16 @@ pet_peese_rstud <- foreach(i = 1:length(summary(myDat)[,1]),.packages=pkg,.combi
     petStud[[i]] <- rma.mv(yi, vi, data=outliers_dropped[[i]], mods=~1 + sei, random=list(~1 | eID, ~1 | sID), method="REML", test="t", control=list(rel.tol=1e-8))
     petStud.CR2[[i]] <- vcovCR(petStud[[i]], type="CR2")
     petStud.rob[[i]] <- coef_test(petStud[[i]], vcov=petStud.CR2[[i]])
-    pet.pv1.rob.stud[[i]] <- as.numeric(petStud.rob[[i]]$p_Satt[1])     
+    pet.pv1.rob.stud[[i]] <- as.numeric(petStud.rob[[i]]$p_Satt[1])
     pet.pv2.rob.stud[[i]] <- as.numeric(petStud.rob[[i]]$p_Satt[2]) #test small-study effect
-    
+
     if (pet.pv1.rob.stud[[i]] > 0.1) {
       petGE1Stud[[i]] <- round(as.numeric(petStud.rob[[i]]$beta[1]), 3)
       pet.pv1.rob.stud[[i]] <- as.numeric(petStud.rob[[i]]$p_Satt[1])
       pet.pv2.rob.stud[[i]] <- as.numeric(petStud.rob[[i]]$p_Satt[2]) #test small-study effect
       pet.tau2.stud[[i]] <- round(petStud[[i]]$sigma2[2], 3)          #variance of true effect (between-study variance)
       pet.isq.stud[[i]] <- round(as.numeric(i2_ml(petStud[[i]],method="matrix")[1]), 2) #total heterogeneity (I^2)
-      
+
       petpeeseGE2[[i]] <- replicate(n=length(outliers_dropped[[i]]$yi), petGE1Stud[[i]])
       petpeese.pv2[[i]] <- replicate(n=length(outliers_dropped[[i]]$yi), pet.pv1.rob.stud[[i]])
       petpeese.pv3[[i]] <- replicate(n=length(outliers_dropped[[i]]$yi), pet.pv2.rob.stud[[i]])
@@ -121,18 +131,18 @@ pet_peese_rstud <- foreach(i = 1:length(summary(myDat)[,1]),.packages=pkg,.combi
       peeseGE1Stud[[i]] <- round(as.numeric(peeseStud.rob[[i]]$beta[1]), 3)
       peese.pv1.rob.stud[[i]] <- as.numeric(peeseStud.rob[[i]]$p_Satt[1])
       peese.pv2.rob.stud[[i]] <- as.numeric(peeseStud.rob[[i]]$p_Satt[2]) #test small-study effect
-      
+
       peese.tau2.stud[[i]] <- round(peeseStud[[i]]$sigma2[2], 3)
       peese.isq.stud[[i]] <- round(as.numeric(i2_ml(peeseStud[[i]],method="matrix")[1]), 2)
-      
+
       petpeeseGE2[[i]] <- replicate(n=length(outliers_dropped[[i]]$yi), peeseGE1Stud[[i]])
       petpeese.pv2[[i]] <- replicate(n=length(outliers_dropped[[i]]$yi), peese.pv1.rob.stud[[i]])
       petpeese.pv3[[i]] <- replicate(n=length(outliers_dropped[[i]]$yi), peese.pv2.rob.stud[[i]])
       petpeese.tau2[[i]] <- replicate(n=length(outliers_dropped[[i]]$yi), peese.tau2.stud[[i]])
       petpeese.isq[[i]] <- replicate(n=length(outliers_dropped[[i]]$yi), peese.isq.stud[[i]])
     }
-    
-    metaID[[i]] <- outliers_dropped[[i]]$metaID 
+
+    metaID[[i]] <- outliers_dropped[[i]]$metaID
     cID[[i]] <- outliers_dropped[[i]]$cID
     sID[[i]] <- outliers_dropped[[i]]$sID
     eID[[i]] <- outliers_dropped[[i]]$eID
@@ -143,27 +153,27 @@ pet_peese_rstud <- foreach(i = 1:length(summary(myDat)[,1]),.packages=pkg,.combi
     prere[[i]] <- outliers_dropped[[i]]$prereg
     subfd[[i]] <- outliers_dropped[[i]]$subfield
     sdesn[[i]] <- outliers_dropped[[i]]$sdesign
-    
+
     df_outliers_dropped <- cbind.data.frame(metaID[[i]],cID[[i]],sID[[i]],eID[[i]],yi[[i]],vi[[i]],petpeeseGE2[[i]],petpeese.tau2[[i]],petpeese.isq[[i]],petpeese.pv2[[i]],petpeese.pv3[[i]],etype[[i]],guide[[i]],prere[[i]],subfd[[i]],sdesn[[i]])
     colnames(df_outliers_dropped) <- c("metaID","cID","sID","eID","yi","vi","GE","tau2","isq","sig_overall","small_study_effect_pval","etype","guide","prere","subfd","sdesn")
-    
+
     saveRDS(df_outliers_dropped, file=here("results","main","pet_peese_rstandard",paste0("meta_", outliers_dropped[[i]]$cID[1],".rds")))
     return(df_outliers_dropped)
-    
+
   } else { #when no influential observation is identified
     petMod[[i]] <- rma.mv(yi, vi, data=myDat[[i]],mods = ~1 + sei, random=list(~1 | eID, ~1 | sID), method="REML", test="t", control=list(rel.tol=1e-8))
     petMod.CR2[[i]] <- vcovCR(petMod[[i]], type="CR2")
     petMod.rob[[i]] <- coef_test(petMod[[i]], vcov=petMod.CR2[[i]])
-    pet.pv1.rob[[i]] <- as.numeric(petMod.rob[[i]]$p_Satt[1]) 
+    pet.pv1.rob[[i]] <- as.numeric(petMod.rob[[i]]$p_Satt[1])
     pet.pv2.rob.nonstud[[i]] <- as.numeric(petMod.rob[[i]]$p_Satt[2]) #test small-study effect
-    
+
     if (pet.pv1.rob[[i]] > 0.1) {
-      petGE1[[i]] <- round(as.numeric(petMod.rob[[i]]$beta[1]), 3) 
-      pet.pv1.rob[[i]] <- as.numeric(petMod.rob[[i]]$p_Satt[1]) 
+      petGE1[[i]] <- round(as.numeric(petMod.rob[[i]]$beta[1]), 3)
+      pet.pv1.rob[[i]] <- as.numeric(petMod.rob[[i]]$p_Satt[1])
       pet.pv2.rob.nonstud[[i]] <- as.numeric(petMod.rob[[i]]$p_Satt[2])
       pet.tau2.nonstud[[i]] <- round(petMod[[i]]$sigma2[2], 3)
       pet.isq.nonstud[[i]] <- round(as.numeric(i2_ml(petMod[[i]],method="matrix")[1]), 2)
-      
+
       petpeeseGE2[[i]] <- replicate(n=length(myDat[[i]]$yi), petGE1[[i]])
       petpeese.pv2[[i]] <- replicate(n=length(myDat[[i]]$yi), pet.pv1.rob[[i]])
       petpeese.pv3[[i]] <- replicate(n=length(myDat[[i]]$yi), pet.pv2.rob.nonstud[[i]])
@@ -173,19 +183,19 @@ pet_peese_rstud <- foreach(i = 1:length(summary(myDat)[,1]),.packages=pkg,.combi
       peeseMod[[i]] <-  rma.mv(yi, vi, data=myDat[[i]], mods = ~1 + vi, random=list(~1 | eID, ~1 | sID), method="REML", test="t", control=list(rel.tol=1e-8))
       peeseMod.CR2[[i]] <- vcovCR(peeseMod[[i]], type="CR2")
       peeseMod.rob[[i]] <- coef_test(peeseMod[[i]], vcov=peeseMod.CR2[[i]])
-      peeseGE1[[i]] <- round(as.numeric(peeseMod.rob[[i]]$beta[1]), 3) 
+      peeseGE1[[i]] <- round(as.numeric(peeseMod.rob[[i]]$beta[1]), 3)
       peese.pv1.rob[[i]] <- as.numeric(peeseMod.rob[[i]]$p_Satt[1])
-      peese.pv2.rob.nonstud[[i]] <- as.numeric(peeseMod.rob[[i]]$p_Satt[2])   
+      peese.pv2.rob.nonstud[[i]] <- as.numeric(peeseMod.rob[[i]]$p_Satt[2])
       peese.tau2.nonstud[[i]] <- round(peeseMod[[i]]$sigma2[2], 3)
       peese.isq.nonstud[[i]] <- round(as.numeric(i2_ml(peeseMod[[i]],method="matrix")[1]), 2)
-      
+
       petpeeseGE2[[i]] <- replicate(n=length(myDat[[i]]$yi), peeseGE1[[i]])
       petpeese.pv2[[i]] <- replicate(n=length(myDat[[i]]$yi), peese.pv1.rob[[i]])
-      petpeese.pv3[[i]] <- replicate(n=length(myDat[[i]]$yi), peese.pv2.rob.nonstud[[i]])   
+      petpeese.pv3[[i]] <- replicate(n=length(myDat[[i]]$yi), peese.pv2.rob.nonstud[[i]])
       petpeese.tau2[[i]] <- replicate(n=length(myDat[[i]]$yi), peese.tau2.nonstud[[i]])
       petpeese.isq[[i]] <- replicate(n=length(myDat[[i]]$yi), peese.isq.nonstud[[i]])
     }
-    
+
     metaID[[i]] <- myDat[[i]]$metaID
     cID[[i]] <- myDat[[i]]$cID
     sID[[i]] <- myDat[[i]]$sID
@@ -197,7 +207,7 @@ pet_peese_rstud <- foreach(i = 1:length(summary(myDat)[,1]),.packages=pkg,.combi
     prere[[i]] <- myDat[[i]]$prereg
     subfd[[i]] <- myDat[[i]]$subfield
     sdesn[[i]] <- myDat[[i]]$sdesign
-    
+
     df <- cbind.data.frame(metaID[[i]],cID[[i]],sID[[i]],eID[[i]],yi[[i]],vi[[i]],petpeeseGE2[[i]],petpeese.tau2[[i]],petpeese.isq[[i]],petpeese.pv2[[i]],petpeese.pv3[[i]],etype[[i]],guide[[i]],prere[[i]],subfd[[i]],sdesn[[i]])
     colnames(df) <- c("metaID","cID","sID","eID","yi","vi","GE","tau2","isq","sig_overall","small_study_effect_pval","etype","guide","prere","subfd","sdesn")
     saveRDS(df, file=here("results","main","pet_peese_rstandard",paste0("meta_", myDat[[i]]$cID[1],".rds")))
@@ -223,20 +233,19 @@ alpha <- 0.05
 q1 <- qnorm(1-alpha/2)  # 1.96
 q2 <- qnorm(alpha/2)    # -1.96
 
-pps_rstandard$GE <- 0.50*pps_rstandard$GE #using half meta-average
-#pps_rstandard$GE <- 0.25*pps_rstandard$GE #using one fourth of meta-average
+pps_rstandard$GE <- meta_average_multiplier * pps_rstandard$GE #default uses half meta-average
 
 pps_rstandard$lambda <- abs(pps_rstandard$GE)/pps_rstandard$sei  #non-centrality parameter
 pps_rstandard$power <- 1- pnorm(q1 - pps_rstandard$lambda) + pnorm(q2 - pps_rstandard$lambda) #power of each test
 pps_rstandard$yn80 <- ifelse(pps_rstandard$power >= 0.8, "yes","no")
-100*round(prop.table(table(pps_rstandard$yn80)), 4) #no=81.71, yes=18.29 
+100*round(prop.table(table(pps_rstandard$yn80)), 4) #no=81.71, yes=18.29
 xx <- 0.18 #using half meta-average
 #xx <- 0.33 #using full meta-average
 #xx <- 0.25 #null MAs dropped & half meta-average
 #xx <- 0.29 #non-sig. estimates dropped & half meta-average
 
 pps_rstandard$yn20 <- ifelse(pps_rstandard$power <= 0.2,"yes","no")
-100*round(prop.table(table(pps_rstandard$yn20)), 4) #no=40.44, yes=59.56 
+100*round(prop.table(table(pps_rstandard$yn20)), 4) #no=40.44, yes=59.56
 
 ## Summary measures about the power of primary estimates
 round(summary(pps_rstandard$power), 2)  #median=13%, mean=32%
@@ -258,7 +267,7 @@ subf_desc <- pps_rstandard %>%
 print(subf_desc)
 
 ## Calculating median of medians by subfield (Table 3)
-med_med <- pps_rstandard %>% 
+med_med <- pps_rstandard %>%
   dplyr::group_by(cID) %>%
   summarise(metaID = metaID[1],
             subfd = subfd[1],
@@ -318,10 +327,10 @@ write.csv(power.tab3,here("results","main","Power_Table3_SI_non-sig. estimates d
 pps_rstandard_median <- pps_rstandard %>%
   dplyr::group_by(cID) %>%
   summarise(metaID=metaID[1],
-            median = median(power), 
+            median = median(power),
             sape = length(which(power >= 0.8))/length(power),
             nips = length(unique(sID)),
-            esty = unique(etype), 
+            esty = unique(etype),
             guid = unique(guide),
             prer = unique(prere),
             subf = unique(subfd),
@@ -402,7 +411,7 @@ het_distrubtion <- het_subfield %>%
   dplyr::summarize(M=length(unique(cID)), Median=median(isq), Mean=mean(isq),
                    Q25=quantile(isq,probs=0.25), Q75=quantile(isq,probs=0.75),
                    Heterogeneity=list(isq), .groups = "drop") %>%
-  gt() %>% 
+  gt() %>%
   gt_plt_dist(Heterogeneity, type="density", line_color="gray", fill_color="skyblue") %>%
   fmt_number(columns=M:Q75,use_seps=FALSE,drop_trailing_zeros=TRUE) %>%
   tab_options(table.font.size="small", table.font.names="calibri") %>%
@@ -411,10 +420,10 @@ print(het_distrubtion)
 gtsave(het_distrubtion,file=here("results","robustness","pet_peese_rstandard_heterogeneity_by_subfield.PNG"))
 
 ## Power analysis (for Supplementary Information)
-## NOTE: After subsetting the data, you can go back to Line 207 to calculate power 
+## NOTE: After subsetting the data, you can go back to Line 207 to calculate power
 ## for the following two cases.
 
-## Excluding null MAs (Nord et al 2017; Yang et al. 2023) 
+## Excluding null MAs (Nord et al 2017; Yang et al. 2023)
 pps_rstandard <- pps_rstandard %>% filter(sig_overall < 0.05)
 dim(pps_rstandard)
 
@@ -431,24 +440,24 @@ myDat <- list()
 jj <- 1
 for (i in unique(meta$cID)){
   myDat[[i]] <- meta[which(meta$cID==i), ]
-  myDat[[i]]$sape <- length(which(myDat[[i]]$yn80=="yes"))/length(myDat[[i]]$vi) 
+  myDat[[i]]$sape <- length(which(myDat[[i]]$yn80=="yes"))/length(myDat[[i]]$vi)
   jj <- jj + 1
 }
 
 ## Check
 mss <- NULL
-for (i in 1:dim(summary(myDat))[1]) { 
+for (i in 1:dim(summary(myDat))[1]) {
   mss[i] <- length(myDat[[i]]$sei)
 }
-length(mss) 
-sum(mss)    
+length(mss)
+sum(mss)
 
 ## Experimental vs Observational
 e <- 1; o <- 1; m <- 1
 i.obs <- NULL; i.exp <- NULL
 mydat.exp <- list(); mydat.obs <- list()
 for (i in 1:length(summary(myDat)[,1])) {
-  if(myDat[[i]]$sdesn[1]=="experimental") { 
+  if(myDat[[i]]$sdesn[1]=="experimental") {
     mydat.exp[[e]] <- myDat[[i]]
     i.exp[e] <- i
     e <- e+1
@@ -467,7 +476,7 @@ p <- 1; o <- 1
 mydat.pow  <- list(); mydat.npow <- list()
 i.pow  <- NULL; i.npow <- NULL
 for (i in 1:length(summary(myDat)[,1])) {
-  if(myDat[[i]]$sape[1] > 0) { 
+  if(myDat[[i]]$sape[1] > 0) {
     mydat.pow[[p]] <- myDat[[i]]
     i.pow[p] <- i
     p <- p+1
@@ -486,7 +495,7 @@ g <- 1; h <- 1
 mydat.gui  <- list(); mydat.ngu <- list()
 i.gui  <- NULL; i.ngu <- NULL
 for (i in 1:length(summary(myDat)[,1])) {
-  if(myDat[[i]]$guide[1]== "yes") { 
+  if(myDat[[i]]$guide[1]== "yes") {
     mydat.gui[[g]] <- myDat[[i]]
     i.gui[g] <- i
     g <- g+1
@@ -505,7 +514,7 @@ r <- 1; s <- 1
 mydat.reg <- list(); mydat.nre <- list()
 i.reg  <- NULL; i.nre <- NULL
 for (i in 1:length(summary(myDat)[,1])) {
-  if(myDat[[i]]$prere[1]=="yes") { 
+  if(myDat[[i]]$prere[1]=="yes") {
     mydat.reg[[r]] <- myDat[[i]]
     i.reg[r] <- i
     r <- r+1
@@ -516,7 +525,7 @@ for (i in 1:length(summary(myDat)[,1])) {
     s <- s+1
   }
 }
-length(mydat.reg)  #43  
+length(mydat.reg)  #43
 length(mydat.nre)  #661
 
 ## Table 1
@@ -550,7 +559,7 @@ d.tab[4,2] <- sum(mss[i.pow]);                         d.tab[5,2] <- sum(mss[i.n
 d.tab[4,3] <- round(mean(mss[i.pow]));                 d.tab[5,3] <- round(mean(mss[i.npow]))
 d.tab[4,4] <- round(median(mss[i.pow]));               d.tab[5,4] <- round(median(mss[i.npow]))
 d.tab[4,5] <- min(mss[i.pow]);                         d.tab[5,5] <- min(mss[i.npow])
-d.tab[4,6] <- round(quantile(mss[i.pow], probs=0.25)); d.tab[5,6] <- round(quantile(mss[i.npow], probs=0.25)) 
+d.tab[4,6] <- round(quantile(mss[i.pow], probs=0.25)); d.tab[5,6] <- round(quantile(mss[i.npow], probs=0.25))
 d.tab[4,7] <- round(median(mss[i.pow]));               d.tab[5,7] <- round(median(mss[i.npow]))
 d.tab[4,8] <- round(quantile(mss[i.pow], probs=0.75)); d.tab[5,8] <- round(quantile(mss[i.npow], probs=0.75))
 d.tab[4,9] <- max(mss[i.pow]);                         d.tab[5,9] <- max(mss[i.npow])
@@ -579,7 +588,7 @@ d.tab[8,9] <- max(mss[i.reg]);                         d.tab[9,9] <- max(mss[i.n
 
 rownames(d.tab) <- c("All meta-analyses", "Observational","Experimental","SAPE > 0", "SAPE = 0","Yes","No","Yes","No")
 colnames(d.tab) <- c("M", "N", "Mean","Median", "Min", "Q25", "Q50", "Q75","Max")
-print(d.tab) 
+print(d.tab)
 write.csv(d.tab,here("results","main","Descriptive_Table1_half meta-average.csv"))
 
 
@@ -593,13 +602,13 @@ myDat <- list()
 jj <- 1
 for (i in unique(my_dat$cID)){
   myDat[[i]] <- my_dat[which(my_dat$cID==i), ]
-  myDat[[i]]$sape <- length(which(myDat[[i]]$yn80=="yes"))/length(myDat[[i]]$vi) 
+  myDat[[i]]$sape <- length(which(myDat[[i]]$yn80=="yes"))/length(myDat[[i]]$vi)
   jj <- jj + 1
 }
 
 ## Check
 mss <- NULL
-for (i in 1:dim(summary(myDat))[1]) { 
+for (i in 1:dim(summary(myDat))[1]) {
   mss[i] <- length(myDat[[i]]$vi)
 }
 length(mss) #704
@@ -692,7 +701,7 @@ p.grid.tab <- c(-Inf,
 
 # We need to calculate for the original z-values also the frequencies
 # and we can do this directly for the two-sided test grid
-p.grid.tab2 <- c(0, 
+p.grid.tab2 <- c(0,
                  qnorm(0.9/2,   lower.tail = FALSE),
                  qnorm(0.8/2,   lower.tail = FALSE),
                  qnorm(0.7/2,   lower.tail = FALSE),
@@ -705,7 +714,7 @@ p.grid.tab2 <- c(0,
                  qnorm(0.05/2,  lower.tail = FALSE),
                  qnorm(0.01/2,  lower.tail = FALSE),
                  qnorm(0.001/2, lower.tail = FALSE),
-                 Inf)				
+                 Inf)
 
 ## p grid for plot -> for exact calculation
 p.grid.plot  <- qnorm(seq(1, 0, -0.005), lower.tail = FALSE)
@@ -731,11 +740,11 @@ for (i in unique(my_dat$cID)){
 
 ## Check
 mss <- NULL
-for (i in 1:dim(summary(myDat))[1]) { 
+for (i in 1:dim(summary(myDat))[1]) {
   mss[i] <- length(myDat[[i]]$vi)
 }
-length(mss) #704   
-sum(mss)    #63956 
+length(mss) #704
+sum(mss)    #63956
 
 ## ---
 
@@ -746,13 +755,13 @@ myDat <- list()
 jj <- 1
 for (i in unique(my_dat$cID)){
   myDat[[i]] <- my_dat[which(my_dat$cID==i), ]
-  myDat[[i]]$sape <- length(which(myDat[[i]]$yn80=="yes"))/length(myDat[[i]]$vi) 
+  myDat[[i]]$sape <- length(which(myDat[[i]]$yn80=="yes"))/length(myDat[[i]]$vi)
   jj <- jj + 1
 }
 
 ## Check
 mss <- NULL
-for (i in 1:dim(summary(myDat))[1]) { 
+for (i in 1:dim(summary(myDat))[1]) {
   mss[i] <- length(myDat[[i]]$vi)
 }
 length(mss) #704
@@ -956,7 +965,7 @@ for (a in 1:(length(p.grid.plot2)-1)) {
   p.orig.plot.wst[a] <- length(which(facz.wst >= p.grid.plot2[a] & facz.wst <= p.grid.plot2[a+1]))
 }
 
-## Health, Toxicology and Mutagenesis 
+## Health, Toxicology and Mutagenesis
 z.orig.htm <- NULL
 for (a in 1:(length(z.grid.plot2)-1)) {
   #point probability is zero, but I added >= and <= to ensure that 0 and Inf are included
@@ -980,7 +989,7 @@ for (a in 1:(length(p.grid.plot2)-1)) {
 
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot <- cf(dat=myDat, z.grid=z.grid.plot)
+z.plot <- cf(dat = myDat, z.grid = z.grid.plot, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 saveRDS(z.plot, file=here("results","main","z_plot_pet_peese_rstandard_half.rds"))
 
@@ -993,7 +1002,7 @@ length(clu)                         #704
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.ci <- cf.ci.cluster(dat=myDat, z.grid=z.grid.plot, iters=it, cluster=clu)
+z.plot.ci <- cf.ci.cluster(dat = myDat, z.grid = z.grid.plot, iters = it, cluster = clu, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time) #about 12 hrs with 7 cores
@@ -1009,7 +1018,7 @@ z.plot.ci <- readRDS(here("results","main","z_plot_ci_pet_peese_rstandard_half.r
 ## z-plot (Figure 1)
 ## -----------------
 
-## z-plot Figure 
+## z-plot Figure
 # z.grid
 xs <- as.vector(z.grid.plot2[-length(z.grid.plot2)] + (z.grid.plot2[2]-z.grid.plot2[1])/2)
 N <- sum(p.orig.plot) # Here z.orig goes until 10 and is smaller than the full sample size!
@@ -1049,10 +1058,10 @@ dev.off()
 ## -------------------------------
 
 ## Functions
-source(here("scripts", "functions.R")) 
+source(here("scripts", "functions.R"))
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab <- cf(dat=myDat, z.grid=p.grid.tab) #VERY IMPORTANT: Make sure sure that you're using the appropriate function for each case.
+p.tab <- cf(dat = myDat, z.grid = p.grid.tab, heterogeneity_multiplier = heterogeneity_multiplier) #VERY IMPORTANT: Make sure sure that you're using the appropriate function for each case.
 stopCluster(cl)
 
 saveRDS(p.tab, file=here("results","main","p_tab_pps_rstandard_half.rds"))
@@ -1066,7 +1075,7 @@ it <- n_iterations
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.ci <- cf.ci.cluster(dat=myDat, z.grid=p.grid.tab, iters=it, cluster=clu) #VERY IMPORTANT: Make sure sure that you're using the appropriate function for each case.
+p.tab.ci <- cf.ci.cluster(dat = myDat, z.grid = p.grid.tab, iters = it, cluster = clu, heterogeneity_multiplier = heterogeneity_multiplier) #VERY IMPORTANT: Make sure sure that you're using the appropriate function for each case.
 #p.tab.ci <- cf.ci.cluster.se(dat=myDat, z.grid=p.grid.tab, iters=it, cluster=clu) #for 1.5*se
 stopCluster(cl)
 e.time <- Sys.time()
@@ -1093,7 +1102,7 @@ N <- sum(p.orig.tab)  #BE CAREFUL HERE! Check whether it's equal to the total!
 p.table[,1] <- round((p.orig.tab - p.tab) / N,  3)
 q025 <- apply(matrix(p.orig.tab/N, nrow=nrow(p.tab.ci[[1]]), ncol=ncol(p.tab.ci[[1]]), byrow=TRUE)
               - p.tab.ci[[1]], 2, quantile, probs=c(0.025))
-q975 <- apply(matrix(p.orig.tab/N, nrow=nrow(p.tab.ci[[1]]), ncol=ncol(p.tab.ci[[1]]), byrow=TRUE) 
+q975 <- apply(matrix(p.orig.tab/N, nrow=nrow(p.tab.ci[[1]]), ncol=ncol(p.tab.ci[[1]]), byrow=TRUE)
               - p.tab.ci[[1]], 2, quantile, probs=c(0.975))
 p.table[,2] <- paste("[", round(q025, 3), ", ",  round(q975, 3), "]", sep="")
 
@@ -1148,14 +1157,14 @@ write.csv(p.table, here("results","main","p.table.ci_pet_peese_rstandard_half_Ta
 ## Ecology
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.eco <- cf(dat=mydat.eco, z.grid=z.grid.plot)
+z.plot.eco <- cf(dat = mydat.eco, z.grid = z.grid.plot, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(z.plot.eco, file=here("results","robustness","pet_peese_rstandard_z_plot.eco.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.ci.eco <- cf.ci.cluster(dat=mydat.eco, z.grid=z.grid.plot,iters=it, cluster=clu[i.eco])
+z.plot.ci.eco <- cf.ci.cluster(dat = mydat.eco, z.grid = z.grid.plot, iters = it, cluster = clu[i.eco], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time) #about 33 mins
@@ -1164,14 +1173,14 @@ save(z.plot.ci.eco,file=here("results","robustness","pet_peese_rstandard_z_plot_
 ## Environmental Chemistry
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.enc <- cf(dat=mydat.enc, z.grid=z.grid.plot)
+z.plot.enc <- cf(dat = mydat.enc, z.grid = z.grid.plot, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(z.plot.enc, file=here("results","robustness","pet_peese_rstandard_z_plot.enc.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.ci.enc <- cf.ci.cluster(dat=mydat.enc,z.grid=z.grid.plot,iters=it, cluster=clu[i.enc])
+z.plot.ci.enc <- cf.ci.cluster(dat = mydat.enc, z.grid = z.grid.plot, iters = it, cluster = clu[i.enc], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)
@@ -1180,14 +1189,14 @@ save(z.plot.ci.enc,file=here("results","robustness","pet_peese_rstandard_z_plot_
 ## Environmental Engineering
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.ene <- cf(dat=mydat.ene, z.grid=z.grid.plot)
+z.plot.ene <- cf(dat = mydat.ene, z.grid = z.grid.plot, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(z.plot.ene, file=here("results","robustness","pet_peese_rstandard_z_plot.ene.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.ci.ene <- cf.ci.cluster(dat=mydat.ene, z.grid=z.grid.plot, iters=it, cluster=clu[i.ene])
+z.plot.ci.ene <- cf.ci.cluster(dat = mydat.ene, z.grid = z.grid.plot, iters = it, cluster = clu[i.ene], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)
@@ -1196,14 +1205,14 @@ save(z.plot.ci.ene,file=here("results","robustness","pet_peese_rstandard_z_plot_
 ## Nature and Landscape Conservation
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.nlc <- cf(dat=mydat.nlc, z.grid=z.grid.plot)
+z.plot.nlc <- cf(dat = mydat.nlc, z.grid = z.grid.plot, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(z.plot.nlc, file=here("results","robustness","pet_peese_rstandard_z_plot.nlc.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.ci.nlc <- cf.ci.cluster(dat=mydat.nlc, z.grid=z.grid.plot,iters=it, cluster=clu[i.nlc])
+z.plot.ci.nlc <- cf.ci.cluster(dat = mydat.nlc, z.grid = z.grid.plot, iters = it, cluster = clu[i.nlc], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)
@@ -1212,14 +1221,14 @@ save(z.plot.ci.nlc,file=here("results","robustness","pet_peese_rstandard_z_plot_
 ## Management
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.mpl <- cf(dat=mydat.mpl, z.grid=z.grid.plot)
+z.plot.mpl <- cf(dat = mydat.mpl, z.grid = z.grid.plot, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(z.plot.mpl, file=here("results","robustness","pet_peese_rstandard_z_plot.mpl.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.ci.mpl <- cf.ci.cluster(dat=mydat.mpl, z.grid=z.grid.plot,iters=it, cluster=clu[i.mpl])
+z.plot.ci.mpl <- cf.ci.cluster(dat = mydat.mpl, z.grid = z.grid.plot, iters = it, cluster = clu[i.mpl], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)
@@ -1228,14 +1237,14 @@ save(z.plot.ci.mpl,file=here("results","robustness","pet_peese_rstandard_z_plot_
 ## Water Science and Technology
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.wst <- cf(dat=mydat.wst, z.grid=z.grid.plot)
+z.plot.wst <- cf(dat = mydat.wst, z.grid = z.grid.plot, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(z.plot.wst, file=here("results","robustness","pet_peese_rstandard_z_plot.wst.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.ci.wst <- cf.ci.cluster(dat=mydat.wst, z.grid=z.grid.plot,iters=it, cluster=clu[i.wst])
+z.plot.ci.wst <- cf.ci.cluster(dat = mydat.wst, z.grid = z.grid.plot, iters = it, cluster = clu[i.wst], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)
@@ -1244,14 +1253,14 @@ save(z.plot.ci.wst,file=here("results","robustness","pet_peese_rstandard_z_plot_
 ## Health, Toxicology and Mutagenesis
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.htm <- cf(dat=mydat.htm, z.grid=z.grid.plot)
+z.plot.htm <- cf(dat = mydat.htm, z.grid = z.grid.plot, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(z.plot.htm, file=here("results","robustness","pet_peese_rstandard_z_plot.htm.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-z.plot.ci.htm <- cf.ci.cluster(dat=mydat.htm, z.grid=z.grid.plot,iters=it, cluster=clu[i.htm])
+z.plot.ci.htm <- cf.ci.cluster(dat = mydat.htm, z.grid = z.grid.plot, iters = it, cluster = clu[i.htm], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)
@@ -1278,7 +1287,7 @@ load(here("results","robustness","pet_peese_rstandard_z_plot_ci.htm.rds"))
 ## z-plot for subfields
 # eco
 xs.eco <- as.vector(z.grid.plot2[-length(z.grid.plot2)] + (z.grid.plot2[2]-z.grid.plot2[1])/2)
-N.eco <- sum(p.orig.plot.eco) 
+N.eco <- sum(p.orig.plot.eco)
 q025.eco <- as.vector(apply(z.plot.ci.eco[[1]], 2, quantile, probs=c(0.025)))
 q975.eco <- as.vector(apply(z.plot.ci.eco[[1]], 2, quantile, probs=c(0.975)))
 n.f.eco <- as.vector(z.orig.eco/N.eco)
@@ -1286,7 +1295,7 @@ n.cf.eco <- as.vector(z.plot.eco/N.eco)
 
 # enc
 xs.enc <- as.vector(z.grid.plot2[-length(z.grid.plot2)] + (z.grid.plot2[2]-z.grid.plot2[1])/2)
-N.enc <- sum(p.orig.plot.enc) 
+N.enc <- sum(p.orig.plot.enc)
 q025.enc <- as.vector(apply(z.plot.ci.enc[[1]], 2, quantile, probs=c(0.025)))
 q975.enc <- as.vector(apply(z.plot.ci.enc[[1]], 2, quantile, probs=c(0.975)))
 n.f.enc <- as.vector(z.orig.enc/N.enc)
@@ -1294,7 +1303,7 @@ n.cf.enc <- as.vector(z.plot.enc/N.enc)
 
 # ene
 xs.ene <- as.vector(z.grid.plot2[-length(z.grid.plot2)] + (z.grid.plot2[2]-z.grid.plot2[1])/2)
-N.ene <- sum(p.orig.plot.ene) 
+N.ene <- sum(p.orig.plot.ene)
 q025.ene <- as.vector(apply(z.plot.ci.ene[[1]], 2, quantile, probs=c(0.025)))
 q975.ene <- as.vector(apply(z.plot.ci.ene[[1]], 2, quantile, probs=c(0.975)))
 n.f.ene <- as.vector(z.orig.ene/N.ene)
@@ -1302,7 +1311,7 @@ n.cf.ene <- as.vector(z.plot.ene/N.ene)
 
 # nlc
 xs.nlc <- as.vector(z.grid.plot2[-length(z.grid.plot2)] + (z.grid.plot2[2]-z.grid.plot2[1])/2)
-N.nlc <- sum(p.orig.plot.nlc) 
+N.nlc <- sum(p.orig.plot.nlc)
 q025.nlc <- as.vector(apply(z.plot.ci.nlc[[1]], 2, quantile, probs=c(0.025)))
 q975.nlc <- as.vector(apply(z.plot.ci.nlc[[1]], 2, quantile, probs=c(0.975)))
 n.f.nlc <- as.vector(z.orig.nlc/N.nlc)
@@ -1310,7 +1319,7 @@ n.cf.nlc <- as.vector(z.plot.nlc/N.nlc)
 
 # Management
 xs.mpl <- as.vector(z.grid.plot2[-length(z.grid.plot2)] + (z.grid.plot2[2]-z.grid.plot2[1])/2)
-N.mpl <- sum(p.orig.plot.mpl) 
+N.mpl <- sum(p.orig.plot.mpl)
 q025.mpl <- as.vector(apply(z.plot.ci.mpl[[1]], 2, quantile, probs=c(0.025)))
 q975.mpl <- as.vector(apply(z.plot.ci.mpl[[1]], 2, quantile, probs=c(0.975)))
 n.f.mpl <- as.vector(z.orig.mpl/N.mpl)
@@ -1318,7 +1327,7 @@ n.cf.mpl <- as.vector(z.plot.mpl/N.mpl)
 
 # wst
 xs.wst <- as.vector(z.grid.plot2[-length(z.grid.plot2)] + (z.grid.plot2[2]-z.grid.plot2[1])/2)
-N.wst <- sum(p.orig.plot.wst) 
+N.wst <- sum(p.orig.plot.wst)
 q025.wst <- as.vector(apply(z.plot.ci.wst[[1]], 2, quantile, probs=c(0.025)))
 q975.wst <- as.vector(apply(z.plot.ci.wst[[1]], 2, quantile, probs=c(0.975)))
 n.f.wst <- as.vector(z.orig.wst/N.wst)
@@ -1326,7 +1335,7 @@ n.cf.wst <- as.vector(z.plot.wst/N.wst)
 
 # htm
 xs.htm <- as.vector(z.grid.plot2[-length(z.grid.plot2)] + (z.grid.plot2[2]-z.grid.plot2[1])/2)
-N.htm <- sum(p.orig.plot.htm) 
+N.htm <- sum(p.orig.plot.htm)
 q025.htm <- as.vector(apply(z.plot.ci.htm[[1]], 2, quantile, probs=c(0.025)))
 q975.htm <- as.vector(apply(z.plot.ci.htm[[1]], 2, quantile, probs=c(0.975)))
 n.f.htm <- as.vector(z.orig.htm/N.htm)
@@ -1469,14 +1478,14 @@ dev.off()
 # eco
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.eco <- cf(dat = mydat.eco, z.grid = p.grid.tab)
+p.tab.eco <- cf(dat = mydat.eco, z.grid = p.grid.tab, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(p.tab.eco, file=here("results","robustness","pet_peese_rstandard_p_tab.eco.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.ci.eco <- cf.ci.cluster(dat = mydat.eco, z.grid = p.grid.tab, iters = it, cluster = clu[i.eco])
+p.tab.ci.eco <- cf.ci.cluster(dat = mydat.eco, z.grid = p.grid.tab, iters = it, cluster = clu[i.eco], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)  #about 44 mins for 1000 iterations.
@@ -1485,14 +1494,14 @@ save(p.tab.ci.eco, file=here("results","robustness","pet_peese_rstandard_p_tab_c
 # enc
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.enc <- cf(dat = mydat.enc, z.grid = p.grid.tab)
+p.tab.enc <- cf(dat = mydat.enc, z.grid = p.grid.tab, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(p.tab.enc, file=here("results","robustness","pet_peese_rstandard_p_tab.enc.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.ci.enc <- cf.ci.cluster(dat = mydat.enc, z.grid = p.grid.tab, iters = it, cluster = clu[i.enc])
+p.tab.ci.enc <- cf.ci.cluster(dat = mydat.enc, z.grid = p.grid.tab, iters = it, cluster = clu[i.enc], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)  #about 18 mins for 1000 iterations.
@@ -1501,14 +1510,14 @@ save(p.tab.ci.enc, file=here("results","robustness","pet_peese_rstandard_p_tab_c
 # ene
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.ene <- cf(dat = mydat.ene, z.grid = p.grid.tab)
+p.tab.ene <- cf(dat = mydat.ene, z.grid = p.grid.tab, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(p.tab.ene, file=here("results","robustness","pet_peese_rstandard_p_tab.ene.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.ci.ene <- cf.ci.cluster(dat = mydat.ene, z.grid = p.grid.tab,iters = it, cluster = clu[i.ene])
+p.tab.ci.ene <- cf.ci.cluster(dat = mydat.ene, z.grid = p.grid.tab, iters = it, cluster = clu[i.ene], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)  #about 4 mins for 1000 iterations.
@@ -1517,14 +1526,14 @@ save(p.tab.ci.ene, file=here("results","robustness","pet_peese_rstandard_p_tab_c
 # nlc
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.nlc <- cf(dat = mydat.nlc, z.grid = p.grid.tab)
+p.tab.nlc <- cf(dat = mydat.nlc, z.grid = p.grid.tab, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(p.tab.nlc, file=here("results","robustness","pet_peese_rstandard_p_tab.nlc.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.ci.nlc <- cf.ci.cluster(dat = mydat.nlc, z.grid = p.grid.tab, iters = it, cluster = clu[i.nlc])
+p.tab.ci.nlc <- cf.ci.cluster(dat = mydat.nlc, z.grid = p.grid.tab, iters = it, cluster = clu[i.nlc], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)  #about 22 mins for 1000 iterations.
@@ -1533,14 +1542,14 @@ save(p.tab.ci.nlc, file=here("results","robustness","pet_peese_rstandard_p_tab_c
 # mpl
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.mpl <- cf(dat = mydat.mpl, z.grid = p.grid.tab)
+p.tab.mpl <- cf(dat = mydat.mpl, z.grid = p.grid.tab, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(p.tab.mpl, file=here("results","robustness","pet_peese_rstandard_p_tab.mpl.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.ci.mpl <- cf.ci.cluster(dat = mydat.mpl, z.grid = p.grid.tab, iters = it, cluster = clu[i.mpl])
+p.tab.ci.mpl <- cf.ci.cluster(dat = mydat.mpl, z.grid = p.grid.tab, iters = it, cluster = clu[i.mpl], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)  #about 2 mins for 1000 iterations.
@@ -1549,14 +1558,14 @@ save(p.tab.ci.mpl, file=here("results","robustness","pet_peese_rstandard_p_tab_c
 # wst
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.wst <- cf(dat = mydat.wst, z.grid = p.grid.tab)
+p.tab.wst <- cf(dat = mydat.wst, z.grid = p.grid.tab, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(p.tab.wst, file=here("results","robustness","pet_peese_rstandard_p_tab.wst.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.ci.wst <- cf.ci.cluster(dat = mydat.wst, z.grid = p.grid.tab,iters = it, cluster = clu[i.wst])
+p.tab.ci.wst <- cf.ci.cluster(dat = mydat.wst, z.grid = p.grid.tab, iters = it, cluster = clu[i.wst], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)  #about 1 min for 1000 iterations.
@@ -1565,14 +1574,14 @@ save(p.tab.ci.wst, file=here("results","robustness","pet_peese_rstandard_p_tab_c
 # htm
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.htm <- cf(dat = mydat.htm, z.grid = p.grid.tab)
+p.tab.htm <- cf(dat = mydat.htm, z.grid = p.grid.tab, heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 save(p.tab.htm, file=here("results","robustness","pet_peese_rstandard_p_tab.htm.rds"))
 
 s.time <- Sys.time()
 cl <- makeCluster(n_cores)
 registerDoParallel(cl)
-p.tab.ci.htm <- cf.ci.cluster(dat = mydat.htm, z.grid = p.grid.tab, iters = it, cluster = clu[i.htm])
+p.tab.ci.htm <- cf.ci.cluster(dat = mydat.htm, z.grid = p.grid.tab, iters = it, cluster = clu[i.htm], heterogeneity_multiplier = heterogeneity_multiplier)
 stopCluster(cl)
 e.time <- Sys.time()
 print(e.time - s.time)  #about 12 mins for 1000 iterations.
@@ -1604,7 +1613,7 @@ p.table[,1] <- round((p.orig.tab.eco - p.tab.eco) / N,  3)
 
 q025 <- apply(matrix(p.orig.tab.eco/N, nrow=nrow(p.tab.ci.eco[[1]]), ncol=ncol(p.tab.ci.eco[[1]]), byrow=TRUE)
               - p.tab.ci.eco[[1]], 2, quantile, probs=c(0.025))
-q975 <- apply(matrix(p.orig.tab.eco/N, nrow=nrow(p.tab.ci.eco[[1]]), ncol=ncol(p.tab.ci.eco[[1]]), byrow=TRUE) 
+q975 <- apply(matrix(p.orig.tab.eco/N, nrow=nrow(p.tab.ci.eco[[1]]), ncol=ncol(p.tab.ci.eco[[1]]), byrow=TRUE)
               - p.tab.ci.eco[[1]], 2, quantile, probs=c(0.975))
 
 p.table[,2] <- paste("[", round(q025, 3), ", ",  round(q975, 3), "]", sep="")
@@ -1663,7 +1672,7 @@ p.table[,1] <- round((p.orig.tab.enc - p.tab.enc) / N,  3)
 
 q025 <- apply(matrix(p.orig.tab.enc/N, nrow=nrow(p.tab.ci.enc[[1]]), ncol=ncol(p.tab.ci.enc[[1]]), byrow=TRUE)
               - p.tab.ci.enc[[1]], 2, quantile, probs=c(0.025))
-q975 <- apply(matrix(p.orig.tab.enc/N, nrow=nrow(p.tab.ci.enc[[1]]), ncol=ncol(p.tab.ci.enc[[1]]), byrow=TRUE) 
+q975 <- apply(matrix(p.orig.tab.enc/N, nrow=nrow(p.tab.ci.enc[[1]]), ncol=ncol(p.tab.ci.enc[[1]]), byrow=TRUE)
               - p.tab.ci.enc[[1]], 2, quantile, probs=c(0.975))
 
 p.table[,2] <- paste("[", round(q025, 3), ", ",  round(q975, 3), "]", sep="")
@@ -1723,7 +1732,7 @@ p.table[,1] <- round((p.orig.tab.ene - p.tab.ene) / N,  3)
 
 q025 <- apply(matrix(p.orig.tab.ene/N, nrow=nrow(p.tab.ci.ene[[1]]), ncol=ncol(p.tab.ci.ene[[1]]), byrow=TRUE)
               - p.tab.ci.ene[[1]], 2, quantile, probs=c(0.025))
-q975 <- apply(matrix(p.orig.tab.ene/N, nrow=nrow(p.tab.ci.ene[[1]]), ncol=ncol(p.tab.ci.ene[[1]]), byrow=TRUE) 
+q975 <- apply(matrix(p.orig.tab.ene/N, nrow=nrow(p.tab.ci.ene[[1]]), ncol=ncol(p.tab.ci.ene[[1]]), byrow=TRUE)
               - p.tab.ci.ene[[1]], 2, quantile, probs=c(0.975))
 
 p.table[,2] <- paste("[", round(q025, 3), ", ",  round(q975, 3), "]", sep="")
@@ -1783,7 +1792,7 @@ p.table[,1] <- round((p.orig.tab.nlc - p.tab.nlc) / N,  3)
 
 q025 <- apply(matrix(p.orig.tab.nlc/N, nrow=nrow(p.tab.ci.nlc[[1]]), ncol=ncol(p.tab.ci.nlc[[1]]), byrow=TRUE)
               - p.tab.ci.nlc[[1]], 2, quantile, probs=c(0.025))
-q975 <- apply(matrix(p.orig.tab.nlc/N, nrow=nrow(p.tab.ci.nlc[[1]]), ncol=ncol(p.tab.ci.nlc[[1]]), byrow=TRUE) 
+q975 <- apply(matrix(p.orig.tab.nlc/N, nrow=nrow(p.tab.ci.nlc[[1]]), ncol=ncol(p.tab.ci.nlc[[1]]), byrow=TRUE)
               - p.tab.ci.nlc[[1]], 2, quantile, probs=c(0.975))
 
 p.table[,2] <- paste("[", round(q025, 3), ", ",  round(q975, 3), "]", sep="")
@@ -1843,7 +1852,7 @@ p.table[,1] <- round((p.orig.tab.mpl - p.tab.mpl) / N,  3)
 
 q025 <- apply(matrix(p.orig.tab.mpl/N, nrow=nrow(p.tab.ci.mpl[[1]]), ncol=ncol(p.tab.ci.mpl[[1]]), byrow=TRUE)
               - p.tab.ci.mpl[[1]], 2, quantile, probs=c(0.025))
-q975 <- apply(matrix(p.orig.tab.mpl/N, nrow=nrow(p.tab.ci.mpl[[1]]), ncol=ncol(p.tab.ci.mpl[[1]]), byrow=TRUE) 
+q975 <- apply(matrix(p.orig.tab.mpl/N, nrow=nrow(p.tab.ci.mpl[[1]]), ncol=ncol(p.tab.ci.mpl[[1]]), byrow=TRUE)
               - p.tab.ci.mpl[[1]], 2, quantile, probs=c(0.975))
 
 p.table[,2] <- paste("[", round(q025, 3), ", ",  round(q975, 3), "]", sep="")
@@ -1903,7 +1912,7 @@ p.table[,1] <- round((p.orig.tab.wst - p.tab.wst) / N,  3)
 
 q025 <- apply(matrix(p.orig.tab.wst/N, nrow=nrow(p.tab.ci.wst[[1]]), ncol=ncol(p.tab.ci.wst[[1]]), byrow=TRUE)
               - p.tab.ci.wst[[1]], 2, quantile, probs=c(0.025))
-q975 <- apply(matrix(p.orig.tab.wst/N, nrow=nrow(p.tab.ci.wst[[1]]), ncol=ncol(p.tab.ci.wst[[1]]), byrow=TRUE) 
+q975 <- apply(matrix(p.orig.tab.wst/N, nrow=nrow(p.tab.ci.wst[[1]]), ncol=ncol(p.tab.ci.wst[[1]]), byrow=TRUE)
               - p.tab.ci.wst[[1]], 2, quantile, probs=c(0.975))
 
 p.table[,2] <- paste("[", round(q025, 3), ", ",  round(q975, 3), "]", sep="")
@@ -1960,7 +1969,7 @@ p.table[,1] <- round((p.orig.tab.htm - p.tab.htm) / N,  3)
 
 q025 <- apply(matrix(p.orig.tab.htm/N, nrow=nrow(p.tab.ci.htm[[1]]), ncol=ncol(p.tab.ci.htm[[1]]), byrow=TRUE)
               - p.tab.ci.htm[[1]], 2, quantile, probs=c(0.025))
-q975 <- apply(matrix(p.orig.tab.htm/N, nrow=nrow(p.tab.ci.htm[[1]]), ncol=ncol(p.tab.ci.htm[[1]]), byrow=TRUE) 
+q975 <- apply(matrix(p.orig.tab.htm/N, nrow=nrow(p.tab.ci.htm[[1]]), ncol=ncol(p.tab.ci.htm[[1]]), byrow=TRUE)
               - p.tab.ci.htm[[1]], 2, quantile, probs=c(0.975))
 
 p.table[,2] <- paste("[", round(q025, 3), ", ",  round(q975, 3), "]", sep="")
@@ -2018,15 +2027,15 @@ jj <- NULL
 f.per.meta <- list()
 
 for (ii in 1:dim(summary(myDat))[1]) {
-  
+
   fz <- abs(myDat[[ii]]$yi / myDat[[ii]]$sei)
-  
+
   temp <- NULL
   for (a in 1:(length(p.grid.tab2)-1)) {
     temp[a] <- length(which(fz >= p.grid.tab2[a] & fz <= p.grid.tab2[a+1]))
   }
-  
-  kk[[ii]] <- temp 
+
+  kk[[ii]] <- temp
   jj[[ii]] <- myDat[[ii]]$cID[1]
   f.per.meta[[ii]] <- c(jj[[ii]], kk[[ii]]) #the first element is cluster id
 }
@@ -2056,20 +2065,20 @@ tot.sig <- NULL #total significant p-values
 matESR <- data.frame(cID=NA,esr.all=NA,esr.sig=NA,esr.all.count=NA,esr.sig.count=NA,dif=NA,tot.all=NA,tot.sig=NA)
 
 for (i in 1:dim(summary(f.per.meta))[1]) {
-  
+
   cID[i] <- f.per.meta[[i]][1] #cluster id
   esr.all[i] <- (sum(as.numeric(f.per.meta[[i]][12:14])) - sum(as.numeric(cf.per.meta[[i]][11:13]))) / sum(as.numeric(f.per.meta[[i]][2:14])) #as a share of all p-values
   esr.sig[i] <- (sum(as.numeric(f.per.meta[[i]][12:14])) - sum(as.numeric(cf.per.meta[[i]][11:13]))) / sum(as.numeric(f.per.meta[[i]][12:14])) #as a share of only signficant p-values
-  
+
   # "esr.all.count" = "esr.sig.count" unless their denominator is different
   esr.all.count[i] <- (sum(as.numeric(f.per.meta[[i]][12:14])) - sum(as.numeric(cf.per.meta[[i]][11:13]))) #/ sum(f.per.meta[[i]])
   esr.sig.count[i] <- (sum(as.numeric(f.per.meta[[i]][12:14])) - sum(as.numeric(cf.per.meta[[i]][11:13]))) #/ sum(f.per.meta[[i]][10:13])
-  
+
   #test
   dif[i] <- (sum(as.numeric(f.per.meta[[i]][12:14])) - sum(as.numeric(cf.per.meta[[i]][11:13])))
   tot.all[i] <- sum(as.numeric(f.per.meta[[i]][2:14]))
   tot.sig[i] <- sum(as.numeric(f.per.meta[[i]][12:14]))
-  
+
   matESR[i,1] <- cID[i]
   matESR[i,2] <- esr.all[i]
   matESR[i,3] <- esr.sig[i]
@@ -2086,7 +2095,7 @@ dim(matESR) #704x8
 
 ## NOTE: esr.sig==-Inf if a meta-analysis has no single statistical significant effect sizes.
 ## Thus, we replace the values of esr.sig & esr.sig.count by zero.
-matESR$esr.sig.count[matESR$esr.sig.count<0 & matESR$esr.sig==-Inf] <- 0 
+matESR$esr.sig.count[matESR$esr.sig.count<0 & matESR$esr.sig==-Inf] <- 0
 matESR$esr.sig[matESR$esr.sig==-Inf] <- 0
 write.xlsx(matESR, here("results","main","esr05_pet_peese_rstandard_half meta-average_704.xlsx"), overwrite=TRUE)
 #write.xlsx(matESR, here("results","main","esr05_pet_peese_rstandard_half meta-average_0.25xtau2_704.xlsx"), overwrite=TRUE)
@@ -2098,9 +2107,9 @@ summary(matESR$esr.sig)
 ## ----------------------
 
 ## Load the data
-esr <- read_excel(here("results","main","esr05_pet_peese_rstandard_half meta-average_704.xlsx")) 
-#esr <- read_excel(here("results","main","esr05_pet_peese_rstandard_half meta-average_0.25xtau2_704.xlsx")) 
-#esr <- read_excel(here("results","main","esr05_pet_peese_rstandard_full meta-average_704.xlsx")) 
+esr <- read_excel(here("results","main","esr05_pet_peese_rstandard_half meta-average_704.xlsx"))
+#esr <- read_excel(here("results","main","esr05_pet_peese_rstandard_half meta-average_0.25xtau2_704.xlsx"))
+#esr <- read_excel(here("results","main","esr05_pet_peese_rstandard_full meta-average_704.xlsx"))
 dim(esr) #704x8
 
 pow <- read.xlsx(here("results","main","median_power_pps_rstandard_half meta-average_704.xlsx"))
@@ -2120,7 +2129,7 @@ final$logtotsig <- log(final$tot.sig+0.5)  #add 0.5 b/c log(0) is -Inf.
 final$logtotall <- log(final$tot.all)
 final$logjif <- log(final$jif_5yr_wos)
 
-## Re-code the categorical variables 
+## Re-code the categorical variables
 final <- final %>%
   dplyr::mutate(subfield = case_when(subf=="Health, Toxicology and Mutagenesis" ~ 0,
                                      subf=="Ecology" ~ 1,
@@ -2170,13 +2179,13 @@ nbMod2.robu <- coeftest(nbMod2, vcov.=vcovCL(nbMod2, cluster=final_nb$metaID))
 
 ## With clustering
 stargazer(nbMod1.robu, nbMod2.robu, type="latex",style="demography",
-          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small", 
-          no.space=T, intercept.bottom=F,notes.align="l", 
+          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small",
+          no.space=T, intercept.bottom=F,notes.align="l",
           column.separate=c(0.5, 0.5, 0.5),single.row = T)
 
 ## Model evaluation for NB model (based Model 1)
 final_nb$resid <- nbMod1$residuals
-final_nb$fitted <- nbMod1$fitted.values 
+final_nb$fitted <- nbMod1$fitted.values
 
 ## Plots
 
@@ -2202,29 +2211,29 @@ dev.off()
 par(mfrow=c(1,1))
 
 ## Plots for residuals vs. categorical variables
-exp <- ggplot(data=final_nb, aes(x=as.factor(design_merged),y=resid)) + 
-  geom_boxplot() + 
+exp <- ggplot(data=final_nb, aes(x=as.factor(design_merged),y=resid)) +
+  geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Experimental research design?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
         axis.line = element_line(size = 0.5, color = "gray"))
 
-guid <- ggplot(data=final_nb, aes(x=as.factor(guid),y=resid)) + 
-  geom_boxplot() + 
+guid <- ggplot(data=final_nb, aes(x=as.factor(guid),y=resid)) +
+  geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Followed reporting guidelines?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
         axis.line = element_line(size = 0.5, color = "gray"))
 
-prer <- ggplot(data=final_nb, aes(x=as.factor(prer),y=resid)) + 
-  geom_boxplot() + 
+prer <- ggplot(data=final_nb, aes(x=as.factor(prer),y=resid)) +
+  geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Protocol registered?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
         axis.line = element_line(size = 0.5, color = "gray"))
 
-subf <- ggplot(data=final_nb, aes(x=as.factor(subfield),y=resid)) + 
-  geom_boxplot() + 
+subf <- ggplot(data=final_nb, aes(x=as.factor(subfield),y=resid)) +
+  geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Subfield", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
@@ -2237,7 +2246,7 @@ dev.off()
 
 ## Model evaluation for NB model (based Model 2)
 final_nb$resid <- nbMod2$residuals
-final_nb$fitted <- nbMod2$fitted.values 
+final_nb$fitted <- nbMod2$fitted.values
 
 ## Plots
 
@@ -2263,29 +2272,29 @@ dev.off()
 par(mfrow=c(1,1))
 
 ## Plots for residuals vs. categorical variables
-exp <- ggplot(data=final_nb, aes(x=as.factor(design_merged),y=resid)) + 
-  geom_boxplot() + 
+exp <- ggplot(data=final_nb, aes(x=as.factor(design_merged),y=resid)) +
+  geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Experimental research design?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
         axis.line = element_line(size = 0.5, color = "gray"))
 
-guid <- ggplot(data=final_nb, aes(x=as.factor(guid),y=resid)) + 
-  geom_boxplot() + 
+guid <- ggplot(data=final_nb, aes(x=as.factor(guid),y=resid)) +
+  geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Followed reporting guidelines?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
         axis.line = element_line(size = 0.5, color = "gray"))
 
-prer <- ggplot(data=final_nb, aes(x=as.factor(prer),y=resid)) + 
-  geom_boxplot() + 
+prer <- ggplot(data=final_nb, aes(x=as.factor(prer),y=resid)) +
+  geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Protocol registered?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
         axis.line = element_line(size = 0.5, color = "gray"))
 
-subf <- ggplot(data=final_nb, aes(x=as.factor(subfield),y=resid)) + 
-  geom_boxplot() + 
+subf <- ggplot(data=final_nb, aes(x=as.factor(subfield),y=resid)) +
+  geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Subfield", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
@@ -2295,23 +2304,23 @@ pdf(here("results","robustness","RegDiagPlots_NB_cat.pdf"),width=12,height=6)
 grid.arrange(exp, guid, prer, subf, nrow=2, ncol = 2)
 dev.off()
 
-## Weighted negative binomial regression  
-## Define weights 
+## Weighted negative binomial regression
+## Define weights
 final_nb$wt <- 1 / final_nb$nips
 
 nbMod3 <- glm.nb(esr.sig.count ~ med_perc + as.factor(design_merged) + guid + prer
-                 + logjif + pyear + as.factor(metric) + offset(logtotsig), 
+                 + logjif + pyear + as.factor(metric) + offset(logtotsig),
                  weights = final_nb$wt, data=final_nb)
 nbMod3.clu <- coeftest(nbMod3, vcov.=vcovCL(nbMod3, cluster=final_nb$metaID))
 
 nbMod4 <- glm.nb(esr.sig.count ~ med_perc + as.factor(design_merged) + guid + prer
-                 + logjif + pyear + as.factor(metric) + subf + offset(logtotsig), 
+                 + logjif + pyear + as.factor(metric) + subf + offset(logtotsig),
                  weights = final_nb$wt, data=final_nb)
 nbMod4.clu <- coeftest(nbMod4, vcov.=vcovCL(nbMod4, cluster=final_nb$metaID))
 
 stargazer(nbMod3.clu, nbMod4.clu, type="text",style="demography",
-          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small", 
-          no.space=T, intercept.bottom=F,notes.align="l", 
+          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small",
+          no.space=T, intercept.bottom=F,notes.align="l",
           column.separate=c(0.5, 0.5, 0.5),single.row = T)
 
 ## -----------------------------------------------------------------------------
@@ -2323,13 +2332,13 @@ summary(final_win$esr.sig_win)
 summary(final_win$esr.sig)
 
 ## Correlation between median power and research design
-cor.test(final$median, final$design_merged) #-0.05442532  
+cor.test(final$median, final$design_merged) #-0.05442532
 
 ## OLS regression (before and after winsorizing dependent variable)
-olsMod1 <- lm(esr.sig_win ~ median + as.factor(design_merged) + guid + prer 
+olsMod1 <- lm(esr.sig_win ~ median + as.factor(design_merged) + guid + prer
               + lognps + logjif + pyear + as.factor(metric), data=final_win)
 
-olsMod2 <- lm(esr.sig_win ~ median + as.factor(design_merged) + guid + prer 
+olsMod2 <- lm(esr.sig_win ~ median + as.factor(design_merged) + guid + prer
               + lognps + logjif + pyear + as.factor(metric) + subf, data=final_win)
 zz <- round(vif(olsMod2),2) #variance inflation factor
 xtable(zz)
@@ -2340,24 +2349,24 @@ olsMod2.clu <- coeftest(olsMod2, vcov.=vcovCL(olsMod2, cluster=final_win$metaID)
 
 ## With clustering
 stargazer(olsMod1.clu, olsMod2.clu,type="latex",style="demography",
-          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small", 
-          no.space=T, intercept.bottom=F,notes.align="l", 
+          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small",
+          no.space=T, intercept.bottom=F,notes.align="l",
           column.separate=c(0.5, 0.5, 0.5),single.row = T)
 
-olsMod_mixed <- lm(esr.sig_win ~ median + as.factor(sdes) + guid + prer 
+olsMod_mixed <- lm(esr.sig_win ~ median + as.factor(sdes) + guid + prer
                    + lognps + logjif + pyear + as.factor(metric) + subf, data=final_win)
 olsMod_mixed.clu <- coeftest(olsMod_mixed, vcov.=vcovCL(olsMod_mixed, cluster=final_win$metaID))
 stargazer(olsMod_mixed.clu,type="latex",style="demography",
-          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small", 
-          no.space=T, intercept.bottom=F,notes.align="l", 
+          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small",
+          no.space=T, intercept.bottom=F,notes.align="l",
           column.separate=c(0.5, 0.5, 0.5),single.row = T)
 
 ## Restrict the sample to where esr.sig >= 0
 fin <- final %>% filter(esr.sig >= 0)
-olsMod3 <- lm(esr.sig ~ median + as.factor(design_merged) + guid + prer 
+olsMod3 <- lm(esr.sig ~ median + as.factor(design_merged) + guid + prer
               + lognps + logjif + pyear + as.factor(metric), data=fin)
 
-olsMod4 <- lm(esr.sig ~ median + as.factor(design_merged) + guid + prer 
+olsMod4 <- lm(esr.sig ~ median + as.factor(design_merged) + guid + prer
               + lognps + logjif + pyear + as.factor(metric) + subf, data=fin)
 
 ## Clustering at "metaID"
@@ -2365,6 +2374,6 @@ olsMod3.clu <- coeftest(olsMod3, vcov.=vcovCL(olsMod3, cluster=fin$metaID))
 olsMod4.clu <- coeftest(olsMod4, vcov.=vcovCL(olsMod4, cluster=fin$metaID))
 
 stargazer(olsMod3.clu, olsMod4.clu,type="latex",style="demography",
-          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small", 
-          no.space=T, intercept.bottom=F,notes.align="l", 
+          ci=F,star.cutoffs=c(.1,.05,.01),font.size="small",
+          no.space=T, intercept.bottom=F,notes.align="l",
           column.separate=c(0.5, 0.5, 0.5),single.row = T)
