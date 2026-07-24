@@ -36,7 +36,7 @@ renv::restore()
 
 ## Reproducing the results
 
-Run the scripts from the repository root in this order:
+Run the scripts from the repository root in this order for the complete legacy workflow:
 
 ```r
 source("scripts/classification.R")
@@ -44,6 +44,26 @@ source("scripts/main.R")
 ```
 
 Alternatively, open `scripts/classification.R` and run it first, then open `scripts/main.R` and run it second. In RStudio, this can be done by opening each file and choosing **Source**. Without RStudio, paste or source the same commands in an R session started from the repository root.
+
+### Ordered manuscript tables and figures
+
+To recreate the manuscript tables and figures in publication order, use the dedicated script:
+
+```r
+source("scripts/create_tables_and_figures.R")
+```
+
+This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced.
+
+### Optional setup-specific data creation
+
+The data-preparation step is separated from table/figure rendering. If you change the setup parameters at the beginning of `scripts/create_analysis_data.R` (for example `meta_average_multiplier`, `heterogeneity_multiplier`, `n_iterations`, or `setup_label`), run:
+
+```r
+source("scripts/create_analysis_data.R")
+```
+
+This writes setup-specific derived datasets under `results/main/derived_data/`. By default, it creates the derived analysis datasets only and leaves the expensive counterfactual simulations untouched. Set `recreate_counterfactuals <- TRUE` in `scripts/create_analysis_data.R` only when you also want to rebuild the setup-specific counterfactual z-value and p-value RDS files. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
 
 ### Optional data-recreation step
 
@@ -85,6 +105,8 @@ The analysis scripts create their output folders automatically if they do not al
 - `data/`: `MasterData.xlsx` for the main analysis, plus raw and derived files used by the optional classification workflow.
 - `scripts/classification.R`: optional script that recreates subfield classifications from raw inputs.
 - `scripts/functions.R`: helper functions used by the analysis.
+- `scripts/create_analysis_data.R`: optional setup-specific derived-data creation for table/figure rendering.
+- `scripts/create_tables_and_figures.R`: creates manuscript tables and figures in numeric order, with independently rerunnable sections.
 - `scripts/main.R`: reproduces main and supplementary results.
 - `results/main/`: generated main results.
 - `results/robustness/`: generated robustness-check results.
