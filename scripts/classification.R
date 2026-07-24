@@ -4,7 +4,6 @@
 ## -----------------
 
 
-rm(list = ls(all = TRUE))  # clear environment
 
 ## Load packages
 library(here)

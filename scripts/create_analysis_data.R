@@ -5,8 +5,6 @@
 ## Set the parameters below, then source this script to create the
 ## setup-specific data files used by scripts/create_tables_and_figures.R.
 
-rm(list = ls(all = TRUE))
-
 library(tidyverse)
 library(foreach)
 library(doParallel)
@@ -15,15 +13,15 @@ library(here)
 source(here("scripts", "functions.R"))
 
 ## User-adjustable analysis settings.
-n_cores <- 7
-n_iterations <- 1000
-meta_average_multiplier <- 0.5
-heterogeneity_multiplier <- 0.25
-setup_label <- "half"
+n_cores <- if (exists("n_cores")) n_cores else 7
+n_iterations <- if (exists("n_iterations")) n_iterations else 1000
+meta_average_multiplier <- if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
+heterogeneity_multiplier <- if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
+setup_label <- if (exists("setup_label")) setup_label else "half"
 
 ## Set to TRUE only when the counterfactual z-/p-value files should be rebuilt.
 ## These steps can be very time consuming with n_iterations <- 1000.
-recreate_counterfactuals <- FALSE
+recreate_counterfactuals <- if (exists("recreate_counterfactuals")) recreate_counterfactuals else FALSE
 
 ensure_output_dirs <- function() {
   invisible(lapply(
