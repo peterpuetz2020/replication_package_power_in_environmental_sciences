@@ -5,17 +5,22 @@
 rm(list = ls(all = TRUE))           #clear R environment
 
 ## Load packages
-library(metafor); library(clubSandwich); library(robumeta)
-library(tidyverse); library(dplyr); library(xtable); library(ggplot2)
+library(metafor); library(clubSandwich)
+library(tidyverse); library(xtable)
 library(foreach); library(doParallel); library(readxl); library(openxlsx)
-library(MASS); library(car); library(mfx); library(rsq); library(writexl)
-library(stargazer); library(pscl); library(RColorBrewer)
-library(gridExtra); library(ggeasy); library(patchwork)
-library(gt); library(gtExtras); library(svglite); library(orchaRd) 
-library(scales); library(DescTools); library(webshot2); library(here)
+library(MASS); library(car); library(lmtest); library(sandwich)
+library(stargazer)
+library(gridExtra); library(ggeasy)
+library(gt); library(gtExtras); library(orchaRd)
+library(scales); library(here)
 
 ## Functions
-source(here("scripts","2. functions.r")) 
+source(here("scripts", "functions.R")) 
+
+## Ensure all documented output directories exist before writing files.
+dir.create(here("results", "main"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("results", "main", "pet_peese_rstandard"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("results", "robustness"), recursive = TRUE, showWarnings = FALSE)
 
 ## Import the data
 meta <- read_excel(here("data","MasterData.xlsx"))
@@ -1031,7 +1036,7 @@ dev.off()
 ## -------------------------------
 
 ## Functions
-source(here("scripts","2. functions.r")) 
+source(here("scripts", "functions.R")) 
 cl <- makeCluster(7) 
 registerDoParallel(cl)
 p.tab <- cf(dat=myDat, z.grid=p.grid.tab) #VERY IMPORTANT: Make sure sure that you're using the appropriate function for each case.
@@ -2016,7 +2021,7 @@ for (ii in 1:dim(summary(myDat))[1]) {
 #f.per.meta[[1]]
 
 ## (2). Counterfactual frequency per meta-analysis
-source(here("scripts","functions.r")) #functions
+source(here("scripts", "functions.R")) #functions
 
 s.time <- Sys.time()
 cl <- makeCluster(7) 
