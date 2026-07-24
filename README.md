@@ -57,13 +57,13 @@ This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 
 
 ### Optional setup-specific data creation
 
-The data-preparation step is separated from table/figure rendering. If you change the setup parameters at the beginning of `scripts/create_analysis_data.R` (for example `meta_average_multiplier`, `heterogeneity_multiplier`, `n_iterations`, or `setup_label`), run:
+The data-preparation step is separated from table/figure rendering. If you change the setup parameters at the beginning of `scripts/create_analysis_data.R` (for example `meta_average_multipliers`, `heterogeneity_multipliers`, `n_iterations`, or `setup_label`), run:
 
 ```r
 source("scripts/create_analysis_data.R")
 ```
 
-This writes setup-specific derived datasets under `results/main/derived_data/`. By default, it creates the derived analysis datasets only and leaves the expensive counterfactual simulations untouched. Set `recreate_counterfactuals <- TRUE` in `scripts/create_analysis_data.R` only when you also want to rebuild the setup-specific counterfactual z-value and p-value RDS files. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
+This writes setup-specific derived datasets under `results/main/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. By default, it creates the derived analysis datasets only and leaves the expensive counterfactual simulations untouched. Set `recreate_counterfactuals <- TRUE` in `scripts/create_analysis_data.R` only when you also want to rebuild the setup-specific counterfactual z-value and p-value RDS files for each selected combination. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
 
 ### Optional data-recreation step
 
