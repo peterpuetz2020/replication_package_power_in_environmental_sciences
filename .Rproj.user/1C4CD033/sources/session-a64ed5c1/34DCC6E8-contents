@@ -6,6 +6,8 @@
 ## (for example, by highlighting one section in RStudio) without relying on
 ## objects created by earlier table/figure sections.
 
+rm(list = ls(all = TRUE))
+
 library(tidyverse)
 library(foreach)
 library(doParallel)
@@ -18,18 +20,16 @@ library(here)
 source(here("scripts", "functions.R"))
 
 ## User-adjustable settings shared by all outputs.
-n_cores <- if (exists("n_cores")) n_cores else 7
-n_iterations <- if (exists("n_iterations")) n_iterations else 1000
-meta_average_multiplier <- if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
-heterogeneity_multiplier <- if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
-setup_label <- if (exists("setup_label")) setup_label else "half"
+n_cores <- 7
+n_iterations <- 1000
+meta_average_multiplier <- 0.5
+heterogeneity_multiplier <- 0.25
 
 ensure_output_dirs <- function() {
   invisible(lapply(
     list(
       here("results", "main"),
       here("results", "main", "pet_peese_rstandard"),
-      here("results", "main", "derived_data"),
       here("results", "robustness")
     ),
     dir.create,
@@ -39,25 +39,20 @@ ensure_output_dirs <- function() {
 }
 
 load_pet_peese_data <- function() {
-  derived_path <- here("results", "main", "derived_data", paste0("pps_rstandard_raw_", setup_label, ".rds"))
-  if (file.exists(derived_path)) {
-    return(readRDS(derived_path))
-  }
-
   pet_peese_files <- list.files(
     here("results", "main", "pet_peese_rstandard"),
     pattern = "\\.rds$",
     full.names = TRUE
   )
-
+  
   if (length(pet_peese_files) == 0) {
     stop(
       "No PET-PEESE RDS files found in results/main/pet_peese_rstandard. ",
       "Run the PET-PEESE estimation block in scripts/main.R first."
     )
   }
-
-  pet_peese_files %>%
+  
+  list.files(here("results", "main", "pet_peese_rstandard"), pattern = "\\.rds$", full.names = TRUE) %>%
     map_dfr(readRDS) %>%
     mutate(
       sei = sqrt(vi),
@@ -69,7 +64,7 @@ add_power_variables <- function(dat, meta_average_multiplier = 0.5) {
   alpha <- 0.05
   q1 <- qnorm(1 - alpha / 2)
   q2 <- qnorm(alpha / 2)
-
+  
   dat %>%
     mutate(
       GE = meta_average_multiplier * GE,
@@ -78,15 +73,6 @@ add_power_variables <- function(dat, meta_average_multiplier = 0.5) {
       yn80 = ifelse(power >= 0.8, "yes", "no"),
       yn20 = ifelse(power <= 0.2, "yes", "no")
     )
-}
-
-load_power_data <- function() {
-  derived_path <- here("results", "main", "derived_data", paste0("pps_rstandard_power_", setup_label, ".rds"))
-  if (file.exists(derived_path)) {
-    return(readRDS(derived_path))
-  }
-  load_pet_peese_data() %>%
-    add_power_variables(meta_average_multiplier)
 }
 
 split_meta_analyses <- function(dat, add_sape = FALSE) {
@@ -159,7 +145,8 @@ ensure_output_dirs()
 ## -------------------------------
 ## Table 1
 ## -------------------------------
-pps_rstandard <- load_power_data()
+pps_rstandard <- load_pet_peese_data() %>%
+  add_power_variables(meta_average_multiplier)
 myDat <- split_meta_analyses(pps_rstandard, add_sape = TRUE)
 mss <- vapply(myDat, function(x) length(x$sei), numeric(1))
 
@@ -192,7 +179,7 @@ write.csv(d.tab, here("results", "main", "Descriptive_Table1_half meta-average.c
 ## -------------------------------
 pps_rstandard <- load_pet_peese_data()
 grids <- make_grids()
-my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
+my_dat <- pps_rstandard %>% mutate(GE = GE / 2)
 myDat <- split_meta_analyses(my_dat)
 facz <- abs(my_dat$yi / sqrt(my_dat$vi))
 z.orig <- count_intervals(facz, grids$z_grid_plot2)
@@ -220,8 +207,8 @@ ggplot(datFull) +
   geom_point(aes(xs, n.f), shape = 20, fill = "blue", color = "blue", size = 1) +
   coord_cartesian(xlim = c(0, 8)) +
   xlab("|z|-value") + ylab("Frequency") +
-  geom_vline(xintercept = c(1.64, 1.96, 2.58), lty = 2, color = c(3, 2, 6), linewidth = 0.5) +
-  scale_x_continuous(breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8)) +
+  geom_vline(xintercept = c(1.64, 1.96, 2.58), lty = 2, color = c(3, 2, 6), size = 0.5) +
+  scale_x_discrete(limits = c(0, 1.64, 1.96, 2.58, 4, 6, 8)) +
   theme(panel.background = element_rect(fill = "gray100"), panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(linewidth = 0.5, color = "gray"))
 dev.off()
 
@@ -230,7 +217,7 @@ dev.off()
 ## -------------------------------
 pps_rstandard <- load_pet_peese_data()
 grids <- make_grids()
-my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
+my_dat <- pps_rstandard %>% mutate(GE = GE / 2)
 myDat <- split_meta_analyses(my_dat)
 facz <- abs(my_dat$yi / sqrt(my_dat$vi))
 p.orig.tab <- count_intervals(facz, grids$p_grid_tab2)
@@ -258,7 +245,7 @@ write.csv(p.table, here("results", "main", "p.table.ci_pet_peese_rstandard_half_
 ## -------------------------------
 ## Table 3
 ## -------------------------------
-pps_rstandard <- load_power_data()
+pps_rstandard <- load_pet_peese_data() %>% add_power_variables(meta_average_multiplier)
 subf_desc <- pps_rstandard %>% group_by(subfd) %>% summarise(M = length(unique(cID)), N = length(power), median = round(median(power), 2), mean = round(mean(power), 2), Q25 = round(quantile(power, 0.25), 2), Q75 = round(quantile(power, 0.75), 2), sape = round(length(which(power >= 0.8)) / length(power), 2), .groups = "drop")
 med_med <- pps_rstandard %>% group_by(cID) %>% summarise(metaID = metaID[1], subfd = subfd[1], median = median(power), .groups = "drop")
 med_med_subf <- med_med %>% group_by(subfd) %>% summarise(mmedian = round(median(median), 2), .groups = "drop")
@@ -272,7 +259,7 @@ write.csv(power.tab3, here("results", "main", "Power_Table3_half_meta-average.cs
 ## -------------------------------
 ## Figure 2
 ## -------------------------------
-pps_rstandard <- load_power_data()
+pps_rstandard <- load_pet_peese_data() %>% add_power_variables(meta_average_multiplier)
 pps_rstandard_median <- pps_rstandard %>% group_by(cID) %>% summarise(metaID = metaID[1], median = median(power), sape = length(which(power >= 0.8)) / length(power), nips = length(unique(sID)), esty = unique(etype), guid = unique(guide), prer = unique(prere), subf = unique(subfd), sdes = unique(sdesn), .groups = "drop") %>% mutate(yn80 = ifelse(median >= 0.8, "yes", "no"), median100 = round(100 * median, 2), sape100 = round(100 * sape, 2))
 write.xlsx(pps_rstandard_median, here("results", "main", "median_power_pps_rstandard_half meta-average_704.xlsx"), overwrite = TRUE)
 med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
