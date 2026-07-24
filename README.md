@@ -1,28 +1,36 @@
-# Replication package: Power in environmental sciences
+# Teshome K. Deressa, Peter Pütz, David I. Stern, Jaco Vangronsveld, Jan Minx, Sebastien Lizin, Robert Malina, Stephan B. Bruns
 
-This repository contains the data and R scripts needed to reproduce the subfield classification, tables, figures, and robustness checks for the paper.
+## Overview
+This is the replication package of “Low statistical power and overrepresentation of statistically
+significant findings in the environmental sciences” (including the Supporting Information).
+
+The repository contains the data and R scripts needed to reproduce the subfield classification, tables, figures, and robustness checks.
 
 ## Computational environment
 
 The project uses [`renv`](https://rstudio.github.io/renv/) to restore the package versions recorded in `renv.lock`. The lockfile records **R 4.5.0** and the CRAN repository snapshot configured through Posit Package Manager. Most packages are installed from CRAN; the non-CRAN dependency `orchaRd` is pinned in `renv.lock` to the GitHub repository `daniel1noble/orchaRd` at commit `5e9ac55cd28d717681bcbcf17527bace42500903`, so `renv::restore()` can install it reproducibly.
 
-> Note: the historical comments in the scripts mention R 3.5.2, but this repository is configured for restoration and replication with the R version recorded in `renv.lock`.
+### RStudio
+
+RStudio is optional but recommended for interactive reproduction. Install a current release of RStudio Desktop after installing R 4.5.0. Then open the repository's RStudio project file, `power and bias.Rproj`, so that paths resolve from the repository root and `renv` activates automatically.
+
+Without RStudio, open R in the repository root before running the commands below. The `.Rprofile` file activates `renv` when R starts in this project.
+
+### Rtools on Windows
+
+Rtools is not used directly by these analysis scripts. On Windows, it may still be needed while restoring packages if R has to compile packages from source, including GitHub or CRAN packages without matching binaries. For R 4.5.0, install **Rtools45** if compilation is required.
 
 ## Restoring packages with renv
 
 1. Install R 4.5.0.
-2. Open R in the repository root.
-3. Restore the project library:
+2. On Windows, install Rtools45 if `renv::restore()` needs to compile packages from source.
+3. Open the project:
+   - With RStudio: open `power and bias.Rproj`.
+   - Without RStudio: start R from the repository root.
+4. Restore the project library:
 
 ```r
 install.packages("renv")
-renv::restore()
-```
-
-If GitHub rate limits prevent installation of the pinned `orchaRd` dependency, set a GitHub personal access token before restoring:
-
-```r
-Sys.setenv(GITHUB_PAT = "<your-token>")
 renv::restore()
 ```
 
@@ -35,14 +43,33 @@ source("scripts/classification.R")
 source("scripts/main.R")
 ```
 
-Alternatively, from a shell with R available:
+Alternatively, open `scripts/classification.R` and run it first, then open `scripts/main.R` and run it second. In RStudio, this can be done by opening each file and choosing **Source**. Without RStudio, paste or source the same commands in an R session started from the repository root.
 
-```sh
-Rscript scripts/classification.R
-Rscript scripts/main.R
+### Optional data-recreation step
+
+The main analysis in `scripts/main.R` reads `data/MasterData.xlsx`. Other files in `data/` support the optional classification workflow or are derived/intermediate files, but they are not read by `scripts/main.R`. Running `scripts/classification.R` is only necessary if you want to recreate the classification files from the raw Scopus and Scimago inputs. If you only want to reproduce the tables, figures, and robustness checks from the available main-analysis data, you can skip `scripts/classification.R` and run only:
+
+```r
+source("scripts/main.R")
 ```
 
-The classification script classifies meta-analyses into environmental-science subfields and writes the derived classification files to `data/`. The main script uses `scripts/functions.R` to reproduce the main-paper and supplementary tables and figures.
+## Runtime settings in `scripts/main.R`
+
+At the beginning of `scripts/main.R`, adjust:
+
+- `n_cores`: number of parallel worker cores.
+- `n_iterations`: number of Monte Carlo/bootstrap iterations for confidence intervals.
+
+The paper uses `n_iterations <- 1000`. Smaller values are useful for quick checks only and should not be used for final replication.
+
+Useful `n_cores` choices depend on the computer:
+
+- `n_cores <- 1`: low-memory laptops or troubleshooting.
+- `n_cores <- 2` to `4`: typical 4- to 8-core laptops/desktops.
+- `n_cores <- 6` to `8`: stronger desktops or workstations.
+- Higher values: high-performance computing nodes, if enough memory is available.
+
+Leave at least one core free for the operating system and other applications.
 
 ## Output folders
 
@@ -51,14 +78,15 @@ All generated results are saved under `results/`:
 - `results/main/` contains the main paper tables, figures, and intermediate result files.
 - `results/robustness/` contains robustness-check tables, figures, diagnostics, and intermediate result files.
 
-The main script creates these output folders automatically if they do not already exist.
+The analysis scripts create their output folders automatically if they do not already exist.
 
 ## Repository structure
 
-- `data/`: source data and derived classification inputs.
-- `scripts/classification.R`: classifies meta-analyses into subfields.
+- `data/`: `MasterData.xlsx` for the main analysis, plus raw and derived files used by the optional classification workflow.
+- `scripts/classification.R`: optional script that recreates subfield classifications from raw inputs.
 - `scripts/functions.R`: helper functions used by the analysis.
 - `scripts/main.R`: reproduces main and supplementary results.
 - `results/main/`: generated main results.
 - `results/robustness/`: generated robustness-check results.
+- `power and bias.Rproj`: RStudio project file for opening the repository in RStudio.
 - `renv.lock`, `renv/activate.R`, `.Rprofile`: `renv` project files for dependency restoration.
