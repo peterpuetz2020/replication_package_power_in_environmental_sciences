@@ -15,9 +15,30 @@ source(here("scripts", "functions.R"))
 ## User-adjustable analysis settings.
 n_cores <- if (exists("n_cores")) n_cores else 7
 n_iterations <- if (exists("n_iterations")) n_iterations else 1000
-meta_average_multiplier <- if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
-heterogeneity_multiplier <- if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
-setup_label <- if (exists("setup_label")) setup_label else "half"
+meta_average_multipliers <- if (exists("meta_average_multipliers")) meta_average_multipliers else if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
+heterogeneity_multipliers <- if (exists("heterogeneity_multipliers")) heterogeneity_multipliers else if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
+setup_label <- if (exists("setup_label")) setup_label else NULL
+
+make_setup_label <- function(meta_average_multiplier, heterogeneity_multiplier) {
+  paste0(
+    "meta_", gsub("\\.", "p", as.character(meta_average_multiplier)),
+    "_heterogeneity_", gsub("\\.", "p", as.character(heterogeneity_multiplier))
+  )
+}
+
+analysis_setups <- if (exists("analysis_setups")) {
+  analysis_setups
+} else {
+  expand_grid(
+    meta_average_multiplier = meta_average_multipliers,
+    heterogeneity_multiplier = heterogeneity_multipliers
+  ) %>%
+    mutate(setup_label = if (length(meta_average_multipliers) == 1 && length(heterogeneity_multipliers) == 1 && !is.null(setup_label)) {
+      setup_label
+    } else {
+      make_setup_label(meta_average_multiplier, heterogeneity_multiplier)
+    })
+}
 
 ## Set to TRUE only when the counterfactual z-/p-value files should be rebuilt.
 ## These steps can be very time consuming with n_iterations <- 1000.
@@ -100,14 +121,14 @@ make_grids <- function() {
   )
 }
 
-run_parallel_cf <- function(dat, grid) {
+run_parallel_cf <- function(dat, grid, heterogeneity_multiplier) {
   cl <- makeCluster(n_cores)
   registerDoParallel(cl)
   on.exit(stopCluster(cl), add = TRUE)
   cf(dat = dat, z.grid = grid, heterogeneity_multiplier = heterogeneity_multiplier)
 }
 
-run_parallel_cf_ci <- function(dat, grid, cluster) {
+run_parallel_cf_ci <- function(dat, grid, cluster, heterogeneity_multiplier) {
   cl <- makeCluster(n_cores)
   registerDoParallel(cl)
   on.exit(stopCluster(cl), add = TRUE)
@@ -120,41 +141,49 @@ run_parallel_cf_ci <- function(dat, grid, cluster) {
   )
 }
 
+write_analysis_setup <- function(pps_rstandard_raw, grids, meta_average_multiplier, heterogeneity_multiplier, setup_label) {
+  pps_rstandard_power <- add_power_variables(pps_rstandard_raw, meta_average_multiplier)
+  pps_counterfactual <- pps_rstandard_raw %>% mutate(GE = meta_average_multiplier * GE)
+  myDat_counterfactual <- split_meta_analyses(pps_counterfactual)
+
+  saveRDS(
+    pps_rstandard_raw,
+    here("results", "main", "derived_data", paste0("pps_rstandard_raw_", setup_label, ".rds"))
+  )
+  saveRDS(
+    pps_rstandard_power,
+    here("results", "main", "derived_data", paste0("pps_rstandard_power_", setup_label, ".rds"))
+  )
+  saveRDS(
+    list(
+      n_cores = n_cores,
+      n_iterations = n_iterations,
+      meta_average_multiplier = meta_average_multiplier,
+      heterogeneity_multiplier = heterogeneity_multiplier,
+      setup_label = setup_label
+    ),
+    here("results", "main", "derived_data", paste0("analysis_settings_", setup_label, ".rds"))
+  )
+
+  if (recreate_counterfactuals) {
+    z_plot_path <- here("results", "main", paste0("z_plot_pet_peese_rstandard_", setup_label, ".rds"))
+    z_plot_ci_path <- here("results", "main", paste0("z_plot_ci_pet_peese_rstandard_", setup_label, ".rds"))
+    p_tab_path <- here("results", "main", paste0("p_tab_pps_rstandard_", setup_label, ".rds"))
+    p_tab_ci_path <- here("results", "main", paste0("p_tab_ci_pps_rstandard_", setup_label, ".rds"))
+
+    saveRDS(run_parallel_cf(myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier), z_plot_path)
+    saveRDS(run_parallel_cf_ci(myDat_counterfactual, grids$z_grid_plot, unique(pps_rstandard_raw$cID), heterogeneity_multiplier), z_plot_ci_path)
+    saveRDS(run_parallel_cf(myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier), p_tab_path)
+    saveRDS(run_parallel_cf_ci(myDat_counterfactual, grids$p_grid_tab, unique(pps_rstandard_raw$cID), heterogeneity_multiplier), p_tab_ci_path)
+  }
+}
+
 ensure_output_dirs()
 
 pps_rstandard_raw <- load_pet_peese_data()
-pps_rstandard_power <- add_power_variables(pps_rstandard_raw, meta_average_multiplier)
-pps_counterfactual <- pps_rstandard_raw %>% mutate(GE = meta_average_multiplier * GE)
-myDat_counterfactual <- split_meta_analyses(pps_counterfactual)
 grids <- make_grids()
 
-saveRDS(
-  pps_rstandard_raw,
-  here("results", "main", "derived_data", paste0("pps_rstandard_raw_", setup_label, ".rds"))
-)
-saveRDS(
-  pps_rstandard_power,
-  here("results", "main", "derived_data", paste0("pps_rstandard_power_", setup_label, ".rds"))
-)
-saveRDS(
-  list(
-    n_cores = n_cores,
-    n_iterations = n_iterations,
-    meta_average_multiplier = meta_average_multiplier,
-    heterogeneity_multiplier = heterogeneity_multiplier,
-    setup_label = setup_label
-  ),
-  here("results", "main", "derived_data", paste0("analysis_settings_", setup_label, ".rds"))
-)
-
-if (recreate_counterfactuals) {
-  z_plot_path <- here("results", "main", paste0("z_plot_pet_peese_rstandard_", setup_label, ".rds"))
-  z_plot_ci_path <- here("results", "main", paste0("z_plot_ci_pet_peese_rstandard_", setup_label, ".rds"))
-  p_tab_path <- here("results", "main", paste0("p_tab_pps_rstandard_", setup_label, ".rds"))
-  p_tab_ci_path <- here("results", "main", paste0("p_tab_ci_pps_rstandard_", setup_label, ".rds"))
-
-  saveRDS(run_parallel_cf(myDat_counterfactual, grids$z_grid_plot), z_plot_path)
-  saveRDS(run_parallel_cf_ci(myDat_counterfactual, grids$z_grid_plot, unique(pps_rstandard_raw$cID)), z_plot_ci_path)
-  saveRDS(run_parallel_cf(myDat_counterfactual, grids$p_grid_tab), p_tab_path)
-  saveRDS(run_parallel_cf_ci(myDat_counterfactual, grids$p_grid_tab, unique(pps_rstandard_raw$cID)), p_tab_ci_path)
-}
+analysis_setups %>%
+  pwalk(function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
+    write_analysis_setup(pps_rstandard_raw, grids, meta_average_multiplier, heterogeneity_multiplier, setup_label)
+  })
