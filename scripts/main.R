@@ -371,7 +371,7 @@ pps_rstandard_median$sape100 <- round(100*pps_rstandard_median$sape,2)
 ## Figure 2 (median power + share of adequately powered estimates)
 med_pwr <- pps_rstandard_median %>%
   ggplot(aes(x=median100, fill=as.factor(yn80))) +
-  geom_histogram(aes(y = ..count../sum(..count..)*100),bins=30, alpha=I(0.6),size=0.1) +
+  geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins=30, alpha=I(0.6), linewidth=0.1) +
   scale_fill_manual(values=c("brown2", "skyblue2")) +
   xlab("Median statistical power of primary estimates per meta-analysis") +
   ylab("Percentage") +
@@ -380,24 +380,24 @@ med_pwr <- pps_rstandard_median %>%
   scale_y_continuous(labels=label_percent(scale=1), expand = c(0,0.5))+
   theme(legend.position="none")+
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 print(med_pwr)
 
 sape <- pps_rstandard_median %>%
   ggplot(aes(x=sape100)) +
-  geom_histogram(aes(y=(..count..)/sum(..count..)*100),bins=30,alpha=I(0.6), size=0.1,fill="skyblue2") +
+  geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins=30, alpha=I(0.6), linewidth=0.1, fill="skyblue2") +
   xlab("Share of adequately powered primary estimates per meta-analysis") +
   ylab("Percentage") +
   ggtitle("(b)") +
   scale_x_continuous(breaks = breaks_width(20),labels=label_percent(scale=1),expand = c(0, 0.5)) +
   scale_y_continuous(labels=label_percent(scale=1), expand = c(0,0.5))+
-  theme(legend.position="yes")+
+  theme(legend.position="none")+
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 print(sape)
 
 pdf(here("results","main","pps_rstandard_704_Fig2.pdf"),width=10,height=4)
-med_pwr + sape
+grid.arrange(med_pwr, sape, ncol = 2)
 dev.off()
 
 ## Heterogeneity by subfield (for Supplementary Information)
@@ -1049,7 +1049,7 @@ ggplot(datFull) +
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 dev.off()
 
 
@@ -1365,7 +1365,7 @@ eco <- ggplot(datSUBF) +
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 enc <- ggplot(datSUBF) +
   geom_line(aes(xs.enc, q025.enc), color='orange', lty=3) +
@@ -1382,7 +1382,7 @@ enc <- ggplot(datSUBF) +
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 ene <- ggplot(datSUBF) +
   geom_line(aes(xs.ene, q025.ene), color='orange', lty=3) +
@@ -1399,7 +1399,7 @@ ene <- ggplot(datSUBF) +
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 nlc <- ggplot(datSUBF) +
   geom_line(aes(xs.nlc, q025.nlc), color='orange', lty=3) +
@@ -1416,7 +1416,7 @@ nlc <- ggplot(datSUBF) +
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 mpl <- ggplot(datSUBF) +
   geom_line(aes(xs.mpl, q025.mpl), color='orange', lty=3) +
@@ -1433,7 +1433,7 @@ mpl <- ggplot(datSUBF) +
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 wst <- ggplot(datSUBF) +
   geom_line(aes(xs.wst, q025.wst), color='orange', lty=3) +
@@ -1450,7 +1450,7 @@ wst <- ggplot(datSUBF) +
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 htm <- ggplot(datSUBF) +
   geom_line(aes(xs.htm, q025.htm), color='orange', lty=3) +
@@ -1467,7 +1467,7 @@ htm <- ggplot(datSUBF) +
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 pdf(here("results","robustness","pet_peese_rstandard_subfield_Fig.pdf"),width=14,height=12)
 grid.arrange(eco, enc, ene, nlc, mpl, wst, htm, ncol = 2)
@@ -2216,28 +2216,28 @@ exp <- ggplot(data=final_nb, aes(x=as.factor(design_merged),y=resid)) +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Experimental research design?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 guid <- ggplot(data=final_nb, aes(x=as.factor(guid),y=resid)) +
   geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Followed reporting guidelines?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 prer <- ggplot(data=final_nb, aes(x=as.factor(prer),y=resid)) +
   geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Protocol registered?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 subf <- ggplot(data=final_nb, aes(x=as.factor(subfield),y=resid)) +
   geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Subfield", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 pdf(here("results","robustness","RegDiagPlots_NB_cat_Model1.pdf"),width=12,height=6)
 grid.arrange(exp, guid, prer, subf, nrow=2, ncol = 2)
@@ -2277,28 +2277,28 @@ exp <- ggplot(data=final_nb, aes(x=as.factor(design_merged),y=resid)) +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Experimental research design?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 guid <- ggplot(data=final_nb, aes(x=as.factor(guid),y=resid)) +
   geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Followed reporting guidelines?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 prer <- ggplot(data=final_nb, aes(x=as.factor(prer),y=resid)) +
   geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Protocol registered?", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 subf <- ggplot(data=final_nb, aes(x=as.factor(subfield),y=resid)) +
   geom_boxplot() +
   geom_hline(yintercept=0,color="red") +
   labs(x = "Subfield", y="Residuals") +
   theme(panel.background = element_rect(fill = "white"),
-        axis.line = element_line(size = 0.5, color = "gray"))
+        axis.line = element_line(linewidth = 0.5, color = "gray"))
 
 pdf(here("results","robustness","RegDiagPlots_NB_cat.pdf"),width=12,height=6)
 grid.arrange(exp, guid, prer, subf, nrow=2, ncol = 2)
