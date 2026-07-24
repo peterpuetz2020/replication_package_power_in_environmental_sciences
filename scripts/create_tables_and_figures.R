@@ -6,8 +6,6 @@
 ## (for example, by highlighting one section in RStudio) without relying on
 ## objects created by earlier table/figure sections.
 
-rm(list = ls(all = TRUE))
-
 library(tidyverse)
 library(foreach)
 library(doParallel)
@@ -20,11 +18,11 @@ library(here)
 source(here("scripts", "functions.R"))
 
 ## User-adjustable settings shared by all outputs.
-n_cores <- 7
-n_iterations <- 1000
-meta_average_multiplier <- 0.5
-heterogeneity_multiplier <- 0.25
-setup_label <- "half"
+n_cores <- if (exists("n_cores")) n_cores else 7
+n_iterations <- if (exists("n_iterations")) n_iterations else 1000
+meta_average_multiplier <- if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
+heterogeneity_multiplier <- if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
+setup_label <- if (exists("setup_label")) setup_label else "half"
 
 ensure_output_dirs <- function() {
   invisible(lapply(
