@@ -53,7 +53,7 @@ To recreate the manuscript tables and figures in publication order, use the dedi
 source("scripts/create_tables_and_figures.R")
 ```
 
-This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced.
+This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Table 2 is written once for every combination of `meta_average_multipliers` and `heterogeneity_multipliers`; with multiple combinations, filenames use labels such as `meta_0p5_heterogeneity_0p25`. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
 
 ### Optional setup-specific data creation
 
