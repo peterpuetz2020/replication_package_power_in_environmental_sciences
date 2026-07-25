@@ -1,8 +1,8 @@
 ## ---------------------------------------------------------
 ## create_analysis_data.R
 ## ---------------------------------------------------------
-## Optional data-preparation script for one analysis setup.
-## Set the parameters below, then source this script to create the
+## Optional data-preparation script for one or more analysis setups.
+## Set the parameters in scripts/main.R, then source this script to create the
 ## setup-specific data files used by scripts/create_tables_and_figures.R.
 
 library(tidyverse)
@@ -17,8 +17,6 @@ n_cores <- if (exists("n_cores")) n_cores else 7
 n_iterations <- if (exists("n_iterations")) n_iterations else 1000
 meta_average_multipliers <- if (exists("meta_average_multipliers")) meta_average_multipliers else if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
 heterogeneity_multipliers <- if (exists("heterogeneity_multipliers")) heterogeneity_multipliers else if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
-setup_label <- if (exists("setup_label")) setup_label else NULL
-
 make_setup_label <- function(meta_average_multiplier, heterogeneity_multiplier) {
   paste0(
     "meta_", gsub("\\.", "p", as.character(meta_average_multiplier)),
@@ -33,11 +31,7 @@ analysis_setups <- if (exists("analysis_setups")) {
     meta_average_multiplier = meta_average_multipliers,
     heterogeneity_multiplier = heterogeneity_multipliers
   ) %>%
-    mutate(setup_label = if (length(meta_average_multipliers) == 1 && length(heterogeneity_multipliers) == 1 && !is.null(setup_label)) {
-      setup_label
-    } else {
-      make_setup_label(meta_average_multiplier, heterogeneity_multiplier)
-    })
+    mutate(setup_label = make_setup_label(meta_average_multiplier, heterogeneity_multiplier))
 }
 
 ## Set to TRUE only when the counterfactual z-/p-value files should be rebuilt.
