@@ -53,17 +53,17 @@ To recreate the manuscript tables and figures in publication order, use the dedi
 source("scripts/create_tables_and_figures.R")
 ```
 
-This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Table 2 is written once for every combination of `meta_average_multipliers` and `heterogeneity_multipliers`; with multiple combinations, filenames use labels such as `meta_0p5_heterogeneity_0p25`. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
+This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Table 2 is written once for every combination of `meta_average_multipliers` and `heterogeneity_multipliers`. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
 
 ### Optional setup-specific data creation
 
-The data-preparation step is separated from table/figure rendering. If you change the setup parameters at the beginning of `scripts/create_analysis_data.R` (for example `meta_average_multipliers`, `heterogeneity_multipliers`, `n_iterations`, or `setup_label`), run:
+The data-preparation step is separated from table/figure rendering. If you change the setup parameters in `scripts/main.R` (for example `meta_average_multipliers`, `heterogeneity_multipliers`, or `n_iterations`), run:
 
 ```r
 source("scripts/create_analysis_data.R")
 ```
 
-This writes setup-specific derived datasets under `results/main/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. By default, it creates the derived analysis datasets only and leaves the expensive counterfactual simulations untouched. Set `recreate_counterfactuals <- TRUE` in `scripts/create_analysis_data.R` only when you also want to rebuild the setup-specific counterfactual z-value and p-value RDS files for each selected combination. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
+This writes setup-specific derived datasets under `results/main/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. By default, it creates the derived analysis datasets only and leaves the expensive counterfactual simulations untouched. Set `recreate_counterfactuals <- TRUE` in `scripts/main.R` only when you also want to rebuild the setup-specific counterfactual z-value and p-value RDS files for each selected combination. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
 
 ### Optional data-recreation step
 

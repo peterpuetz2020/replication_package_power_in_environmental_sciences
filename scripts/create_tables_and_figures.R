@@ -22,8 +22,6 @@ n_cores <- if (exists("n_cores")) n_cores else 7
 n_iterations <- if (exists("n_iterations")) n_iterations else 1000
 meta_average_multipliers <- if (exists("meta_average_multipliers")) meta_average_multipliers else if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
 heterogeneity_multipliers <- if (exists("heterogeneity_multipliers")) heterogeneity_multipliers else if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
-setup_label <- if (exists("setup_label")) setup_label else "half"
-
 make_setup_label <- function(meta_average_multiplier, heterogeneity_multiplier) {
   paste0(
     "meta_", gsub("\\.", "p", as.character(meta_average_multiplier)),
@@ -38,11 +36,7 @@ analysis_setups <- if (exists("analysis_setups")) {
     meta_average_multiplier = meta_average_multipliers,
     heterogeneity_multiplier = heterogeneity_multipliers
   ) %>%
-    mutate(setup_label = if (n() == 1) {
-      setup_label
-    } else {
-      make_setup_label(meta_average_multiplier, heterogeneity_multiplier)
-    })
+    mutate(setup_label = make_setup_label(meta_average_multiplier, heterogeneity_multiplier))
 }
 
 required_setup_columns <- c("meta_average_multiplier", "heterogeneity_multiplier", "setup_label")
@@ -219,7 +213,7 @@ d.tab <- rbind(
 )
 rownames(d.tab) <- c("All meta-analyses", "Observational", "Experimental", "SAPE > 0", "SAPE = 0", "Yes", "No", "Yes", "No")
 colnames(d.tab) <- c("M", "N", "Mean", "Median", "Min", "Q25", "Q50", "Q75", "Max")
-write.csv(d.tab, here("results", "main", "Descriptive_Table1_half meta-average.csv"))
+write.csv(d.tab, here("results", "main", paste0("Descriptive_Table1_", setup_label, ".csv")))
 
 ## -------------------------------
 ## Figure 1
@@ -231,8 +225,8 @@ myDat <- split_meta_analyses(my_dat)
 facz <- abs(my_dat$yi / sqrt(my_dat$vi))
 z.orig <- count_intervals(facz, grids$z_grid_plot2)
 p.orig.plot <- count_intervals(facz, grids$p_grid_plot[which(grids$p_grid_plot >= 0)])
-z.plot <- get_counterfactual(here("results", "main", "z_plot_pet_peese_rstandard_half.rds"), myDat, grids$z_grid_plot)
-z.plot.ci <- get_counterfactual(here("results", "main", "z_plot_ci_pet_peese_rstandard_half.rds"), myDat, grids$z_grid_plot, ci = TRUE, cluster = unique(pps_rstandard$cID))
+z.plot <- get_counterfactual(here("results", "main", paste0("z_plot_pet_peese_rstandard_", setup_label, ".rds")), myDat, grids$z_grid_plot)
+z.plot.ci <- get_counterfactual(here("results", "main", paste0("z_plot_ci_pet_peese_rstandard_", setup_label, ".rds")), myDat, grids$z_grid_plot, ci = TRUE, cluster = unique(pps_rstandard$cID))
 
 xs <- as.vector(grids$z_grid_plot2[-length(grids$z_grid_plot2)] + (grids$z_grid_plot2[2] - grids$z_grid_plot2[1]) / 2)
 N <- sum(p.orig.plot)
@@ -244,7 +238,7 @@ datFull <- as.data.frame(cbind(
   n.cf = as.vector(z.plot / N)
 ))
 
-pdf(here("results", "main", "zplot_pet_peese_rstandard_half_704_Fig1.pdf"), width = 10, height = 5)
+pdf(here("results", "main", paste0("zplot_pet_peese_rstandard_", setup_label, "_704_Fig1.pdf")), width = 10, height = 5)
 ggplot(datFull) +
   geom_line(aes(xs, q025), color = "orange", lty = 3) +
   geom_line(aes(xs, n.cf), color = "orange", lty = 1) +
@@ -305,16 +299,16 @@ power.tab3[1, ] <- c(nrow(med_med), nrow(pps_rstandard), round(summary(med_med$m
 for (i in seq_len(nrow(subf_desc))) power.tab3[i + 1, ] <- c(subf_desc$M[i], subf_desc$N[i], med_med_subf$mmedian[i], subf_desc$median[i], subf_desc$mean[i], subf_desc$Q25[i], subf_desc$Q75[i], subf_desc$sape[i])
 colnames(power.tab3) <- c("M", "N", "mmedian", "median", "mean", "Q25", "Q75", "SAPE")
 rownames(power.tab3) <- c("All meta-analyses", "Ecology", "Environmental Chemistry", "Environmental Engineering", "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law", "Nature and Landscape Conservation", "Water Science and Technology")
-write.csv(power.tab3, here("results", "main", "Power_Table3_half_meta-average.csv"))
+write.csv(power.tab3, here("results", "main", paste0("Power_Table3_", setup_label, ".csv")))
 
 ## -------------------------------
 ## Figure 2
 ## -------------------------------
 pps_rstandard <- load_power_data()
 pps_rstandard_median <- pps_rstandard %>% group_by(cID) %>% summarise(metaID = metaID[1], median = median(power), sape = length(which(power >= 0.8)) / length(power), nips = length(unique(sID)), esty = unique(etype), guid = unique(guide), prer = unique(prere), subf = unique(subfd), sdes = unique(sdesn), .groups = "drop") %>% mutate(yn80 = ifelse(median >= 0.8, "yes", "no"), median100 = round(100 * median, 2), sape100 = round(100 * sape, 2))
-write.xlsx(pps_rstandard_median, here("results", "main", "median_power_pps_rstandard_half meta-average_704.xlsx"), overwrite = TRUE)
+write.xlsx(pps_rstandard_median, here("results", "main", paste0("median_power_pps_rstandard_", setup_label, "_704.xlsx")), overwrite = TRUE)
 med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
 sape <- pps_rstandard_median %>% ggplot(aes(x = sape100)) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1, fill = "skyblue2") + xlab("Share of adequately powered primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(b)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
-pdf(here("results", "main", "pps_rstandard_704_Fig2.pdf"), width = 10, height = 4)
+pdf(here("results", "main", paste0("pps_rstandard_", setup_label, "_704_Fig2.pdf")), width = 10, height = 4)
 grid.arrange(med_pwr, sape, ncol = 2)
 dev.off()

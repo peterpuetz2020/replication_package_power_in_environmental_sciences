@@ -26,12 +26,6 @@ meta_average_multipliers <- c(0.5)
 ## scripts/create_analysis_data.R when that optional script is sourced.
 heterogeneity_multipliers <- c(0.25)
 
-## Optional labels used when reading/writing setup-specific intermediate outputs.
-## For a single combination this preserves the legacy "half" file names; when
-## multiple combinations are selected, scripts/create_analysis_data.R generates
-## labels such as "meta_0p5_heterogeneity_0p25" unless analysis_setups is supplied.
-setup_label <- "half"
-
 ## Set to TRUE only when the counterfactual z-/p-value files should be rebuilt.
 ## These steps can be very time consuming with n_iterations <- 1000.
 recreate_counterfactuals <- FALSE
