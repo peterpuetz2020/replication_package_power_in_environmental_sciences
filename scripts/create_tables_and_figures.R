@@ -20,9 +20,43 @@ source(here("scripts", "functions.R"))
 ## User-adjustable settings shared by all outputs.
 n_cores <- if (exists("n_cores")) n_cores else 7
 n_iterations <- if (exists("n_iterations")) n_iterations else 1000
-meta_average_multiplier <- if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
-heterogeneity_multiplier <- if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
+meta_average_multipliers <- if (exists("meta_average_multipliers")) meta_average_multipliers else if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
+heterogeneity_multipliers <- if (exists("heterogeneity_multipliers")) heterogeneity_multipliers else if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
 setup_label <- if (exists("setup_label")) setup_label else "half"
+
+make_setup_label <- function(meta_average_multiplier, heterogeneity_multiplier) {
+  paste0(
+    "meta_", gsub("\\.", "p", as.character(meta_average_multiplier)),
+    "_heterogeneity_", gsub("\\.", "p", as.character(heterogeneity_multiplier))
+  )
+}
+
+analysis_setups <- if (exists("analysis_setups")) {
+  as_tibble(analysis_setups)
+} else {
+  expand_grid(
+    meta_average_multiplier = meta_average_multipliers,
+    heterogeneity_multiplier = heterogeneity_multipliers
+  ) %>%
+    mutate(setup_label = if (n() == 1) {
+      setup_label
+    } else {
+      make_setup_label(meta_average_multiplier, heterogeneity_multiplier)
+    })
+}
+
+required_setup_columns <- c("meta_average_multiplier", "heterogeneity_multiplier", "setup_label")
+if (!all(required_setup_columns %in% names(analysis_setups))) {
+  stop("analysis_setups must contain: ", paste(required_setup_columns, collapse = ", "))
+}
+if (anyDuplicated(analysis_setups$setup_label)) {
+  stop("Each row of analysis_setups must have a unique setup_label.")
+}
+
+## Retain scalar defaults for the manuscript outputs other than Table 2.
+meta_average_multiplier <- analysis_setups$meta_average_multiplier[[1]]
+heterogeneity_multiplier <- analysis_setups$heterogeneity_multiplier[[1]]
+setup_label <- analysis_setups$setup_label[[1]]
 
 ensure_output_dirs <- function() {
   invisible(lapply(
@@ -38,8 +72,8 @@ ensure_output_dirs <- function() {
   ))
 }
 
-load_pet_peese_data <- function() {
-  derived_path <- here("results", "main", "derived_data", paste0("pps_rstandard_raw_", setup_label, ".rds"))
+load_pet_peese_data <- function(setup_label_value = setup_label) {
+  derived_path <- here("results", "main", "derived_data", paste0("pps_rstandard_raw_", setup_label_value, ".rds"))
   if (file.exists(derived_path)) {
     return(readRDS(derived_path))
   }
@@ -140,7 +174,7 @@ count_intervals <- function(values, grid) {
   }, numeric(1))
 }
 
-get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL) {
+get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL, heterogeneity_multiplier_value = heterogeneity_multiplier) {
   if (file.exists(path)) {
     return(readRDS(path))
   }
@@ -148,9 +182,9 @@ get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL) {
   registerDoParallel(cl)
   on.exit(stopCluster(cl), add = TRUE)
   if (ci) {
-    cf.ci.cluster(dat = dat, z.grid = grid, iters = n_iterations, cluster = cluster, heterogeneity_multiplier = heterogeneity_multiplier)
+    cf.ci.cluster(dat = dat, z.grid = grid, iters = n_iterations, cluster = cluster, heterogeneity_multiplier = heterogeneity_multiplier_value)
   } else {
-    cf(dat = dat, z.grid = grid, heterogeneity_multiplier = heterogeneity_multiplier)
+    cf(dat = dat, z.grid = grid, heterogeneity_multiplier = heterogeneity_multiplier_value)
   }
 }
 
@@ -228,32 +262,36 @@ dev.off()
 ## -------------------------------
 ## Table 2
 ## -------------------------------
-pps_rstandard <- load_pet_peese_data()
-grids <- make_grids()
-my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
-myDat <- split_meta_analyses(my_dat)
-facz <- abs(my_dat$yi / sqrt(my_dat$vi))
-p.orig.tab <- count_intervals(facz, grids$p_grid_tab2)
-p.tab <- get_counterfactual(here("results", "main", "p_tab_pps_rstandard_half.rds"), myDat, grids$p_grid_tab)
-p.tab.ci <- get_counterfactual(here("results", "main", "p_tab_ci_pps_rstandard_half.rds"), myDat, grids$p_grid_tab, ci = TRUE, cluster = unique(pps_rstandard$cID))
+write_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
+  pps_rstandard <- load_pet_peese_data(setup_label)
+  grids <- make_grids()
+  my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
+  myDat <- split_meta_analyses(my_dat)
+  facz <- abs(my_dat$yi / sqrt(my_dat$vi))
+  p.orig.tab <- count_intervals(facz, grids$p_grid_tab2)
+  p.tab <- get_counterfactual(here("results", "main", paste0("p_tab_pps_rstandard_", setup_label, ".rds")), myDat, grids$p_grid_tab, heterogeneity_multiplier_value = heterogeneity_multiplier)
+  p.tab.ci <- get_counterfactual(here("results", "main", paste0("p_tab_ci_pps_rstandard_", setup_label, ".rds")), myDat, grids$p_grid_tab, ci = TRUE, cluster = unique(pps_rstandard$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
-p.table <- matrix(ncol = 2, nrow = length(grids$p_grid_tab2) - 1)
-colnames(p.table) <- c("Difference", "0.95 CI")
-N <- sum(p.orig.tab)
-p.table[, 1] <- round((p.orig.tab - p.tab) / N, 3)
-q025 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.025))
-q975 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.975))
-p.table[, 2] <- paste("[", round(q025, 3), ", ", round(q975, 3), "]", sep = "")
-for (level in list(c(10, 13, 1, "all"), c(11, 13, 1, "all"), c(10, 13, 2, "sig"), c(11, 13, 3, "sig"))) {
-  lo <- as.integer(level[[1]]); hi <- as.integer(level[[2]]); ci_idx <- as.integer(level[[3]]); denom <- if (level[[4]] == "all") N else sum(p.orig.tab[lo:hi])
-  point <- round(sum((p.orig.tab - p.tab)[lo:hi] / denom), 3)
-  bs <- apply(p.tab.ci[[ci_idx]][, lo:hi], 1, sum)
-  q <- round(quantile(sum((p.orig.tab / denom)[lo:hi]) - bs, probs = c(0.025, 0.975)), 3)
-  p.table <- rbind(p.table, c(point, paste("[", q[1], ", ", q[2], "]", sep = "")))
+  p.table <- matrix(ncol = 2, nrow = length(grids$p_grid_tab2) - 1)
+  colnames(p.table) <- c("Difference", "0.95 CI")
+  N <- sum(p.orig.tab)
+  p.table[, 1] <- round((p.orig.tab - p.tab) / N, 3)
+  q025 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.025))
+  q975 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.975))
+  p.table[, 2] <- paste("[", round(q025, 3), ", ", round(q975, 3), "]", sep = "")
+  for (level in list(c(10, 13, 1, "all"), c(11, 13, 1, "all"), c(10, 13, 2, "sig"), c(11, 13, 3, "sig"))) {
+    lo <- as.integer(level[[1]]); hi <- as.integer(level[[2]]); ci_idx <- as.integer(level[[3]]); denom <- if (level[[4]] == "all") N else sum(p.orig.tab[lo:hi])
+    point <- round(sum((p.orig.tab - p.tab)[lo:hi] / denom), 3)
+    bs <- apply(p.tab.ci[[ci_idx]][, lo:hi], 1, sum)
+    q <- round(quantile(sum((p.orig.tab / denom)[lo:hi]) - bs, probs = c(0.025, 0.975)), 3)
+    p.table <- rbind(p.table, c(point, paste("[", q[1], ", ", q[2], "]", sep = "")))
+  }
+  p.table <- rbind(p.table, c(length(myDat), 0), c(N, 0))
+  rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0.7", "0.5 < p < 0.6", "0.4 < p < 0.5", "0.3 < p < 0.4", "0.2 < p < 0.3", "0.1 < p < 0.2", "0.05 < p < 0.1", "0.01 < p < 0.05", "0.001 < p < 0.01", "p < 0.001", "ESR_{0.1}^{all}", "ESR_{0.05}^{all}", "ESR_{0.1}^{sig}", "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests")
+  write.csv(p.table, here("results", "main", paste0("p.table.ci_pet_peese_rstandard_", setup_label, "_Table 2.csv")))
 }
-p.table <- rbind(p.table, c(length(myDat), 0), c(N, 0))
-rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0.7", "0.5 < p < 0.6", "0.4 < p < 0.5", "0.3 < p < 0.4", "0.2 < p < 0.3", "0.1 < p < 0.2", "0.05 < p < 0.1", "0.01 < p < 0.05", "0.001 < p < 0.01", "p < 0.001", "ESR_{0.1}^{all}", "ESR_{0.05}^{all}", "ESR_{0.1}^{sig}", "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests")
-write.csv(p.table, here("results", "main", "p.table.ci_pet_peese_rstandard_half_Table 2.csv"))
+
+analysis_setups %>% pwalk(write_table_2)
 
 ## -------------------------------
 ## Table 3
