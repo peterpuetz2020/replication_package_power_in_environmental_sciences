@@ -2,9 +2,10 @@
 ## compare_meta_analysis_estimators.R
 ## ---------------------------------------------------------------------------
 ## Re-estimate every meta-analysis using the extended PET-PEESE procedure used
-## in the original analysis and two conventional (independence-assuming)
-## meta-analysis estimators. The resulting estimates are then compared on the
-## same, PET-screened set of observations.
+## in the original analysis and fixed- and random-effects meta-analysis
+## estimators. The random-effects estimator uses the same effect- and
+## study-level random intercepts as PET-PEESE. The resulting estimates are then
+## compared on the same, PET-screened set of observations.
 
 library(metafor)
 library(clubSandwich)
@@ -88,20 +89,26 @@ fit_pet_peese <- function(dat) {
     estimate = as.numeric(selected_test$beta[1]),
     standard_error = as.numeric(selected_test$SE[1]),
     p_value = as.numeric(selected_test$p_Satt[1]),
-    small_study_effect_p_value = as.numeric(pet_test$p_Satt[2]),
+    ## Once PEESE is selected, its variance slope (rather than the PET standard
+    ## error slope) is the small-study-effect test reported by the original
+    ## implementation.
+    small_study_effect_p_value = as.numeric(selected_test$p_Satt[2]),
     n_outliers_identified = sum(!keep),
     n_outliers_removed = if (residual_screen_fallback) 0L else sum(!keep),
     residual_screen_fallback = residual_screen_fallback
   )
 }
 
-## The conventional models deliberately treat effect sizes as independent:
-## inverse-variance fixed effect and REML random effects, respectively.
+## Fit the comparison estimators to exactly the observations retained by the
+## PET residual screen. The random-effects model reproduces PET-PEESE's two
+## random intercepts. A fixed-effects model cannot contain random effects by
+## definition, but rma.mv still permits the same multivariate data interface;
+## CR2 inference is used for both models, as it is for PET-PEESE.
 fit_one_meta_analysis <- function(dat) {
   pet_peese <- fit_pet_peese(dat)
   analysis_data <- pet_peese$data
   
-  ## Do this check before calling rma.uni(): metafor terminates immediately for
+  ## Do this check before calling rma.mv(): metafor terminates immediately for
   ## some one-effect inputs, so inspecting fixed$k after fitting is too late.
   conventional_data <- analysis_data %>%
     filter(is.finite(yi), is.finite(vi), vi >= 0)
@@ -112,7 +119,7 @@ fit_one_meta_analysis <- function(dat) {
   } else if (conventional_k == 1) {
     ## With one effect, both conventional estimators have the closed-form
     ## inverse-variance result. Between-effect heterogeneity is unidentifiable,
-    ## so report the boundary value tau^2 = 0 without invoking rma.uni().
+    ## so report the boundary value tau^2 = 0 without invoking rma.mv().
     fixed_effect_estimate <- conventional_data$yi[1]
     fixed_effect_se <- sqrt(conventional_data$vi[1])
     fixed_effect_p_value <- if (fixed_effect_se > 0) {
@@ -128,15 +135,34 @@ fit_one_meta_analysis <- function(dat) {
     random_effect_tau2 <- 0
     random_effect_fallback <- TRUE
   } else {
-    fixed <- rma.uni(yi, vi, data = conventional_data, method = "FE")
-    random <- rma.uni(yi, vi, data = conventional_data, method = "REML")
-    fixed_effect_estimate <- as.numeric(coef(fixed)[1])
-    fixed_effect_se <- fixed$se
-    fixed_effect_p_value <- fixed$pval
-    random_effect_estimate <- as.numeric(coef(random)[1])
-    random_effect_se <- random$se
-    random_effect_p_value <- random$pval
-    random_effect_tau2 <- random$tau2
+    fixed <- rma.mv(
+      yi, vi,
+      data = conventional_data,
+      method = "FE", test = "t",
+      control = list(rel.tol = 1e-8)
+    )
+    fixed_test <- coef_test(
+      fixed,
+      vcov = vcovCR(fixed, cluster = conventional_data$sID, type = "CR2")
+    )
+
+    random <- rma.mv(
+      yi, vi,
+      random = list(~ 1 | eID, ~ 1 | sID),
+      data = conventional_data,
+      method = "REML", test = "t",
+      control = list(rel.tol = 1e-8)
+    )
+    random_test <- coef_test(random, vcov = vcovCR(random, type = "CR2"))
+
+    fixed_effect_estimate <- as.numeric(fixed_test$beta[1])
+    fixed_effect_se <- as.numeric(fixed_test$SE[1])
+    fixed_effect_p_value <- as.numeric(fixed_test$p_Satt[1])
+    random_effect_estimate <- as.numeric(random_test$beta[1])
+    random_effect_se <- as.numeric(random_test$SE[1])
+    random_effect_p_value <- as.numeric(random_test$p_Satt[1])
+    ## sigma2[2] is the between-study variance, matching the PET-PEESE code.
+    random_effect_tau2 <- as.numeric(random$sigma2[2])
     random_effect_fallback <- FALSE
   }
   
