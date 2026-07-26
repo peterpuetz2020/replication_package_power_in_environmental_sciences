@@ -352,3 +352,7 @@ ggsave(
 )
 
 print(comparison_summary)
+
+temp <- estimates |> 
+  dplyr::select(pet_peese_estimate, random_effect_estimate, pet_peese_vs_random_deviation)
+
