@@ -212,36 +212,74 @@ run_meta_analyses <- function(meta_analyses, n_cores) {
 
 estimates <- run_meta_analyses(meta_analyses, n_cores)
 
-## Paired differences retain the direction of the discrepancy for every
-## meta-analysis. Aggregate comparisons summarize its size and association.
+## Compare effect magnitudes rather than signed estimates. A positive deviation
+## means that the comparison method produces a stronger effect (farther from
+## zero), irrespective of whether the estimates are positive or negative. The
+## percentage uses the absolute original estimate as its denominator; it is
+## undefined when the original estimate is exactly zero.
 estimates <- estimates %>%
   mutate(
-    fixed_minus_pet_peese = fixed_effect_estimate - pet_peese_estimate,
-    random_minus_pet_peese = random_effect_estimate - pet_peese_estimate,
-    fixed_minus_random = fixed_effect_estimate - random_effect_estimate
+    pet_peese_vs_fixed_deviation =
+      abs(pet_peese_estimate) - abs(fixed_effect_estimate),
+    pet_peese_vs_fixed_percentage_deviation = if_else(
+      fixed_effect_estimate == 0,
+      NA_real_,
+      100 * pet_peese_vs_fixed_deviation / abs(fixed_effect_estimate)
+    ),
+    pet_peese_vs_random_deviation =
+      abs(pet_peese_estimate) - abs(random_effect_estimate),
+    pet_peese_vs_random_percentage_deviation = if_else(
+      random_effect_estimate == 0,
+      NA_real_,
+      100 * pet_peese_vs_random_deviation / abs(random_effect_estimate)
+    ),
+    fixed_vs_random_deviation =
+      abs(fixed_effect_estimate) - abs(random_effect_estimate),
+    fixed_vs_random_percentage_deviation = if_else(
+      random_effect_estimate == 0,
+      NA_real_,
+      100 * fixed_vs_random_deviation / abs(random_effect_estimate)
+    )
   ) %>%
   arrange(cID)
 
-comparison_summary <- tribble(
-  ~comparison, ~mean_difference, ~median_difference, ~mean_absolute_difference, ~rmse, ~correlation,
-  "Fixed effect minus PET-PEESE",
-  mean(estimates$fixed_minus_pet_peese),
-  median(estimates$fixed_minus_pet_peese),
-  mean(abs(estimates$fixed_minus_pet_peese)),
-  sqrt(mean(estimates$fixed_minus_pet_peese^2)),
-  cor(estimates$fixed_effect_estimate, estimates$pet_peese_estimate, method = "kendall"),
-  "Random effects minus PET-PEESE",
-  mean(estimates$random_minus_pet_peese),
-  median(estimates$random_minus_pet_peese),
-  mean(abs(estimates$random_minus_pet_peese)),
-  sqrt(mean(estimates$random_minus_pet_peese^2)),
-  cor(estimates$random_effect_estimate, estimates$pet_peese_estimate, method = "kendall"),
-  "Fixed effect minus random effects",
-  mean(estimates$fixed_minus_random),
-  median(estimates$fixed_minus_random),
-  mean(abs(estimates$fixed_minus_random)),
-  sqrt(mean(estimates$fixed_minus_random^2)),
-  cor(estimates$fixed_effect_estimate, estimates$random_effect_estimate, method = "kendall")
+summarize_comparison <- function(comparison, comparison_estimate,
+                                 original_estimate) {
+  magnitude_deviation <- abs(comparison_estimate) - abs(original_estimate)
+  percentage_deviation <- if_else(
+    original_estimate == 0,
+    NA_real_,
+    100 * magnitude_deviation / abs(original_estimate)
+  )
+
+  tibble(
+    comparison = comparison,
+    median_magnitude_deviation = median(magnitude_deviation, na.rm = TRUE),
+    median_percentage_deviation = median(percentage_deviation, na.rm = TRUE),
+    mean_absolute_difference = mean(
+      abs(comparison_estimate - original_estimate), na.rm = TRUE
+    ),
+    rmse = sqrt(mean((comparison_estimate - original_estimate)^2, na.rm = TRUE)),
+    correlation = cor(
+      comparison_estimate, original_estimate,
+      method = "kendall", use = "complete.obs"
+    )
+  )
+}
+
+comparison_summary <- bind_rows(
+  summarize_comparison(
+    "PET-PEESE vs fixed effect (original)",
+    estimates$pet_peese_estimate, estimates$fixed_effect_estimate
+  ),
+  summarize_comparison(
+    "PET-PEESE vs random effects (original)",
+    estimates$pet_peese_estimate, estimates$random_effect_estimate
+  ),
+  summarize_comparison(
+    "Fixed effect vs random effects (original)",
+    estimates$fixed_effect_estimate, estimates$random_effect_estimate
+  )
 )
 
 write_csv(estimates, file.path(output_dir, "meta_analysis_estimates.csv"))
@@ -314,48 +352,3 @@ ggsave(
 )
 
 print(comparison_summary)
-
-# compare study size with difference between pet-peese and re
-# estimates |> 
-#   dplyr::select(k_analyzed, pet_peese_estimate, random_effect_estimate) |> 
-#   mutate(abs_dif = abs(pet_peese_estimate-random_effect_estimate)) |> 
-#   filter(abs_dif < quantile(abs_dif, 0.99)) |> 
-#   ggplot(aes(k_analyzed, abs_dif)) +
-#   geom_point() +
-#   scale_x_log10() +
-#   geom_smooth()
-
-# no clear sign, but remove small studies
-## Paired differences retain the direction of the discrepancy for every
-## meta-analysis. Aggregate comparisons summarize its size and association.
-# estimates_big_sample <- estimates %>%
-#   filter(k_analyzed > 20) |> 
-#   mutate(
-#     fixed_minus_pet_peese = fixed_effect_estimate - pet_peese_estimate,
-#     random_minus_pet_peese = random_effect_estimate - pet_peese_estimate,
-#     fixed_minus_random = fixed_effect_estimate - random_effect_estimate
-#   ) %>%
-#   arrange(cID)
-# 
-# comparison_summary_big_sample <- tribble(
-#   ~comparison, ~mean_difference, ~median_difference, ~mean_absolute_difference, ~rmse, ~correlation,
-#   "Fixed effect minus PET-PEESE",
-#   mean(estimates_big_sample$fixed_minus_pet_peese),
-#   median(estimates_big_sample$fixed_minus_pet_peese),
-#   mean(abs(estimates_big_sample$fixed_minus_pet_peese)),
-#   sqrt(mean(estimates_big_sample$fixed_minus_pet_peese^2)),
-#   cor(estimates_big_sample$fixed_effect_estimate, estimates_big_sample$pet_peese_estimate, method = "kendall"),
-#   "Random effects minus PET-PEESE",
-#   mean(estimates_big_sample$random_minus_pet_peese),
-#   median(estimates_big_sample$random_minus_pet_peese),
-#   mean(abs(estimates_big_sample$random_minus_pet_peese)),
-#   sqrt(mean(estimates_big_sample$random_minus_pet_peese^2)),
-#   cor(estimates_big_sample$random_effect_estimate, estimates_big_sample$pet_peese_estimate, method = "kendall"),
-#   "Fixed effect minus random effects",
-#   mean(estimates_big_sample$fixed_minus_random),
-#   median(estimates_big_sample$fixed_minus_random),
-#   mean(abs(estimates_big_sample$fixed_minus_random)),
-#   sqrt(mean(estimates_big_sample$fixed_minus_random^2)),
-#   cor(estimates_big_sample$fixed_effect_estimate, estimates_big_sample$random_effect_estimate, method = "kendall")
-# )
-# comparison_summary_big_sample
