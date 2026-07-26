@@ -14,7 +14,7 @@ library(readxl)
 library(foreach)
 library(doParallel)
 library(here)
-
+n_cores <- 4
 ## Use a value supplied by the calling session, if present.
 n_cores <- if (exists("n_cores")) n_cores else 7
 
@@ -314,3 +314,48 @@ ggsave(
 )
 
 print(comparison_summary)
+
+# compare study size with difference between pet-peese and re
+# estimates |> 
+#   dplyr::select(k_analyzed, pet_peese_estimate, random_effect_estimate) |> 
+#   mutate(abs_dif = abs(pet_peese_estimate-random_effect_estimate)) |> 
+#   filter(abs_dif < quantile(abs_dif, 0.99)) |> 
+#   ggplot(aes(k_analyzed, abs_dif)) +
+#   geom_point() +
+#   scale_x_log10() +
+#   geom_smooth()
+
+# no clear sign, but remove small studies
+## Paired differences retain the direction of the discrepancy for every
+## meta-analysis. Aggregate comparisons summarize its size and association.
+# estimates_big_sample <- estimates %>%
+#   filter(k_analyzed > 20) |> 
+#   mutate(
+#     fixed_minus_pet_peese = fixed_effect_estimate - pet_peese_estimate,
+#     random_minus_pet_peese = random_effect_estimate - pet_peese_estimate,
+#     fixed_minus_random = fixed_effect_estimate - random_effect_estimate
+#   ) %>%
+#   arrange(cID)
+# 
+# comparison_summary_big_sample <- tribble(
+#   ~comparison, ~mean_difference, ~median_difference, ~mean_absolute_difference, ~rmse, ~correlation,
+#   "Fixed effect minus PET-PEESE",
+#   mean(estimates_big_sample$fixed_minus_pet_peese),
+#   median(estimates_big_sample$fixed_minus_pet_peese),
+#   mean(abs(estimates_big_sample$fixed_minus_pet_peese)),
+#   sqrt(mean(estimates_big_sample$fixed_minus_pet_peese^2)),
+#   cor(estimates_big_sample$fixed_effect_estimate, estimates_big_sample$pet_peese_estimate, method = "kendall"),
+#   "Random effects minus PET-PEESE",
+#   mean(estimates_big_sample$random_minus_pet_peese),
+#   median(estimates_big_sample$random_minus_pet_peese),
+#   mean(abs(estimates_big_sample$random_minus_pet_peese)),
+#   sqrt(mean(estimates_big_sample$random_minus_pet_peese^2)),
+#   cor(estimates_big_sample$random_effect_estimate, estimates_big_sample$pet_peese_estimate, method = "kendall"),
+#   "Fixed effect minus random effects",
+#   mean(estimates_big_sample$fixed_minus_random),
+#   median(estimates_big_sample$fixed_minus_random),
+#   mean(abs(estimates_big_sample$fixed_minus_random)),
+#   sqrt(mean(estimates_big_sample$fixed_minus_random^2)),
+#   cor(estimates_big_sample$fixed_effect_estimate, estimates_big_sample$random_effect_estimate, method = "kendall")
+# )
+# comparison_summary_big_sample
