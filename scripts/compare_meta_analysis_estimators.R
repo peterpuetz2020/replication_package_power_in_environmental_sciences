@@ -137,6 +137,7 @@ fit_one_meta_analysis <- function(dat) {
   } else {
     fixed <- rma.mv(
       yi, vi,
+      mods = ~ 1,
       data = conventional_data,
       method = "FE", test = "t",
       control = list(rel.tol = 1e-8)
@@ -148,6 +149,9 @@ fit_one_meta_analysis <- function(dat) {
 
     random <- rma.mv(
       yi, vi,
+      ## This is a separate intercept-only meta-analysis: unlike PET and
+      ## PEESE, it does not regress yi on sei or vi.
+      mods = ~ 1,
       random = list(~ 1 | eID, ~ 1 | sID),
       data = conventional_data,
       method = "REML", test = "t",
