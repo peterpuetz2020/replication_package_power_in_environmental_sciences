@@ -13,7 +13,7 @@ n_cores <- 7
 
 ## Number of Monte Carlo/bootstrap iterations for confidence intervals. The paper
 ## uses 1000; smaller values are useful only for quick code checks.
-n_iterations <- 1000
+n_iterations <- 10
 
 ## Multipliers applied to genuine-effect estimates before power analyses. The
 ## default 0.5 uses half of the meta-average; include 1 for the full
@@ -24,7 +24,7 @@ meta_average_multipliers <- c(0.5)
 ## z-/p-value simulations. The manuscript sensitivity analyses use 0, 0.25,
 ## and 0.5. All combinations with meta_average_multipliers are computed by
 ## scripts/create_analysis_data.R when that optional script is sourced.
-heterogeneity_multipliers <- c(0.25)
+heterogeneity_multipliers <- c(0.25, 0.5, 0.75)
 
 ## Set to TRUE only when the counterfactual z-/p-value files should be rebuilt.
 ## These steps can be very time consuming with n_iterations <- 1000.
