@@ -282,8 +282,67 @@ comparison_summary <- bind_rows(
   )
 )
 
+## Summarize changes in absolute magnitude in a form that can be reported as
+## percentage attenuation. Ratios use the conventional estimator as the
+## reference (comparison / original), so 100 * (1 - ratio) is positive when
+## the comparison estimate is closer to zero. Exact zero comparison estimates
+## are valid ratios and imply a 100% reduction. Sign reversals require two
+## non-zero estimates; an estimate of zero has no direction to reverse.
+summarize_attenuation <- function(comparison, comparison_estimate,
+                                  original_estimate) {
+  eligible <- is.finite(comparison_estimate) &
+    is.finite(original_estimate) & original_estimate != 0
+  comparison_estimate <- comparison_estimate[eligible]
+  original_estimate <- original_estimate[eligible]
+  magnitude_ratio <- abs(comparison_estimate) / abs(original_estimate)
+  percentage_reduction <- 100 * (1 - magnitude_ratio)
+  n_comparisons <- length(magnitude_ratio)
+
+  ## exp(mean(log(0))) correctly returns zero if an estimate is attenuated all
+  ## the way to zero. This is the continuous extension of the geometric mean.
+  geometric_mean_ratio <- if (n_comparisons == 0) {
+    NA_real_
+  } else {
+    exp(mean(log(magnitude_ratio)))
+  }
+
+  tibble(
+    comparison = comparison,
+    n_meta_analyses = n_comparisons,
+    geometric_mean_percentage_reduction =
+      100 * (1 - geometric_mean_ratio),
+    median_percentage_reduction = median(percentage_reduction),
+    percentage_attenuated = 100 * mean(magnitude_ratio < 1),
+    percentage_amplified = 100 * mean(magnitude_ratio > 1),
+    percentage_unchanged = 100 * mean(magnitude_ratio == 1),
+    percentage_sign_reversal = 100 * mean(
+      comparison_estimate != 0 &
+        sign(comparison_estimate) != sign(original_estimate)
+    )
+  )
+}
+
+attenuation_summary <- bind_rows(
+  summarize_attenuation(
+    "PET-PEESE vs fixed effect (reference)",
+    estimates$pet_peese_estimate, estimates$fixed_effect_estimate
+  ),
+  summarize_attenuation(
+    "PET-PEESE vs random effects (reference)",
+    estimates$pet_peese_estimate, estimates$random_effect_estimate
+  ),
+  summarize_attenuation(
+    "Fixed effect vs random effects (reference)",
+    estimates$fixed_effect_estimate, estimates$random_effect_estimate
+  )
+)
+
 write_csv(estimates, file.path(output_dir, "meta_analysis_estimates.csv"))
 write_csv(comparison_summary, file.path(output_dir, "estimator_comparison_summary.csv"))
+write_csv(
+  attenuation_summary,
+  file.path(output_dir, "estimator_attenuation_summary.csv")
+)
 
 comparison_plot_data <- estimates %>%
   select(cID, pet_peese_estimate,
@@ -352,7 +411,33 @@ ggsave(
 )
 
 print(comparison_summary)
+print(attenuation_summary)
 
 temp <- estimates |> 
   dplyr::select(pet_peese_estimate, random_effect_estimate, pet_peese_vs_random_deviation)
 
+# or the current 704 meta-analyses, PET–PEESE estimates were geometrically 24.05% 
+# smaller than random-effects estimates, with a 7.82% median reduction; 57.10%
+# were attenuated, 42.90% amplified, and 22.73% reversed direction.
+
+# drop small effects which might affect results
+estimates_drop_small <- estimates |> 
+  filter(!between(random_effect_estimate, -0.1, 0.1))
+
+attenuation_summary_drop_small <- bind_rows(
+  summarize_attenuation(
+    "PET-PEESE vs fixed effect (reference)",
+    estimates_drop_small$pet_peese_estimate, estimates_drop_small$fixed_effect_estimate
+  ),
+  summarize_attenuation(
+    "PET-PEESE vs random effects (reference)",
+    estimates_drop_small$pet_peese_estimate, estimates_drop_small$random_effect_estimate
+  ),
+  summarize_attenuation(
+    "Fixed effect vs random effects (reference)",
+    estimates_drop_small$fixed_effect_estimate, estimates_drop_small$random_effect_estimate
+  )
+)
+print(attenuation_summary)
+print(attenuation_summary_drop_small)
+# results remain quite stable (for median)
