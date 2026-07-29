@@ -337,11 +337,51 @@ attenuation_summary <- bind_rows(
   )
 )
 
+## Repeat the attenuation comparison after excluding pair-specific sign
+## reversals. Zero estimates are retained because they have no direction and
+## therefore do not constitute a sign reversal.
+summarize_attenuation_without_sign_reversals <- function(
+    comparison, comparison_estimate, original_estimate) {
+  sign_reversal <- is.finite(comparison_estimate) &
+    is.finite(original_estimate) &
+    comparison_estimate != 0 &
+    original_estimate != 0 &
+    sign(comparison_estimate) != sign(original_estimate)
+  
+  summarize_attenuation(
+    comparison,
+    comparison_estimate[!sign_reversal],
+    original_estimate[!sign_reversal]
+  )
+}
+
+attenuation_summary_without_sign_reversals <- bind_rows(
+  summarize_attenuation_without_sign_reversals(
+    "PET-PEESE vs fixed effect (reference)",
+    estimates$pet_peese_estimate, estimates$fixed_effect_estimate
+  ),
+  summarize_attenuation_without_sign_reversals(
+    "PET-PEESE vs random effects (reference)",
+    estimates$pet_peese_estimate, estimates$random_effect_estimate
+  ),
+  summarize_attenuation_without_sign_reversals(
+    "Fixed effect vs random effects (reference)",
+    estimates$fixed_effect_estimate, estimates$random_effect_estimate
+  )
+)
+
 write_csv(estimates, file.path(output_dir, "meta_analysis_estimates.csv"))
 write_csv(comparison_summary, file.path(output_dir, "estimator_comparison_summary.csv"))
 write_csv(
   attenuation_summary,
   file.path(output_dir, "estimator_attenuation_summary.csv")
+)
+write_csv(
+  attenuation_summary_without_sign_reversals,
+  file.path(
+    output_dir,
+    "estimator_attenuation_summary_without_sign_reversals.csv"
+  )
 )
 
 comparison_plot_data <- estimates %>%
@@ -412,6 +452,7 @@ ggsave(
 
 print(comparison_summary)
 print(attenuation_summary)
+print(attenuation_summary_without_sign_reversals)
 
 temp <- estimates |> 
   dplyr::select(pet_peese_estimate, random_effect_estimate, pet_peese_vs_random_deviation)
