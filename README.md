@@ -10,6 +10,8 @@ The repository contains the data and R scripts needed to reproduce the subfield 
 
 The project uses [`renv`](https://rstudio.github.io/renv/) to restore the package versions recorded in `renv.lock`. The lockfile records **R 4.5.0** and the CRAN repository snapshot configured through Posit Package Manager. Most packages are installed from CRAN; the non-CRAN dependency `orchaRd` is pinned in `renv.lock` to the GitHub repository `daniel1noble/orchaRd` at commit `5e9ac55cd28d717681bcbcf17527bace42500903`, so `renv::restore()` can install it reproducibly.
 
+Chrome or Chromium is **not required**. The analysis writes tables directly as CSV/XLSX files and figures through R graphics devices; it does not take browser screenshots. Consequently, the browser automation packages `webshot2`, `chromote`, and `websocket` are not included in the lockfile. Some installed table packages list `webshot2` only as an optional suggested dependency, but none of the replication scripts use that feature.
+
 ### RStudio
 
 RStudio is optional but recommended for interactive reproduction. Install a current release of RStudio Desktop after installing R 4.5.0. Then open the repository's RStudio project file, `power and bias.Rproj`, so that paths resolve from the repository root and `renv` activates automatically.
