@@ -452,6 +452,15 @@ ggsave(
 
 print(comparison_summary)
 print(attenuation_summary)
+# how many sign changes from positive to negative by applying pet-peese
+estimates %>% filter(random_effect_estimate > 0 & pet_peese_estimate < 0) %>% nrow()
+# how many positive random effects at all 
+estimates %>% filter(random_effect_estimate > 0) %>% nrow()
+# vice verse
+estimates %>% filter(random_effect_estimate < 0 & pet_peese_estimate > 0) %>% nrow()
+estimates %>% filter(random_effect_estimate < 0) %>% nrow()
+
+# seems not to be systematic, but remove estimates with sign changes beforehand for robustness check
 print(attenuation_summary_without_sign_reversals)
 
 temp <- estimates |> 
