@@ -59,25 +59,25 @@ This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 
 
 ### Optional setup-specific data creation
 
-The data-preparation step is separated from table/figure rendering. If you change the setup parameters in `scripts/main.R` (for example `meta_average_multipliers`, `heterogeneity_multipliers`, or `n_iterations`), run:
+The data-preparation step is separated from table/figure rendering. To generate one or more alternative setups, define `meta_average_multipliers`, `heterogeneity_multipliers`, or `n_iterations` before running:
 
 ```r
 source("scripts/create_analysis_data.R")
 ```
 
-This writes setup-specific derived datasets under `results/main/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. By default, it creates the derived analysis datasets only and leaves the expensive counterfactual simulations untouched. Set `recreate_counterfactuals <- TRUE` in `scripts/main.R` only when you also want to rebuild the setup-specific counterfactual z-value and p-value RDS files for each selected combination. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
+This writes setup-specific derived datasets under `results/main/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. By default, it creates the derived analysis datasets only and leaves the expensive counterfactual simulations untouched. Define `recreate_counterfactuals <- TRUE` before sourcing the script only when you also want to rebuild the setup-specific counterfactual z-value and p-value RDS files for each selected combination. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
 
 ### Optional data-recreation step
 
-The main analysis in `scripts/main.R` reads `data/MasterData.xlsx`. Other files in `data/` support the optional classification workflow or are derived/intermediate files, but they are not read by `scripts/main.R`. Running `scripts/classification.R` is only necessary if you want to recreate the classification files from the raw Scopus and Scimago inputs. If you only want to reproduce the tables, figures, and robustness checks from the available main-analysis data, you can skip `scripts/classification.R` and run only:
+The optional model-fitting script, `scripts/fit_pet_peese_models.R`, reads `data/MasterData.xlsx`. Running `scripts/classification.R` is only necessary if you want to recreate the classification files from the raw Scopus and Scimago inputs. `scripts/main.R` is now an orchestrator: it loads shared setup, renders outputs from the supplied derived data, and runs the exploratory regressions. Expensive scripts that replace supplied derived data are listed as commented, optional `source()` calls in `scripts/main.R`.
 
 ```r
 source("scripts/main.R")
 ```
 
-## Runtime settings in `scripts/main.R`
+## Runtime settings in `scripts/analysis_setup.R`
 
-At the beginning of `scripts/main.R`, adjust:
+In `scripts/analysis_setup.R`, adjust:
 
 - `n_cores`: number of parallel worker cores.
 - `n_iterations`: number of Monte Carlo/bootstrap iterations for confidence intervals.
@@ -107,9 +107,14 @@ The analysis scripts create their output folders automatically if they do not al
 - `data/`: `MasterData.xlsx` for the main analysis, plus raw and derived files used by the optional classification workflow.
 - `scripts/classification.R`: optional script that recreates subfield classifications from raw inputs.
 - `scripts/functions.R`: helper functions used by the analysis.
+- `scripts/analysis_setup.R`: shared packages, runtime settings, helpers, and output-directory setup.
+- `scripts/fit_pet_peese_models.R`: optional PET-PEESE fitting and per-meta-analysis RDS generation.
 - `scripts/create_analysis_data.R`: optional setup-specific derived-data creation for table/figure rendering.
 - `scripts/create_tables_and_figures.R`: creates manuscript tables and figures in numeric order, with independently rerunnable sections.
-- `scripts/main.R`: reproduces main and supplementary results.
+- `scripts/create_full_tables_figures_and_robustness.R`: optional complete legacy counterfactual, supplementary, and robustness workflow.
+- `scripts/create_esr_data.R`: optional recreation of the ESR workbook after the complete legacy workflow.
+- `scripts/run_exploratory_regressions.R`: exploratory regression models and diagnostic figures, loading supplied data when regenerated files are absent.
+- `scripts/main.R`: short orchestrator that sources the analysis steps.
 - `results/main/`: generated main results.
 - `results/robustness/`: generated robustness-check results.
 - `power and bias.Rproj`: RStudio project file for opening the repository in RStudio.
