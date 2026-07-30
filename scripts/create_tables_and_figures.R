@@ -15,29 +15,7 @@ library(ggeasy)
 library(scales)
 library(here)
 
-source(here("scripts", "functions.R"))
-
-## User-adjustable settings shared by all outputs.
-n_cores <- if (exists("n_cores")) n_cores else 7
-n_iterations <- if (exists("n_iterations")) n_iterations else 1000
-meta_average_multipliers <- if (exists("meta_average_multipliers")) meta_average_multipliers else if (exists("meta_average_multiplier")) meta_average_multiplier else 0.5
-heterogeneity_multipliers <- if (exists("heterogeneity_multipliers")) heterogeneity_multipliers else if (exists("heterogeneity_multiplier")) heterogeneity_multiplier else 0.25
-make_setup_label <- function(meta_average_multiplier, heterogeneity_multiplier) {
-  paste0(
-    "meta_", gsub("\\.", "p", as.character(meta_average_multiplier)),
-    "_heterogeneity_", gsub("\\.", "p", as.character(heterogeneity_multiplier))
-  )
-}
-
-analysis_setups <- if (exists("analysis_setups")) {
-  as_tibble(analysis_setups)
-} else {
-  expand_grid(
-    meta_average_multiplier = meta_average_multipliers,
-    heterogeneity_multiplier = heterogeneity_multipliers
-  ) %>%
-    mutate(setup_label = make_setup_label(meta_average_multiplier, heterogeneity_multiplier))
-}
+source(here("scripts", "analysis_setup.R"))
 
 required_setup_columns <- c("meta_average_multiplier", "heterogeneity_multiplier", "setup_label")
 if (!all(required_setup_columns %in% names(analysis_setups))) {

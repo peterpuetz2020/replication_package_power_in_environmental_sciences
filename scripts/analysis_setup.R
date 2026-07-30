@@ -10,10 +10,24 @@ library(gridExtra); library(ggeasy)
 library(orchaRd)
 library(scales); library(here)
 
-n_cores <- if (exists("n_cores", inherits = FALSE)) n_cores else 7
-n_iterations <- if (exists("n_iterations", inherits = FALSE)) n_iterations else 1000
-meta_average_multiplier <- if (exists("meta_average_multiplier", inherits = FALSE)) meta_average_multiplier else c(0.5, 1)
-heterogeneity_multiplier <- if (exists("heterogeneity_multiplier", inherits = FALSE)) heterogeneity_multiplier else c(0.25, 0.5, 0.75)
+## Set analysis parameters here. All downstream scripts consume these settings.
+n_cores <- 4
+n_iterations <- 10
+meta_average_multiplier <- c(0.5, 1)
+heterogeneity_multiplier <- c(0.25, 0.5, 0.75)
+
+make_setup_label <- function(meta_average_multiplier, heterogeneity_multiplier) {
+  paste0(
+    "meta_", gsub("\\.", "p", as.character(meta_average_multiplier)),
+    "_heterogeneity_", gsub("\\.", "p", as.character(heterogeneity_multiplier))
+  )
+}
+
+analysis_setups <- tidyr::expand_grid(
+  meta_average_multiplier = meta_average_multiplier,
+  heterogeneity_multiplier = heterogeneity_multiplier
+) %>%
+  dplyr::mutate(setup_label = make_setup_label(meta_average_multiplier, heterogeneity_multiplier))
 
 source(here("scripts", "functions.R"))
 
