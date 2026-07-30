@@ -47,6 +47,13 @@ if (anyDuplicated(analysis_setups$setup_label)) {
   stop("Each row of analysis_setups must have a unique setup_label.")
 }
 
+## P-value outputs depend on both multipliers. Power outputs are reported once
+## for each heterogeneity setting, using the first supplied meta-average setting.
+p_value_setups <- analysis_setups
+power_setups <- analysis_setups %>%
+  filter(meta_average_multiplier == first(meta_average_multiplier)) %>%
+  distinct(heterogeneity_multiplier, .keep_all = TRUE)
+
 ## Retain scalar defaults for the manuscript outputs other than Table 2.
 meta_average_multiplier <- analysis_setups$meta_average_multiplier[[1]]
 heterogeneity_multiplier <- analysis_setups$heterogeneity_multiplier[[1]]
@@ -175,11 +182,13 @@ get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL, hete
   cl <- makeCluster(n_cores)
   registerDoParallel(cl)
   on.exit(stopCluster(cl), add = TRUE)
-  if (ci) {
+  result <- if (ci) {
     cf.ci.cluster(dat = dat, z.grid = grid, iters = n_iterations, cluster = cluster, heterogeneity_multiplier = heterogeneity_multiplier_value)
   } else {
     cf(dat = dat, z.grid = grid, heterogeneity_multiplier = heterogeneity_multiplier_value)
   }
+  saveRDS(result, path)
+  result
 }
 
 ensure_output_dirs()
@@ -285,12 +294,13 @@ write_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier, set
   write.csv(p.table, here("results", "main", paste0("p.table.ci_pet_peese_rstandard_", setup_label, "_Table 2.csv")))
 }
 
-analysis_setups %>% pwalk(write_table_2)
+p_value_setups %>% pwalk(write_table_2)
 
 ## -------------------------------
 ## Table 3
 ## -------------------------------
-pps_rstandard <- load_power_data()
+write_table_3 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
+pps_rstandard <- load_pet_peese_data(setup_label) %>% add_power_variables(meta_average_multiplier)
 subf_desc <- pps_rstandard %>% group_by(subfd) %>% summarise(M = length(unique(cID)), N = length(power), median = round(median(power), 2), mean = round(mean(power), 2), Q25 = round(quantile(power, 0.25), 2), Q75 = round(quantile(power, 0.75), 2), sape = round(length(which(power >= 0.8)) / length(power), 2), .groups = "drop")
 med_med <- pps_rstandard %>% group_by(cID) %>% summarise(metaID = metaID[1], subfd = subfd[1], median = median(power), .groups = "drop")
 med_med_subf <- med_med %>% group_by(subfd) %>% summarise(mmedian = round(median(median), 2), .groups = "drop")
@@ -300,6 +310,9 @@ for (i in seq_len(nrow(subf_desc))) power.tab3[i + 1, ] <- c(subf_desc$M[i], sub
 colnames(power.tab3) <- c("M", "N", "mmedian", "median", "mean", "Q25", "Q75", "SAPE")
 rownames(power.tab3) <- c("All meta-analyses", "Ecology", "Environmental Chemistry", "Environmental Engineering", "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law", "Nature and Landscape Conservation", "Water Science and Technology")
 write.csv(power.tab3, here("results", "main", paste0("Power_Table3_", setup_label, ".csv")))
+}
+
+power_setups %>% pwalk(write_table_3)
 
 ## -------------------------------
 ## Figure 2

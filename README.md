@@ -55,7 +55,7 @@ To recreate the manuscript tables and figures in publication order, use the dedi
 source("scripts/create_tables_and_figures.R")
 ```
 
-This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Table 2 is written once for every combination of `meta_average_multipliers` and `heterogeneity_multipliers`. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
+This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). The p-value results in Table 2 are written for every combination of `meta_average_multipliers` and `heterogeneity_multipliers`. The power results in Table 3 are written once for each heterogeneity multiplier, using the first supplied meta-average multiplier. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
 
 ### Optional setup-specific data creation
 
@@ -65,7 +65,7 @@ The data-preparation step is separated from table/figure rendering. To generate 
 source("scripts/create_analysis_data.R")
 ```
 
-This writes setup-specific derived datasets under `results/main/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. By default, it creates the derived analysis datasets only and leaves the expensive counterfactual simulations untouched. Define `recreate_counterfactuals <- TRUE` before sourcing the script only when you also want to rebuild the setup-specific counterfactual z-value and p-value RDS files for each selected combination. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
+This writes setup-specific derived datasets under `results/main/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. The script also creates any missing setup-specific counterfactual z-value and p-value RDS files needed by the tables and plots, while reusing files that already exist. Define `recreate_counterfactuals <- TRUE` before sourcing the script to overwrite and rebuild all matching counterfactual files. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
 
 ### Optional data-recreation step
 
@@ -84,7 +84,7 @@ In `scripts/analysis_setup.R`, adjust:
 - `meta_average_multiplier`: vector of multipliers applied to the meta-analytic average when calculating power (default `c(0.5, 1)`).
 - `heterogeneity_multiplier`: vector of multipliers applied to the between-effect heterogeneity in the counterfactual calculations (default `c(0.25, 0.5, 0.75)`).
 
-The two multiplier vectors are independent. Table 2 and the optional setup-specific data generation evaluate every combination of their values; the other manuscript outputs use the first combination. Define custom vectors before sourcing `scripts/main.R`; the setup script retains supplied values:
+The two multiplier vectors are independent. P-value outputs and setup-specific data generation evaluate every combination of their values. Power Table 3 is saved once for each heterogeneity multiplier (with the first supplied meta-average multiplier), while the remaining manuscript outputs use the first combination. Define custom vectors before sourcing `scripts/main.R`; the setup script retains supplied values:
 
 ```r
 meta_average_multiplier <- c(0.5, 0.75, 1)
