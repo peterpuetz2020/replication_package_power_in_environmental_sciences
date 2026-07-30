@@ -188,19 +188,36 @@ het_subfield <- pps_rstandard %>%
   dplyr::group_by(cID) %>%
   dplyr::summarize(subfd=subfd[1], tau2=tau2[1], isq=isq[1], .groups="drop")
 
-het_distrubtion <- het_subfield %>%
+het_distribution <- het_subfield %>%
   dplyr::rename("Subfield"=subfd) %>%
   dplyr::group_by(Subfield) %>%
   dplyr::summarize(M=length(unique(cID)), Median=median(isq), Mean=mean(isq),
                    Q25=quantile(isq,probs=0.25), Q75=quantile(isq,probs=0.75),
-                   Heterogeneity=list(isq), .groups = "drop") %>%
-  gt() %>%
-  gt_plt_dist(Heterogeneity, type="density", line_color="gray", fill_color="skyblue") %>%
-  fmt_number(columns=M:Q75,use_seps=FALSE,drop_trailing_zeros=TRUE) %>%
-  tab_options(table.font.size="small", table.font.names="calibri") %>%
-  tab_style(style=cell_text(align="center"), locations=cells_column_labels(columns=M:Q75))
-print(het_distrubtion)
-gtsave(het_distrubtion,file=here("results","robustness","pet_peese_rstandard_heterogeneity_by_subfield.PNG"))
+                   .groups = "drop") %>%
+  dplyr::mutate(dplyr::across(M:Q75, ~ format(round(.x, 2), trim=TRUE)))
+print(het_distribution)
+
+## Render with R's native PNG graphics device. Unlike gtsave() for a PNG, this
+## does not render an intermediate HTML document and therefore needs no Chrome,
+## Chromium, chromote, or other browser automation software.
+heterogeneity_table <- gridExtra::tableGrob(
+  het_distribution,
+  rows=NULL,
+  theme=gridExtra::ttheme_minimal(
+    base_size=9,
+    core=list(fg_params=list(hjust=0.5, x=0.5)),
+    colhead=list(fg_params=list(hjust=0.5, x=0.5, fontface="bold"))
+  )
+)
+grDevices::png(
+  filename=here("results","robustness","pet_peese_rstandard_heterogeneity_by_subfield.PNG"),
+  width=2400,
+  height=700,
+  res=200
+)
+grid::grid.newpage()
+grid::grid.draw(heterogeneity_table)
+grDevices::dev.off()
 
 ## Power analysis (for Supplementary Information)
 ## NOTE: After subsetting the data, you can go back to Line 207 to calculate power
