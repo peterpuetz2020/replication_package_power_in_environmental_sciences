@@ -10,6 +10,10 @@ source(here::here("scripts", "analysis_setup.R"))
 ## Optional: refit PET-PEESE models and replace the per-meta-analysis RDS files.
 # source(here::here("scripts", "fit_pet_peese_models.R"))
 
+## Build setup-specific datasets and any missing counterfactual simulations before
+## rendering. Existing counterfactual files are reused unless explicitly rebuilt.
+source(here::here("scripts", "create_analysis_data.R"))
+
 ## Recreate the ordered manuscript tables and figures from available data.
 source(here::here("scripts", "create_tables_and_figures.R"))
 

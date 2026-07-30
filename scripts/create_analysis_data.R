@@ -34,9 +34,16 @@ analysis_setups <- if (exists("analysis_setups")) {
     mutate(setup_label = make_setup_label(meta_average_multiplier, heterogeneity_multiplier))
 }
 
-## Set to TRUE only when the counterfactual z-/p-value files should be rebuilt.
+## Missing counterfactual z-/p-value files are always created because the tables
+## and plots consume them. Set this to TRUE to overwrite existing matching files.
 ## These steps can be very time consuming with n_iterations <- 1000.
 recreate_counterfactuals <- if (exists("recreate_counterfactuals")) recreate_counterfactuals else FALSE
+
+save_counterfactual <- function(path, calculate) {
+  if (recreate_counterfactuals || !file.exists(path)) {
+    saveRDS(calculate(), path)
+  }
+}
 
 ensure_output_dirs <- function() {
   invisible(lapply(
@@ -159,17 +166,15 @@ write_analysis_setup <- function(pps_rstandard_raw, grids, meta_average_multipli
     here("results", "main", "derived_data", paste0("analysis_settings_", setup_label, ".rds"))
   )
 
-  if (recreate_counterfactuals) {
-    z_plot_path <- here("results", "main", paste0("z_plot_pet_peese_rstandard_", setup_label, ".rds"))
-    z_plot_ci_path <- here("results", "main", paste0("z_plot_ci_pet_peese_rstandard_", setup_label, ".rds"))
-    p_tab_path <- here("results", "main", paste0("p_tab_pps_rstandard_", setup_label, ".rds"))
-    p_tab_ci_path <- here("results", "main", paste0("p_tab_ci_pps_rstandard_", setup_label, ".rds"))
+  z_plot_path <- here("results", "main", paste0("z_plot_pet_peese_rstandard_", setup_label, ".rds"))
+  z_plot_ci_path <- here("results", "main", paste0("z_plot_ci_pet_peese_rstandard_", setup_label, ".rds"))
+  p_tab_path <- here("results", "main", paste0("p_tab_pps_rstandard_", setup_label, ".rds"))
+  p_tab_ci_path <- here("results", "main", paste0("p_tab_ci_pps_rstandard_", setup_label, ".rds"))
 
-    saveRDS(run_parallel_cf(myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier), z_plot_path)
-    saveRDS(run_parallel_cf_ci(myDat_counterfactual, grids$z_grid_plot, unique(pps_rstandard_raw$cID), heterogeneity_multiplier), z_plot_ci_path)
-    saveRDS(run_parallel_cf(myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier), p_tab_path)
-    saveRDS(run_parallel_cf_ci(myDat_counterfactual, grids$p_grid_tab, unique(pps_rstandard_raw$cID), heterogeneity_multiplier), p_tab_ci_path)
-  }
+  save_counterfactual(z_plot_path, function() run_parallel_cf(myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier))
+  save_counterfactual(z_plot_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$z_grid_plot, unique(pps_rstandard_raw$cID), heterogeneity_multiplier))
+  save_counterfactual(p_tab_path, function() run_parallel_cf(myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier))
+  save_counterfactual(p_tab_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$p_grid_tab, unique(pps_rstandard_raw$cID), heterogeneity_multiplier))
 }
 
 ensure_output_dirs()
