@@ -7,7 +7,7 @@ library(foreach); library(doParallel); library(readxl); library(openxlsx)
 library(MASS); library(car); library(lmtest); library(sandwich)
 library(stargazer)
 library(gridExtra); library(ggeasy)
-library(gt); library(gtExtras); library(orchaRd)
+library(orchaRd)
 library(scales); library(here)
 
 n_cores <- 7
