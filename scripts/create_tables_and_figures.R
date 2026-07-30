@@ -47,14 +47,7 @@ if (anyDuplicated(analysis_setups$setup_label)) {
   stop("Each row of analysis_setups must have a unique setup_label.")
 }
 
-## P-value outputs depend on both multipliers. Power outputs are reported once
-## for each heterogeneity setting, using the first supplied meta-average setting.
-p_value_setups <- analysis_setups
-power_setups <- analysis_setups %>%
-  filter(meta_average_multiplier == first(meta_average_multiplier)) %>%
-  distinct(heterogeneity_multiplier, .keep_all = TRUE)
-
-## Retain scalar defaults for the manuscript outputs other than Table 2.
+## Retain scalar defaults for helper calls made outside a setup-specific writer.
 meta_average_multiplier <- analysis_setups$meta_average_multiplier[[1]]
 heterogeneity_multiplier <- analysis_setups$heterogeneity_multiplier[[1]]
 setup_label <- analysis_setups$setup_label[[1]]
@@ -115,13 +108,13 @@ add_power_variables <- function(dat, meta_average_multiplier = 0.5) {
     )
 }
 
-load_power_data <- function() {
-  derived_path <- here("results", "main", "derived_data", paste0("pps_rstandard_power_", setup_label, ".rds"))
+load_power_data <- function(setup_label_value = setup_label, meta_average_multiplier_value = meta_average_multiplier) {
+  derived_path <- here("results", "main", "derived_data", paste0("pps_rstandard_power_", setup_label_value, ".rds"))
   if (file.exists(derived_path)) {
     return(readRDS(derived_path))
   }
-  load_pet_peese_data() %>%
-    add_power_variables(meta_average_multiplier)
+  load_pet_peese_data(setup_label_value) %>%
+    add_power_variables(meta_average_multiplier_value)
 }
 
 split_meta_analyses <- function(dat, add_sape = FALSE) {
@@ -196,7 +189,8 @@ ensure_output_dirs()
 ## -------------------------------
 ## Table 1
 ## -------------------------------
-pps_rstandard <- load_power_data()
+write_table_1 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
+pps_rstandard <- load_power_data(setup_label, meta_average_multiplier)
 myDat <- split_meta_analyses(pps_rstandard, add_sape = TRUE)
 mss <- vapply(myDat, function(x) length(x$sei), numeric(1))
 
@@ -223,19 +217,23 @@ d.tab <- rbind(
 rownames(d.tab) <- c("All meta-analyses", "Observational", "Experimental", "SAPE > 0", "SAPE = 0", "Yes", "No", "Yes", "No")
 colnames(d.tab) <- c("M", "N", "Mean", "Median", "Min", "Q25", "Q50", "Q75", "Max")
 write.csv(d.tab, here("results", "main", paste0("Descriptive_Table1_", setup_label, ".csv")))
+}
+
+analysis_setups %>% pwalk(write_table_1)
 
 ## -------------------------------
 ## Figure 1
 ## -------------------------------
-pps_rstandard <- load_pet_peese_data()
+write_figure_1 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
+pps_rstandard <- load_pet_peese_data(setup_label)
 grids <- make_grids()
 my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
 myDat <- split_meta_analyses(my_dat)
 facz <- abs(my_dat$yi / sqrt(my_dat$vi))
 z.orig <- count_intervals(facz, grids$z_grid_plot2)
 p.orig.plot <- count_intervals(facz, grids$p_grid_plot[which(grids$p_grid_plot >= 0)])
-z.plot <- get_counterfactual(here("results", "main", paste0("z_plot_pet_peese_rstandard_", setup_label, ".rds")), myDat, grids$z_grid_plot)
-z.plot.ci <- get_counterfactual(here("results", "main", paste0("z_plot_ci_pet_peese_rstandard_", setup_label, ".rds")), myDat, grids$z_grid_plot, ci = TRUE, cluster = unique(pps_rstandard$cID))
+z.plot <- get_counterfactual(here("results", "main", paste0("z_plot_pet_peese_rstandard_", setup_label, ".rds")), myDat, grids$z_grid_plot, heterogeneity_multiplier_value = heterogeneity_multiplier)
+z.plot.ci <- get_counterfactual(here("results", "main", paste0("z_plot_ci_pet_peese_rstandard_", setup_label, ".rds")), myDat, grids$z_grid_plot, ci = TRUE, cluster = unique(pps_rstandard$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
 xs <- as.vector(grids$z_grid_plot2[-length(grids$z_grid_plot2)] + (grids$z_grid_plot2[2] - grids$z_grid_plot2[1]) / 2)
 N <- sum(p.orig.plot)
@@ -261,6 +259,9 @@ ggplot(datFull) +
   scale_x_continuous(breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8)) +
   theme(panel.background = element_rect(fill = "gray100"), panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(linewidth = 0.5, color = "gray"))
 dev.off()
+}
+
+analysis_setups %>% pwalk(write_figure_1)
 
 ## -------------------------------
 ## Table 2
@@ -294,7 +295,7 @@ write_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier, set
   write.csv(p.table, here("results", "main", paste0("p.table.ci_pet_peese_rstandard_", setup_label, "_Table 2.csv")))
 }
 
-p_value_setups %>% pwalk(write_table_2)
+analysis_setups %>% pwalk(write_table_2)
 
 ## -------------------------------
 ## Table 3
@@ -312,12 +313,13 @@ rownames(power.tab3) <- c("All meta-analyses", "Ecology", "Environmental Chemist
 write.csv(power.tab3, here("results", "main", paste0("Power_Table3_", setup_label, ".csv")))
 }
 
-power_setups %>% pwalk(write_table_3)
+analysis_setups %>% pwalk(write_table_3)
 
 ## -------------------------------
 ## Figure 2
 ## -------------------------------
-pps_rstandard <- load_power_data()
+write_figure_2 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
+pps_rstandard <- load_power_data(setup_label, meta_average_multiplier)
 pps_rstandard_median <- pps_rstandard %>% group_by(cID) %>% summarise(metaID = metaID[1], median = median(power), sape = length(which(power >= 0.8)) / length(power), nips = length(unique(sID)), esty = unique(etype), guid = unique(guide), prer = unique(prere), subf = unique(subfd), sdes = unique(sdesn), .groups = "drop") %>% mutate(yn80 = ifelse(median >= 0.8, "yes", "no"), median100 = round(100 * median, 2), sape100 = round(100 * sape, 2))
 write.xlsx(pps_rstandard_median, here("results", "main", paste0("median_power_pps_rstandard_", setup_label, "_704.xlsx")), overwrite = TRUE)
 med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
@@ -325,3 +327,6 @@ sape <- pps_rstandard_median %>% ggplot(aes(x = sape100)) + geom_histogram(aes(y
 pdf(here("results", "main", paste0("pps_rstandard_", setup_label, "_704_Fig2.pdf")), width = 10, height = 4)
 grid.arrange(med_pwr, sape, ncol = 2)
 dev.off()
+}
+
+analysis_setups %>% pwalk(write_figure_2)
