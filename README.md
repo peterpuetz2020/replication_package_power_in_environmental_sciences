@@ -81,6 +81,16 @@ In `scripts/analysis_setup.R`, adjust:
 
 - `n_cores`: number of parallel worker cores.
 - `n_iterations`: number of Monte Carlo/bootstrap iterations for confidence intervals.
+- `meta_average_multiplier`: vector of multipliers applied to the meta-analytic average when calculating power (default `c(0.5, 1)`).
+- `heterogeneity_multiplier`: vector of multipliers applied to the between-effect heterogeneity in the counterfactual calculations (default `c(0.25, 0.5, 0.75)`).
+
+The two multiplier vectors are independent. Table 2 and the optional setup-specific data generation evaluate every combination of their values; the other manuscript outputs use the first combination. Define custom vectors before sourcing `scripts/main.R`; the setup script retains supplied values:
+
+```r
+meta_average_multiplier <- c(0.5, 0.75, 1)
+heterogeneity_multiplier <- c(0.25, 0.5)
+source("scripts/main.R")
+```
 
 The paper uses `n_iterations <- 1000`. Smaller values are useful for quick checks only and should not be used for final replication.
 
