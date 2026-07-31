@@ -21,6 +21,12 @@ n_cores <- if (exists("n_cores")) n_cores else 7
 input_file <- here("data", "MasterData.xlsx")
 output_dir <- here("results", "estimator_comparison")
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+estimator_data_dirs <- c(
+  multilevel_random = here("results", "main", "multilevel_random"),
+  fixed = here("results", "main", "fixed")
+)
+invisible(lapply(estimator_data_dirs, dir.create, recursive = TRUE,
+                 showWarnings = FALSE))
 
 meta <- read_excel(input_file) %>%
   ## These models also fail in the original PET-PEESE analysis because their
@@ -133,6 +139,7 @@ fit_one_meta_analysis <- function(dat) {
     random_effect_se <- fixed_effect_se
     random_effect_p_value <- fixed_effect_p_value
     random_effect_tau2 <- 0
+    random_effect_isq <- 0
     random_effect_fallback <- TRUE
   } else {
     fixed <- rma.mv(
@@ -167,8 +174,41 @@ fit_one_meta_analysis <- function(dat) {
     random_effect_p_value <- as.numeric(random_test$p_Satt[1])
     ## sigma2[2] is the between-study variance, matching the PET-PEESE code.
     random_effect_tau2 <- as.numeric(random$sigma2[2])
+    random_effect_isq <- as.numeric(orchaRd::i2_ml(random, method = "matrix")[1])
     random_effect_fallback <- FALSE
   }
+
+  ## Preserve the effect-level structure consumed by the downstream power and
+  ## counterfactual analyses. Each meta-analytic estimate is repeated for all
+  ## observations retained by the common PET residual screen, just as in the
+  ## original PET-PEESE RDS files.
+  make_estimator_data <- function(estimate, tau2, isq, p_value) {
+    conventional_data %>%
+      transmute(
+        metaID, cID, sID, eID, yi, vi,
+        GE = estimate,
+        tau2 = tau2,
+        isq = isq,
+        sig_overall = p_value,
+        small_study_effect_pval = NA_real_,
+        etype = estype,
+        guide, prere = prereg, subfd = subfield, sdesn = sdesign
+      )
+  }
+
+  saveRDS(
+    make_estimator_data(
+      random_effect_estimate, random_effect_tau2,
+      random_effect_isq, random_effect_p_value
+    ),
+    file.path(estimator_data_dirs[["multilevel_random"]],
+              paste0("meta_", analysis_data$cID[1], ".rds"))
+  )
+  saveRDS(
+    make_estimator_data(fixed_effect_estimate, 0, 0, fixed_effect_p_value),
+    file.path(estimator_data_dirs[["fixed"]],
+              paste0("meta_", analysis_data$cID[1], ".rds"))
+  )
   
   tibble(
     cID = as.character(analysis_data$cID[1]),
@@ -201,11 +241,11 @@ run_meta_analyses <- function(meta_analyses, n_cores) {
   
   foreach(
     dat = meta_analyses,
-    .packages = c("metafor", "clubSandwich", "dplyr", "tibble"),
+    .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),
     ## The fitting functions are referenced indirectly from this wrapper, so
     ## foreach's automatic global detection does not reliably export them to
     ## PSOCK workers (notably on Windows). Export both functions explicitly.
-    .export = c("fit_one_meta_analysis", "fit_pet_peese"),
+    .export = c("fit_one_meta_analysis", "fit_pet_peese", "estimator_data_dirs"),
     .combine = bind_rows
   ) %dopar% fit_one_meta_analysis(dat)
 }
