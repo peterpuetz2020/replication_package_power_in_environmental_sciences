@@ -14,7 +14,7 @@ library(scales); library(here)
 n_cores <- 4
 n_iterations <- 10
 meta_average_multiplier <- c(0.5, 1)
-heterogeneity_multiplier <- c(0.25, 0.5, 0.75)
+heterogeneity_multiplier <- c(0, 0.25, 0.5, 0.75)
 
 make_setup_label <- function(meta_average_multiplier, heterogeneity_multiplier) {
   paste0(

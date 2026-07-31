@@ -846,8 +846,8 @@ ggplot(datFull) +
   geom_point(aes(xs,n.f), shape=20, fill='blue', color='blue', size=1)+
   coord_cartesian(xlim=c(0,8)) +
   xlab('|z|-value') + ylab('Frequency') +
-  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), size=0.5)+
-  scale_x_discrete(limits = c(0,1.64,1.96,2.58,4,6,8)) +
+  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), linewidth=0.5)+
+  scale_x_continuous(breaks = c(0,1.64,1.96,2.58,4,6,8)) +
   theme(panel.background = element_rect(fill = "gray100"),
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -1162,8 +1162,8 @@ eco <- ggplot(datSUBF) +
   geom_point(aes(xs.eco, n.f.eco),shape=20, fill='blue', color='blue', size=1)+
   coord_cartesian(xlim=c(0,8)) + xlab('|z|-value') + ylab('Frequency') +
   ggtitle('Ecology') + easy_center_title()+
-  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), size=0.5)+
-  scale_x_discrete(limits=c(0,1.64,1.96,2.58,4,6,8)) +
+  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), linewidth=0.5)+
+  scale_x_continuous(breaks=c(0,1.64,1.96,2.58,4,6,8)) +
   theme(panel.background = element_rect(fill = "gray100"),
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -1179,8 +1179,8 @@ enc <- ggplot(datSUBF) +
   geom_point(aes(xs.enc, n.f.enc),shape=20, fill='blue', color='blue', size=1)+
   coord_cartesian(xlim=c(0,8)) + xlab('|z|-value') + ylab('Frequency') +
   ggtitle('Environmental Chemistry') + easy_center_title()+
-  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), size=0.5)+
-  scale_x_discrete(limits=c(0,1.64,1.96,2.58,4,6,8)) +
+  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), linewidth=0.5)+
+  scale_x_continuous(breaks=c(0,1.64,1.96,2.58,4,6,8)) +
   theme(panel.background = element_rect(fill = "gray100"),
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -1196,8 +1196,8 @@ ene <- ggplot(datSUBF) +
   geom_point(aes(xs.ene, n.f.ene),shape=20, fill='blue', color='blue', size=1)+
   coord_cartesian(xlim=c(0,8)) + xlab('|z|-value') + ylab('Frequency') +
   ggtitle('Environmental Engineering') + easy_center_title()+
-  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), size=0.5)+
-  scale_x_discrete(limits=c(0,1.64,1.96,2.58,4,6,8)) +
+  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), linewidth=0.5)+
+  scale_x_continuous(breaks=c(0,1.64,1.96,2.58,4,6,8)) +
   theme(panel.background = element_rect(fill = "gray100"),
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -1213,8 +1213,8 @@ nlc <- ggplot(datSUBF) +
   geom_point(aes(xs.nlc, n.f.nlc),shape=20, fill='blue', color='blue', size=1)+
   coord_cartesian(xlim=c(0,8)) + xlab('|z|-value') + ylab('Frequency') +
   ggtitle('Nature & Landscape Conservation') + easy_center_title()+
-  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), size=0.5)+
-  scale_x_discrete(limits=c(0,1.64,1.96,2.58,4,6,8)) +
+  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), linewidth=0.5)+
+  scale_x_continuous(breaks=c(0,1.64,1.96,2.58,4,6,8)) +
   theme(panel.background = element_rect(fill = "gray100"),
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -1230,8 +1230,8 @@ mpl <- ggplot(datSUBF) +
   geom_point(aes(xs.mpl, n.f.mpl),shape=20, fill='blue', color='blue', size=1)+
   coord_cartesian(xlim=c(0,8)) + xlab('|z|-value') + ylab('Frequency') +
   ggtitle('Management, Monitoring, Policy & Law')+ easy_center_title()+
-  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), size=0.5)+
-  scale_x_discrete(limits=c(0,1.64,1.96,2.58,4,6,8)) +
+  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), linewidth=0.5)+
+  scale_x_continuous(breaks=c(0,1.64,1.96,2.58,4,6,8)) +
   theme(panel.background = element_rect(fill = "gray100"),
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -1247,8 +1247,8 @@ wst <- ggplot(datSUBF) +
   geom_point(aes(xs.wst, n.f.wst),shape=20, fill='blue', color='blue', size=1)+
   coord_cartesian(xlim=c(0,8)) + xlab('|z|-value') + ylab('Frequency') +
   ggtitle('Water Science & Technology') + easy_center_title()+
-  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), size=0.5)+
-  scale_x_discrete(limits=c(0,1.64,1.96,2.58,4,6,8)) +
+  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), linewidth=0.5)+
+  scale_x_continuous(breaks=c(0,1.64,1.96,2.58,4,6,8)) +
   theme(panel.background = element_rect(fill = "gray100"),
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
@@ -1264,8 +1264,8 @@ htm <- ggplot(datSUBF) +
   geom_point(aes(xs.htm, n.f.htm),shape=20, fill='blue', color='blue', size=1)+
   coord_cartesian(xlim=c(0,8)) + xlab('|z|-value') + ylab('Frequency') +
   ggtitle('Health, Toxicology & Mutagenesis') + easy_center_title()+
-  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), size=0.5)+
-  scale_x_discrete(limits=c(0,1.64,1.96,2.58,4,6,8)) +
+  geom_vline(xintercept = c(1.64,1.96,2.58), lty=2, color=c(3,2,6), linewidth=0.5)+
+  scale_x_continuous(breaks=c(0,1.64,1.96,2.58,4,6,8)) +
   theme(panel.background = element_rect(fill = "gray100"),
         panel.border = element_blank(),
         panel.grid.major = element_blank(),
