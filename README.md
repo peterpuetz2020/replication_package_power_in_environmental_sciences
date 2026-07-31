@@ -57,6 +57,20 @@ source("scripts/create_tables_and_figures.R")
 
 This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Every table and figure is written for every combination of `meta_average_multipliers` and `heterogeneity_multipliers`. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
 
+The workflow renders each setup for PET-PEESE, multilevel random effects, and
+fixed effects. Before the first run, create the conventional-estimator datasets:
+
+```r
+source("scripts/compare_meta_analysis_estimators.R")
+source("scripts/create_tables_and_figures.R")
+```
+
+The comparison script applies the PET residual screen consistently, then saves
+effect-level inputs under `results/main/multilevel_random/` and
+`results/main/fixed/`. Output filenames end in `_pet_peese`,
+`_multilevel_random`, or `_fixed`, so results from each estimator remain
+separate.
+
 Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 
 ### Optional setup-specific data creation
