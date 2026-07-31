@@ -103,7 +103,7 @@ final_nb$fitted <- nbMod1$fitted.values
 
 ## Plots
 
-pdf(here("results","robustness","RegDiagPlots_NB_cont_Model1.pdf"),width=12,height=12)
+pdf(here("results","robustness","Robustness_Figure_2_NB_Model_1_continuous_diagnostics.pdf"),width=12,height=12)
 par(mfrow=c(4,2))
 plot(final_nb$fitted, final_nb$resid,col="skyblue",
      xlab="Fitted values", ylab="Residuals", main="Residuals vs. Fitted")
@@ -153,7 +153,7 @@ subf <- ggplot(data=final_nb, aes(x=as.factor(subfield),y=resid)) +
   theme(panel.background = element_rect(fill = "white"),
         axis.line = element_line(linewidth = 0.5, color = "gray"))
 
-pdf(here("results","robustness","RegDiagPlots_NB_cat_Model1.pdf"),width=12,height=6)
+pdf(here("results","robustness","Robustness_Figure_3_NB_Model_1_categorical_diagnostics.pdf"),width=12,height=6)
 grid.arrange(exp, guid, prer, subf, nrow=2, ncol = 2)
 dev.off()
 
@@ -164,7 +164,7 @@ final_nb$fitted <- nbMod2$fitted.values
 
 ## Plots
 
-pdf(here("results","robustness","RegDiagPlots_NB_cont.pdf"),width=12,height=12)
+pdf(here("results","robustness","Robustness_Figure_4_NB_Model_2_continuous_diagnostics.pdf"),width=12,height=12)
 par(mfrow=c(4,2))
 plot(final_nb$fitted, final_nb$resid,col="skyblue",
      xlab="Fitted values", ylab="Residuals", main="Residuals vs. Fitted")
@@ -214,7 +214,7 @@ subf <- ggplot(data=final_nb, aes(x=as.factor(subfield),y=resid)) +
   theme(panel.background = element_rect(fill = "white"),
         axis.line = element_line(linewidth = 0.5, color = "gray"))
 
-pdf(here("results","robustness","RegDiagPlots_NB_cat.pdf"),width=12,height=6)
+pdf(here("results","robustness","Robustness_Figure_5_NB_Model_2_categorical_diagnostics.pdf"),width=12,height=6)
 grid.arrange(exp, guid, prer, subf, nrow=2, ncol = 2)
 dev.off()
 

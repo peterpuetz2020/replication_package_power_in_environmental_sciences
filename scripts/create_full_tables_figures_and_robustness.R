@@ -100,11 +100,11 @@ colnames(power.tab3) <- c("M","N","mmedian","median","mean","Q25","Q75","SAPE")
 rownames(power.tab3) <- c("All meta-analyses","Ecology","Environmental Chemistry","Environmental Engineering","Health, Toxicology and Mutagenesis",
                           "Management, Monitoring, Policy and Law","Nature and Landscape Conservation","Water Science and Technology")
 print(power.tab3)
-#write.csv(power.tab3,here("results","main","Power_Table3_half_meta-average.csv"))
-#write.csv(power.tab3,here("results","main","Power_Table3_SI_full_meta-average.csv"))
-#write.csv(power.tab3,here("results","main","Power_Table3_SI_one fourth_meta-average.csv"))
-#write.csv(power.tab3,here("results","main","Power_Table3_SI_null MA dropped_half_meta-average.csv"))
-write.csv(power.tab3,here("results","main","Power_Table3_SI_non-sig. estimates dropped_half_meta-average.csv"))
+#write.csv(power.tab3,here("results","main","Table_3_legacy_half_meta_average.csv"))
+#write.csv(power.tab3,here("results","robustness","Robustness_Table_9_Power_full_meta_average.csv"))
+#write.csv(power.tab3,here("results","robustness","Robustness_Table_9_Power_quarter_meta_average.csv"))
+#write.csv(power.tab3,here("results","robustness","Robustness_Table_9_Power_null_meta_analyses_dropped.csv"))
+write.csv(power.tab3,here("results","robustness","Robustness_Table_9_Power_non_significant_estimates_dropped_half_meta_average.csv"))
 
 ## Summary statistics for each meta-analysis (we need for our exploratory regression analyses)
 pps_rstandard_median <- pps_rstandard %>%
@@ -120,8 +120,8 @@ pps_rstandard_median <- pps_rstandard %>%
             sdes = unique(sdesn))
 dim(pps_rstandard_median)  #704x10
 
-write.xlsx(pps_rstandard_median,here("results","main","median_power_pps_rstandard_half meta-average_704.xlsx"),overwrite=T)
-#write.xlsx(pps_rstandard_median,here("results","main","median_power_pps_rstandard_full meta-average_704.xlsx"),overwrite=T)
+write.xlsx(pps_rstandard_median,here("results","main","Figure_2_data_legacy_half_meta_average.xlsx"),overwrite=T)
+#write.xlsx(pps_rstandard_median,here("results","main","Figure_2_data_legacy_full_meta_average.xlsx"),overwrite=T)
 
 length(unique(pps_rstandard_median$metaID)) #202
 
@@ -179,7 +179,7 @@ sape <- pps_rstandard_median %>%
         axis.line = element_line(linewidth = 0.5, color = "gray"))
 print(sape)
 
-pdf(here("results","main","pps_rstandard_704_Fig2.pdf"),width=10,height=4)
+pdf(here("results","main","Figure_2_legacy_half_meta_average.pdf"),width=10,height=4)
 grid.arrange(med_pwr, sape, ncol = 2)
 dev.off()
 
@@ -210,7 +210,7 @@ heterogeneity_table <- gridExtra::tableGrob(
   )
 )
 grDevices::png(
-  filename=here("results","robustness","pet_peese_rstandard_heterogeneity_by_subfield.PNG"),
+  filename=here("results","robustness","Robustness_Table_1_Heterogeneity_by_subfield.png"),
   width=2400,
   height=700,
   res=200
@@ -392,7 +392,7 @@ d.tab[8,9] <- max(mss[i.reg]);                         d.tab[9,9] <- max(mss[i.n
 rownames(d.tab) <- c("All meta-analyses", "Observational","Experimental","SAPE > 0", "SAPE = 0","Yes","No","Yes","No")
 colnames(d.tab) <- c("M", "N", "Mean","Median", "Min", "Q25", "Q50", "Q75","Max")
 print(d.tab)
-write.csv(d.tab,here("results","main","Descriptive_Table1_half meta-average.csv"))
+write.csv(d.tab,here("results","main","Table_1_legacy_half_meta_average.csv"))
 
 
 ## -----------------------------------------------------------------------------
@@ -835,8 +835,8 @@ n.cf <- as.vector(z.plot/N)
 datFull <- as.data.frame(cbind(xs, q025, q975, n.f, n.cf))
 dim(datFull)
 
-#pdf(here("results","main","zplot_waap_pet_peese_z20_Fig1.pdf"),width=10,height=5)
-pdf(here("results","main","zplot_pet_peese_rstandard_half_704_Fig1.pdf"),width=10,height=5)
+#pdf(here("results","robustness","Robustness_Figure_1_WAAP_z20.pdf"),width=10,height=5)
+pdf(here("results","main","Figure_1_legacy_half_meta_average.pdf"),width=10,height=5)
 ggplot(datFull) +
   geom_line(aes(xs, q025), color='orange', lty=3) +
   geom_line(aes(xs, n.cf), color='orange', lty=1) +
@@ -949,9 +949,9 @@ rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0
                        "No. of meta-analysis", "No. of tests")
 print(p.table)
 
-write.csv(p.table, here("results","main","p.table.ci_pet_peese_rstandard_half_Table 2.csv"))
-#write.csv(p.table, here("results","main","p.table.ci_pet_peese_rstandard_half_0.25xtau2_Table 2.csv"))
-#write.csv(p.table, here("results","main","p.table.ci_pet_peese_rstandard_half_0.5xtau2_Table 2.csv"))
+write.csv(p.table, here("results","main","Table_2_legacy_half_meta_average.csv"))
+#write.csv(p.table, here("results","robustness","Robustness_Table_10_ESR_quarter_heterogeneity.csv"))
+#write.csv(p.table, here("results","robustness","Robustness_Table_10_ESR_half_heterogeneity.csv"))
 
 ## -------------
 ## For subfields
@@ -1272,7 +1272,7 @@ htm <- ggplot(datSUBF) +
         panel.grid.minor = element_blank(),
         axis.line = element_line(linewidth = 0.5, color = "gray"))
 
-pdf(here("results","robustness","pet_peese_rstandard_subfield_Fig.pdf"),width=14,height=12)
+pdf(here("results","robustness","Robustness_Figure_1_ESR_by_subfield.pdf"),width=14,height=12)
 grid.arrange(eco, enc, ene, nlc, mpl, wst, htm, ncol = 2)
 dev.off()
 
@@ -1464,7 +1464,7 @@ rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0
                        "p < 0.001","ESR_{0.1}^{all}","ESR_{0.05}^{all}","ESR_{0.1}^{sig}","ESR_{0.05}^{sig}",
                        "No. of meta-analysis", "No. of tests")
 print(p.table)
-write.csv(p.table, here("results","robustness","pet_peese_rstandard_p.table.ci.eco.csv"))
+write.csv(p.table, here("results","robustness","Robustness_Table_2_ESR_Ecology.csv"))
 
 # enc
 p.table <- matrix(ncol=2, nrow=length(p.grid.tab2)-1)
@@ -1524,7 +1524,7 @@ rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0
                        "p < 0.001","ESR_{0.1}^{all}","ESR_{0.05}^{all}","ESR_{0.1}^{sig}","ESR_{0.05}^{sig}",
                        "No. of meta-analysis", "No. of tests")
 print(p.table)
-write.csv(p.table, here("results","robustness","pet_peese_rstandard_p.table.ci.enc.csv"))
+write.csv(p.table, here("results","robustness","Robustness_Table_3_ESR_Environmental_Chemistry.csv"))
 
 # ene
 p.table <- matrix(ncol=2, nrow=length(p.grid.tab2)-1)
@@ -1584,7 +1584,7 @@ rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0
                        "p < 0.001","ESR_{0.1}^{all}","ESR_{0.05}^{all}","ESR_{0.1}^{sig}","ESR_{0.05}^{sig}",
                        "No. of meta-analysis", "No. of tests")
 print(p.table)
-write.csv(p.table, here("results","robustness","pet_peese_rstandard_p.table.ci.ene.csv"))
+write.csv(p.table, here("results","robustness","Robustness_Table_4_ESR_Environmental_Engineering.csv"))
 
 # nlc
 p.table <- matrix(ncol=2, nrow=length(p.grid.tab2)-1)
@@ -1644,7 +1644,7 @@ rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0
                        "p < 0.001","ESR_{0.1}^{all}","ESR_{0.05}^{all}","ESR_{0.1}^{sig}","ESR_{0.05}^{sig}",
                        "No. of meta-analysis", "No. of tests")
 print(p.table)
-write.csv(p.table, here("results","robustness","pet_peese_rstandard_p.table.ci.nlc.csv"))
+write.csv(p.table, here("results","robustness","Robustness_Table_5_ESR_Nature_and_Landscape_Conservation.csv"))
 
 # mpl
 p.table <- matrix(ncol=2, nrow=length(p.grid.tab2)-1)
@@ -1704,7 +1704,7 @@ rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0
                        "p < 0.001","ESR_{0.1}^{all}","ESR_{0.05}^{all}","ESR_{0.1}^{sig}","ESR_{0.05}^{sig}",
                        "No. of meta-analysis", "No. of tests")
 print(p.table)
-write.csv(p.table, here("results","robustness","pet_peese_rstandard_p.table.ci.mpl.csv"))
+write.csv(p.table, here("results","robustness","Robustness_Table_6_ESR_Management_Monitoring_Policy_and_Law.csv"))
 
 # wst
 p.table <- matrix(ncol=2, nrow=length(p.grid.tab2)-1)
@@ -1761,7 +1761,7 @@ rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0
                        "p < 0.001","ESR_{0.1}^{all}","ESR_{0.05}^{all}","ESR_{0.1}^{sig}","ESR_{0.05}^{sig}",
                        "No. of meta-analysis", "No. of tests")
 print(p.table)
-write.csv(p.table, here("results","robustness","pet_peese_rstandard_p.table.ci.wst.csv"))
+write.csv(p.table, here("results","robustness","Robustness_Table_7_ESR_Water_Science_and_Technology.csv"))
 
 # htm
 p.table <- matrix(ncol=2, nrow=length(p.grid.tab2)-1)
@@ -1817,4 +1817,4 @@ rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0
                        "p < 0.001","ESR_{0.1}^{all}","ESR_{0.05}^{all}","ESR_{0.1}^{sig}","ESR_{0.05}^{sig}",
                        "No. of meta-analysis", "No. of tests")
 print(p.table)
-write.csv(p.table, here("results","robustness","pet_peese_rstandard_p.table.ci.htm.csv"))
+write.csv(p.table, here("results","robustness","Robustness_Table_8_ESR_Health_Toxicology_and_Mutagenesis.csv"))
