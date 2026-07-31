@@ -194,7 +194,7 @@ d.tab <- rbind(
 )
 rownames(d.tab) <- c("All meta-analyses", "Observational", "Experimental", "SAPE > 0", "SAPE = 0", "Yes", "No", "Yes", "No")
 colnames(d.tab) <- c("M", "N", "Mean", "Median", "Min", "Q25", "Q50", "Q75", "Max")
-write.csv(d.tab, here("results", "main", paste0("Descriptive_Table1_", setup_label, ".csv")))
+write.csv(d.tab, here("results", "main", paste0("Table_1_", setup_label, ".csv")))
 }
 
 analysis_setups %>% pwalk(write_table_1)
@@ -223,7 +223,7 @@ datFull <- as.data.frame(cbind(
   n.cf = as.vector(z.plot / N)
 ))
 
-pdf(here("results", "main", paste0("zplot_pet_peese_rstandard_", setup_label, "_704_Fig1.pdf")), width = 10, height = 5)
+pdf(here("results", "main", paste0("Figure_1_", setup_label, ".pdf")), width = 10, height = 5)
 ggplot(datFull) +
   geom_line(aes(xs, q025), color = "orange", lty = 3) +
   geom_line(aes(xs, n.cf), color = "orange", lty = 1) +
@@ -270,7 +270,7 @@ write_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier, set
   }
   p.table <- rbind(p.table, c(length(myDat), 0), c(N, 0))
   rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0.7", "0.5 < p < 0.6", "0.4 < p < 0.5", "0.3 < p < 0.4", "0.2 < p < 0.3", "0.1 < p < 0.2", "0.05 < p < 0.1", "0.01 < p < 0.05", "0.001 < p < 0.01", "p < 0.001", "ESR_{0.1}^{all}", "ESR_{0.05}^{all}", "ESR_{0.1}^{sig}", "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests")
-  write.csv(p.table, here("results", "main", paste0("p.table.ci_pet_peese_rstandard_", setup_label, "_Table 2.csv")))
+  write.csv(p.table, here("results", "main", paste0("Table_2_", setup_label, ".csv")))
 }
 
 analysis_setups %>% pwalk(write_table_2)
@@ -288,7 +288,7 @@ power.tab3[1, ] <- c(nrow(med_med), nrow(pps_rstandard), round(summary(med_med$m
 for (i in seq_len(nrow(subf_desc))) power.tab3[i + 1, ] <- c(subf_desc$M[i], subf_desc$N[i], med_med_subf$mmedian[i], subf_desc$median[i], subf_desc$mean[i], subf_desc$Q25[i], subf_desc$Q75[i], subf_desc$sape[i])
 colnames(power.tab3) <- c("M", "N", "mmedian", "median", "mean", "Q25", "Q75", "SAPE")
 rownames(power.tab3) <- c("All meta-analyses", "Ecology", "Environmental Chemistry", "Environmental Engineering", "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law", "Nature and Landscape Conservation", "Water Science and Technology")
-write.csv(power.tab3, here("results", "main", paste0("Power_Table3_", setup_label, ".csv")))
+write.csv(power.tab3, here("results", "main", paste0("Table_3_", setup_label, ".csv")))
 }
 
 analysis_setups %>% pwalk(write_table_3)
@@ -299,10 +299,10 @@ analysis_setups %>% pwalk(write_table_3)
 write_figure_2 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
 pps_rstandard <- load_power_data(setup_label, meta_average_multiplier)
 pps_rstandard_median <- pps_rstandard %>% group_by(cID) %>% summarise(metaID = metaID[1], median = median(power), sape = length(which(power >= 0.8)) / length(power), nips = length(unique(sID)), esty = unique(etype), guid = unique(guide), prer = unique(prere), subf = unique(subfd), sdes = unique(sdesn), .groups = "drop") %>% mutate(yn80 = ifelse(median >= 0.8, "yes", "no"), median100 = round(100 * median, 2), sape100 = round(100 * sape, 2))
-write.xlsx(pps_rstandard_median, here("results", "main", paste0("median_power_pps_rstandard_", setup_label, "_704.xlsx")), overwrite = TRUE)
+write.xlsx(pps_rstandard_median, here("results", "main", paste0("Figure_2_data_", setup_label, ".xlsx")), overwrite = TRUE)
 med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
 sape <- pps_rstandard_median %>% ggplot(aes(x = sape100)) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1, fill = "skyblue2") + xlab("Share of adequately powered primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(b)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
-pdf(here("results", "main", paste0("pps_rstandard_", setup_label, "_704_Fig2.pdf")), width = 10, height = 4)
+pdf(here("results", "main", paste0("Figure_2_", setup_label, ".pdf")), width = 10, height = 4)
 grid.arrange(med_pwr, sape, ncol = 2)
 dev.off()
 }
