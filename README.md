@@ -139,7 +139,9 @@ The analysis scripts create their output folders automatically if they do not al
   script (piped URLs override the bundled list); the
   PDFs are saved under `data/papers/`. Each Scopus link is truncated immediately
   after the first `doi=10.` and four digits, and that extracted link is sanitised
-  to form a portable filename. Publisher authentication and paywalls are not
+  to form a portable filename. Downloads resolve the complete DOI from the
+  original URL rather than navigating the truncated Scopus URL, avoiding
+  Scopus's repeated HTTP 307 redirects. Publisher authentication and paywalls are not
   bypassed; inaccessible papers are reported and processing continues.
 - `scripts/classification.R`: optional script that recreates subfield classifications from raw inputs.
 - `scripts/functions.R`: helper functions used by the analysis.

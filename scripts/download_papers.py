@@ -22,6 +22,7 @@ from xml.etree import ElementTree
 
 LINK_RE = re.compile(r"^(.*?doi=10\.\d{4})", re.IGNORECASE)
 URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+DOI_RE = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
 SPREADSHEET_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 USER_AGENT = "Mozilla/5.0 (compatible; replication-package-paper-downloader/1.0)"
 
@@ -77,6 +78,13 @@ def extract_link(value: object) -> str | None:
     """Return a link truncated immediately after the four DOI digits."""
     match = LINK_RE.match(str(value).strip()) if value is not None else None
     return match.group(1) if match else None
+
+
+def extract_doi(value: str) -> str | None:
+    """Extract and URL-decode a complete DOI query parameter."""
+    parameters = urllib.parse.parse_qs(urllib.parse.urlsplit(value).query)
+    doi = next((item for key, items in parameters.items() if key.lower() == "doi" for item in items), None)
+    return doi if doi and DOI_RE.match(doi) else None
 
 
 def output_name(link: str) -> str:
@@ -159,6 +167,25 @@ def read_links(path: Path) -> list[str]:
     return [link for row in rows if (link := extract_link(row.get(link_column)))]
 
 
+def read_source_urls(path: Path) -> list[str]:
+    """Read complete source URLs, retaining the full DOI for resolution."""
+    if path.suffix.lower() in {".txt", ".list"}:
+        return URL_RE.findall(path.read_text(encoding="utf-8"))
+    if path.suffix.lower() == ".csv":
+        with path.open(encoding="utf-8-sig", newline="") as stream:
+            rows = list(csv.DictReader(stream))
+    elif path.suffix.lower() == ".xlsx":
+        rows = _xlsx_rows(path)
+    else:
+        raise ValueError("input must be a .csv, .xlsx, .txt, or .list file")
+    if not rows:
+        return []
+    link_column = next((name for name in rows[0] if name.lower() == "link"), None)
+    if link_column is None:
+        raise ValueError("input does not contain a column named 'link'")
+    return [str(row[link_column]).strip() for row in rows if extract_link(row.get(link_column))]
+
+
 def read_link_text(text: str) -> list[str]:
     """Extract and truncate URLs pasted directly into a plain-text file/stdin."""
     return [link for value in URL_RE.findall(text) if (link := extract_link(value))]
@@ -189,9 +216,15 @@ def _request(url: str, timeout: float):
     )
 
 
-def download_pdf(link: str, destination: Path, timeout: float = 30) -> None:
-    """Follow *link*, locate a PDF if necessary, and atomically save it."""
-    with _request(link, timeout) as response:
+def download_pdf(source_url: str, destination: Path, timeout: float = 30) -> None:
+    """Resolve the complete DOI, locate a PDF, and atomically save it.
+
+    Resolving the full DOI avoids Scopus' 307 loop, which is caused by visiting
+    a Scopus URL whose DOI parameter has been deliberately truncated for naming.
+    """
+    doi = extract_doi(source_url)
+    request_url = f"https://doi.org/{urllib.parse.quote(doi, safe='/')}" if doi else source_url
+    with _request(request_url, timeout) as response:
         final_url = response.geturl()
         body = response.read()
 
@@ -226,27 +259,33 @@ def main(argv: list[str] | None = None) -> int:
 
     args.output.mkdir(parents=True, exist_ok=True)
     try:
-        if args.input:
-            links = read_links(args.input)
-        else:
+        if not args.input:
             pasted = sys.stdin.read() if not sys.stdin.isatty() else ""
-            links = read_link_text(pasted or PROVIDED_LINKS)
+            source_text = pasted or PROVIDED_LINKS
+            source_urls = URL_RE.findall(source_text)
+        else:
+            source_urls = read_source_urls(args.input)
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         parser.error(str(error))
 
     failures = 0
-    for link in dict.fromkeys(links):
+    targets = {
+        extracted: source
+        for source in source_urls
+        if (extracted := extract_link(source)) is not None
+    }
+    for link, source_url in targets.items():
         destination = args.output / output_name(link)
         if destination.exists():
             print(f"SKIP {destination}")
             continue
         try:
-            download_pdf(link, destination, args.timeout)
+            download_pdf(source_url, destination, args.timeout)
             print(f"SAVED {destination}")
         except Exception as error:  # Keep processing the other spreadsheet rows.
             failures += 1
             print(f"FAILED {link}: {error}", file=sys.stderr)
-    print(f"Processed {len(set(links))} unique links; {failures} failed.")
+    print(f"Processed {len(targets)} unique links; {failures} failed.")
     return 1 if failures else 0
 
 
