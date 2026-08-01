@@ -425,7 +425,7 @@ write_csv(
 )
 
 comparison_plot_data <- estimates %>%
-  select(cID, pet_peese_estimate,
+  dplyr::select(cID, pet_peese_estimate,
          `Fixed effect` = fixed_effect_estimate,
          `Random effects` = random_effect_estimate) %>%
   pivot_longer(
