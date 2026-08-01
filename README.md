@@ -143,6 +143,12 @@ The analysis scripts create their output folders automatically if they do not al
   original URL rather than navigating the truncated Scopus URL, avoiding
   Scopus's repeated HTTP 307 redirects. Publisher authentication and paywalls are not
   bypassed; inaccessible papers are reported and processing continues.
+- `scripts/download_papers_browser.py`: browser-driven alternative for publisher
+  pages that require clicking **View PDF**. Install its dependency with
+  `python -m pip install -r requirements-download-papers.txt`, then run
+  `python scripts/download_papers_browser.py`. It opens every bundled source URL
+  in a separate Chrome tab, clicks **View PDF**, downloads into `data/papers/`,
+  and deliberately leaves Chrome and all tabs open after processing.
 - `scripts/classification.R`: optional script that recreates subfield classifications from raw inputs.
 - `scripts/functions.R`: helper functions used by the analysis.
 - `scripts/analysis_setup.R`: shared packages, runtime settings, helpers, and output-directory setup.
