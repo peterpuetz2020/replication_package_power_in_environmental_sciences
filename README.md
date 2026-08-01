@@ -131,6 +131,16 @@ The analysis scripts create their output folders automatically if they do not al
 ## Repository structure
 
 - `data/`: `MasterData.xlsx` for the main analysis, plus raw and derived files used by the optional classification workflow.
+- `scripts/download_papers.py`: downloads accessible PDFs listed in a CSV/XLSX
+  `link` column or a plain-text list. Run
+  `python scripts/download_papers.py path/to/file.xlsx`,
+  `python scripts/download_papers.py links.txt`, or simply
+  `python scripts/download_papers.py` to process the links bundled in the
+  script (piped URLs override the bundled list); the
+  PDFs are saved under `data/papers/`. Each Scopus link is truncated immediately
+  after the first `doi=10.` and four digits, and that extracted link is sanitised
+  to form a portable filename. Publisher authentication and paywalls are not
+  bypassed; inaccessible papers are reported and processing continues.
 - `scripts/classification.R`: optional script that recreates subfield classifications from raw inputs.
 - `scripts/functions.R`: helper functions used by the analysis.
 - `scripts/analysis_setup.R`: shared packages, runtime settings, helpers, and output-directory setup.
