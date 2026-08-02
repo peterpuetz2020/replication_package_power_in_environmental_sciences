@@ -2,8 +2,8 @@
 ## compare_meta_analysis_estimators.R
 ## ---------------------------------------------------------------------------
 ## Re-estimate every meta-analysis using the extended PET-PEESE procedure used
-## in the original analysis and fixed- and random-effects meta-analysis
-## estimators. The random-effects estimator uses the same effect- and
+## in the original analysis and a multilevel random-effects meta-analysis
+## estimator. The random-effects estimator uses the same effect- and
 ## study-level random intercepts as PET-PEESE. The resulting estimates are then
 ## compared on the same, PET-screened set of observations.
 
@@ -22,8 +22,7 @@ input_file <- here("data", "MasterData.xlsx")
 output_dir <- here("results", "estimator_comparison")
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 estimator_data_dirs <- c(
-  multilevel_random = here("results", "main", "multilevel_random"),
-  fixed = here("results", "main", "fixed")
+  multilevel_random = here("results", "main", "multilevel_random")
 )
 invisible(lapply(estimator_data_dirs, dir.create, recursive = TRUE,
                  showWarnings = FALSE))
@@ -107,15 +106,13 @@ fit_pet_peese <- function(dat) {
 
 ## Fit the comparison estimators to exactly the observations retained by the
 ## PET residual screen. The random-effects model reproduces PET-PEESE's two
-## random intercepts. A fixed-effects model cannot contain random effects by
-## definition, but rma.mv still permits the same multivariate data interface;
-## CR2 inference is used for both models, as it is for PET-PEESE.
+## random intercepts, with CR2 inference as in PET-PEESE.
 fit_one_meta_analysis <- function(dat) {
   pet_peese <- fit_pet_peese(dat)
   analysis_data <- pet_peese$data
   
   ## Do this check before calling rma.mv(): metafor terminates immediately for
-  ## some one-effect inputs, so inspecting fixed$k after fitting is too late.
+  ## some one-effect inputs, so checking the fitted model afterward is too late.
   conventional_data <- analysis_data %>%
     filter(is.finite(yi), is.finite(vi), vi >= 0)
   conventional_k <- nrow(conventional_data)
@@ -123,37 +120,22 @@ fit_one_meta_analysis <- function(dat) {
   if (conventional_k == 0) {
     stop("No finite yi/vi pairs remain for cID ", analysis_data$cID[1])
   } else if (conventional_k == 1) {
-    ## With one effect, both conventional estimators have the closed-form
+    ## With one effect, the random-effects estimator has the closed-form
     ## inverse-variance result. Between-effect heterogeneity is unidentifiable,
     ## so report the boundary value tau^2 = 0 without invoking rma.mv().
-    fixed_effect_estimate <- conventional_data$yi[1]
-    fixed_effect_se <- sqrt(conventional_data$vi[1])
-    fixed_effect_p_value <- if (fixed_effect_se > 0) {
-      2 * pnorm(-abs(fixed_effect_estimate / fixed_effect_se))
-    } else if (fixed_effect_estimate == 0) {
+    random_effect_estimate <- conventional_data$yi[1]
+    random_effect_se <- sqrt(conventional_data$vi[1])
+    random_effect_p_value <- if (random_effect_se > 0) {
+      2 * pnorm(-abs(random_effect_estimate / random_effect_se))
+    } else if (random_effect_estimate == 0) {
       1
     } else {
       0
     }
-    random_effect_estimate <- fixed_effect_estimate
-    random_effect_se <- fixed_effect_se
-    random_effect_p_value <- fixed_effect_p_value
     random_effect_tau2 <- 0
     random_effect_isq <- 0
     random_effect_fallback <- TRUE
   } else {
-    fixed <- rma.mv(
-      yi, vi,
-      mods = ~ 1,
-      data = conventional_data,
-      method = "FE", test = "t",
-      control = list(rel.tol = 1e-8)
-    )
-    fixed_test <- coef_test(
-      fixed,
-      vcov = vcovCR(fixed, cluster = conventional_data$sID, type = "CR2")
-    )
-
     random <- rma.mv(
       yi, vi,
       ## This is a separate intercept-only meta-analysis: unlike PET and
@@ -166,9 +148,6 @@ fit_one_meta_analysis <- function(dat) {
     )
     random_test <- coef_test(random, vcov = vcovCR(random, type = "CR2"))
 
-    fixed_effect_estimate <- as.numeric(fixed_test$beta[1])
-    fixed_effect_se <- as.numeric(fixed_test$SE[1])
-    fixed_effect_p_value <- as.numeric(fixed_test$p_Satt[1])
     random_effect_estimate <- as.numeric(random_test$beta[1])
     random_effect_se <- as.numeric(random_test$SE[1])
     random_effect_p_value <- as.numeric(random_test$p_Satt[1])
@@ -204,11 +183,6 @@ fit_one_meta_analysis <- function(dat) {
     file.path(estimator_data_dirs[["multilevel_random"]],
               paste0("meta_", analysis_data$cID[1], ".rds"))
   )
-  saveRDS(
-    make_estimator_data(fixed_effect_estimate, 0, 0, fixed_effect_p_value),
-    file.path(estimator_data_dirs[["fixed"]],
-              paste0("meta_", analysis_data$cID[1], ".rds"))
-  )
   
   tibble(
     cID = as.character(analysis_data$cID[1]),
@@ -223,9 +197,6 @@ fit_one_meta_analysis <- function(dat) {
     pet_peese_se = pet_peese$standard_error,
     pet_peese_p_value = pet_peese$p_value,
     small_study_effect_p_value = pet_peese$small_study_effect_p_value,
-    fixed_effect_estimate = fixed_effect_estimate,
-    fixed_effect_se = fixed_effect_se,
-    fixed_effect_p_value = fixed_effect_p_value,
     random_effect_estimate = random_effect_estimate,
     random_effect_se = random_effect_se,
     random_effect_p_value = random_effect_p_value,
@@ -259,26 +230,12 @@ estimates <- run_meta_analyses(meta_analyses, n_cores)
 ## undefined when the original estimate is exactly zero.
 estimates <- estimates %>%
   mutate(
-    pet_peese_vs_fixed_deviation =
-      abs(pet_peese_estimate) - abs(fixed_effect_estimate),
-    pet_peese_vs_fixed_percentage_deviation = if_else(
-      fixed_effect_estimate == 0,
-      NA_real_,
-      100 * pet_peese_vs_fixed_deviation / abs(fixed_effect_estimate)
-    ),
     pet_peese_vs_random_deviation =
       abs(pet_peese_estimate) - abs(random_effect_estimate),
     pet_peese_vs_random_percentage_deviation = if_else(
       random_effect_estimate == 0,
       NA_real_,
       100 * pet_peese_vs_random_deviation / abs(random_effect_estimate)
-    ),
-    fixed_vs_random_deviation =
-      abs(fixed_effect_estimate) - abs(random_effect_estimate),
-    fixed_vs_random_percentage_deviation = if_else(
-      random_effect_estimate == 0,
-      NA_real_,
-      100 * fixed_vs_random_deviation / abs(random_effect_estimate)
     )
   ) %>%
   arrange(cID)
@@ -307,19 +264,9 @@ summarize_comparison <- function(comparison, comparison_estimate,
   )
 }
 
-comparison_summary <- bind_rows(
-  summarize_comparison(
-    "PET-PEESE vs fixed effect (original)",
-    estimates$pet_peese_estimate, estimates$fixed_effect_estimate
-  ),
-  summarize_comparison(
-    "PET-PEESE vs random effects (original)",
-    estimates$pet_peese_estimate, estimates$random_effect_estimate
-  ),
-  summarize_comparison(
-    "Fixed effect vs random effects (original)",
-    estimates$fixed_effect_estimate, estimates$random_effect_estimate
-  )
+comparison_summary <- summarize_comparison(
+  "PET-PEESE vs random effects (original)",
+  estimates$pet_peese_estimate, estimates$random_effect_estimate
 )
 
 ## Summarize changes in absolute magnitude in a form that can be reported as
@@ -362,19 +309,9 @@ summarize_attenuation <- function(comparison, comparison_estimate,
   )
 }
 
-attenuation_summary <- bind_rows(
-  summarize_attenuation(
-    "PET-PEESE vs fixed effect (reference)",
-    estimates$pet_peese_estimate, estimates$fixed_effect_estimate
-  ),
-  summarize_attenuation(
-    "PET-PEESE vs random effects (reference)",
-    estimates$pet_peese_estimate, estimates$random_effect_estimate
-  ),
-  summarize_attenuation(
-    "Fixed effect vs random effects (reference)",
-    estimates$fixed_effect_estimate, estimates$random_effect_estimate
-  )
+attenuation_summary <- summarize_attenuation(
+  "PET-PEESE vs random effects (reference)",
+  estimates$pet_peese_estimate, estimates$random_effect_estimate
 )
 
 ## Repeat the attenuation comparison after excluding pair-specific sign
@@ -395,20 +332,11 @@ summarize_attenuation_without_sign_reversals <- function(
   )
 }
 
-attenuation_summary_without_sign_reversals <- bind_rows(
-  summarize_attenuation_without_sign_reversals(
-    "PET-PEESE vs fixed effect (reference)",
-    estimates$pet_peese_estimate, estimates$fixed_effect_estimate
-  ),
+attenuation_summary_without_sign_reversals <-
   summarize_attenuation_without_sign_reversals(
     "PET-PEESE vs random effects (reference)",
     estimates$pet_peese_estimate, estimates$random_effect_estimate
-  ),
-  summarize_attenuation_without_sign_reversals(
-    "Fixed effect vs random effects (reference)",
-    estimates$fixed_effect_estimate, estimates$random_effect_estimate
   )
-)
 
 write_csv(estimates, file.path(output_dir, "meta_analysis_estimates.csv"))
 write_csv(comparison_summary, file.path(output_dir, "estimator_comparison_summary.csv"))
@@ -426,12 +354,7 @@ write_csv(
 
 comparison_plot_data <- estimates %>%
   dplyr::select(cID, pet_peese_estimate,
-         `Fixed effect` = fixed_effect_estimate,
-         `Random effects` = random_effect_estimate) %>%
-  pivot_longer(
-    c(`Fixed effect`, `Random effects`),
-    names_to = "estimator", values_to = "estimate"
-  )
+                estimate = random_effect_estimate)
 
 x_limits <- c(-6, 6)
 y_limits <- c(-6, 6)
@@ -443,10 +366,8 @@ r2_labels <- comparison_plot_data %>%
     between(pet_peese_estimate, -6, 6),
     between(estimate, -6, 6)
   ) %>%
-  group_by(estimator) %>%
   summarise(
-    r2 = summary(lm(estimate ~ pet_peese_estimate))$r.squared,
-    .groups = "drop"
+    r2 = summary(lm(estimate ~ pet_peese_estimate))$r.squared
   ) %>%
   mutate(
     label = sprintf("R² = %.3f", r2),
@@ -472,7 +393,6 @@ comparison_plot <- ggplot(
     hjust = 0,
     vjust = 1
   ) +
-  facet_wrap(~ estimator) +
   coord_equal(
     xlim = x_limits,
     ylim = y_limits,
@@ -514,19 +434,10 @@ temp <- estimates |>
 estimates_drop_small <- estimates |> 
   filter(!between(random_effect_estimate, -0.1, 0.1))
 
-attenuation_summary_drop_small <- bind_rows(
-  summarize_attenuation(
-    "PET-PEESE vs fixed effect (reference)",
-    estimates_drop_small$pet_peese_estimate, estimates_drop_small$fixed_effect_estimate
-  ),
-  summarize_attenuation(
-    "PET-PEESE vs random effects (reference)",
-    estimates_drop_small$pet_peese_estimate, estimates_drop_small$random_effect_estimate
-  ),
-  summarize_attenuation(
-    "Fixed effect vs random effects (reference)",
-    estimates_drop_small$fixed_effect_estimate, estimates_drop_small$random_effect_estimate
-  )
+attenuation_summary_drop_small <- summarize_attenuation(
+  "PET-PEESE vs random effects (reference)",
+  estimates_drop_small$pet_peese_estimate,
+  estimates_drop_small$random_effect_estimate
 )
 print(attenuation_summary)
 print(attenuation_summary_drop_small)

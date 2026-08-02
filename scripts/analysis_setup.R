@@ -31,7 +31,7 @@ analysis_setups <- tidyr::expand_grid(
 
 ## Estimators used throughout the manuscript-output workflow. The identifiers
 ## are also used as filename suffixes, so keep them filesystem friendly.
-meta_analysis_estimators <- c("pet_peese", "multilevel_random", "fixed")
+meta_analysis_estimators <- c("pet_peese", "multilevel_random")
 
 source(here("scripts", "functions.R"))
 
@@ -39,7 +39,6 @@ output_dirs <- list(
   here("results", "main"),
   here("results", "main", "pet_peese_rstandard"),
   here("results", "main", "multilevel_random"),
-  here("results", "main", "fixed"),
   here("results", "robustness")
 )
 invisible(lapply(output_dirs, dir.create, recursive = TRUE, showWarnings = FALSE))

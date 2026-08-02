@@ -1,4 +1,2 @@
 comparison,n_meta_analyses,geometric_mean_percentage_reduction,median_percentage_reduction,percentage_attenuated,percentage_amplified,percentage_unchanged,percentage_sign_reversal
-PET-PEESE vs fixed effect (reference),551,-9.427118600952888,-6.29688357431093,45.00907441016334,54.99092558983666,0,0
 PET-PEESE vs random effects (reference),546,24.829160520905557,4.27006497372292,58.42490842490843,41.57509157509158,0,0
-Fixed effect vs random effects (reference),657,36.33460886122717,15.73509655524099,71.5372907153729,28.462709284627092,0,0
