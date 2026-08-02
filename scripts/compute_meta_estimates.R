@@ -37,7 +37,9 @@ extract_between_study_variance <- function(model) {
 
 extract_total_isq <- function(model) {
   isq_statistics <- i2_ml(model, method = "matrix")
-  as.numeric(isq_statistics[["I2_total"]])
+  ## i2_ml() returns total I-squared as its first value. It is not named
+  ## "I2_total", so indexing it by that name causes "subscript out of bounds".
+  as.numeric(isq_statistics[1])
 }
 
 make_effect_data <- function(dat, result, small_study_effect_p_value = NA_real_) {
@@ -188,11 +190,6 @@ registerDoParallel(cluster)
 meta_analysis_estimates <- foreach(
   dat = meta_analyses,
   .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),
-  .export = c(
-    "fit_one_meta_analysis", "fit_pet_peese", "fit_random_effects",
-    "make_effect_data", "extract_coefficient_statistic",
-    "extract_between_study_variance", "extract_total_isq", "output_dirs"
-  ),
   .combine = bind_rows
 ) %dopar% fit_one_meta_analysis(dat)
 stopCluster(cluster)
