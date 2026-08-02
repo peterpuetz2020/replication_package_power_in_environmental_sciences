@@ -53,11 +53,17 @@ To recreate the manuscript tables and figures in publication order, use the dedi
 
 ```r
 source("scripts/create_tables_and_figures.R")
+source("scripts/create_supplement_tables_and_figures.R")
 ```
 
-This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Figure 1 and Table 2 are written for every combination of `meta_average_multiplier` and `heterogeneity_multiplier`. Because heterogeneity is not used by Table 1, Table 3, or Figure 2, those outputs are written once per meta-average multiplier, using the first heterogeneity value only. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
+This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Main-text Figure 1 uses a meta-average multiplier of 0.5 and heterogeneity multipliers 0 and 0.5; its 0.25 and 1 meta-average sensitivity counterparts are Figures S1 and S2. Table 2 is written for every combination of `meta_average_multiplier` and `heterogeneity_multiplier`. Because heterogeneity is not used by Table 1, Table 3, or Figure 2, those outputs are written once per meta-average multiplier, using the first heterogeneity value only. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
 
 The workflow renders each setup for PET-PEESE and multilevel random effects.
+The supplementary script writes Figure S1 (meta-average multiplier 0.25),
+Figure S2 (meta-average multiplier 1), and the across-combination ESR plot in
+Figure S3 to `results/supplement/`, in both PDF and EPS format. It should be run
+after the main script because Figure S3 reads
+`results/main/ESR_results_all_combinations.csv`.
 Before the first run, create the random-effects estimator datasets:
 
 ```r
@@ -96,8 +102,8 @@ In `scripts/analysis_setup.R`, adjust:
 
 - `n_cores`: number of parallel worker cores.
 - `n_iterations`: number of Monte Carlo/bootstrap iterations for confidence intervals.
-- `meta_average_multiplier`: vector of multipliers applied to the meta-analytic average when calculating power (default `c(0.5, 1)`).
-- `heterogeneity_multiplier`: vector of multipliers applied to the between-effect heterogeneity in the counterfactual calculations (default `c(0.25, 0.5, 0.75)`).
+- `meta_average_multiplier`: vector of multipliers applied to the meta-analytic average when calculating power (default `c(0.25, 0.5, 1)`).
+- `heterogeneity_multiplier`: vector of multipliers applied to the between-effect heterogeneity in the counterfactual calculations (default `c(0, 0.25, 0.5, 0.75)`).
 
 The two multiplier vectors are independent. Setup-specific data generation, Figure 1, and Table 2 evaluate every combination of their values. Table 1, Table 3, and Figure 2 are saved once for each meta-average multiplier, using the first supplied heterogeneity multiplier in their filenames. Define custom vectors before sourcing `scripts/main.R`:
 
@@ -136,11 +142,13 @@ The analysis scripts create their output folders automatically if they do not al
 - `scripts/fit_pet_peese_models.R`: optional PET-PEESE fitting and per-meta-analysis RDS generation.
 - `scripts/create_analysis_data.R`: optional setup-specific derived-data creation for table/figure rendering.
 - `scripts/create_tables_and_figures.R`: creates manuscript tables and figures in numeric order, with independently rerunnable sections.
+- `scripts/create_supplement_tables_and_figures.R`: creates supplementary counterfactual sensitivity figures and the across-combination excess-significance plot.
 - `scripts/create_full_tables_figures_and_robustness.R`: optional complete legacy counterfactual, supplementary, and robustness workflow.
 - `scripts/create_esr_data.R`: optional recreation of the ESR workbook after the complete legacy workflow.
 - `scripts/run_exploratory_regressions.R`: exploratory regression models and diagnostic figures, loading supplied data when regenerated files are absent.
 - `scripts/main.R`: short orchestrator that sources the analysis steps.
 - `results/main/`: generated main results.
 - `results/robustness/`: generated robustness-check results.
+- `results/supplement/`: generated supplementary figures.
 - `power and bias.Rproj`: RStudio project file for opening the repository in RStudio.
 - `renv.lock`, `renv/activate.R`, `.Rprofile`: `renv` project files for dependency restoration.
