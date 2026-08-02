@@ -10,10 +10,9 @@ source(here::here("scripts", "analysis_setup.R"))
 ## Optional: refit PET-PEESE models and replace the per-meta-analysis RDS files.
 # source(here::here("scripts", "fit_pet_peese_models.R"))
 
-## Optional: fit the multilevel random-effects estimator and save its
-## effect-level analysis data. Run this once before rendering outputs for both
-## estimators in create_tables_and_figures.R.
-#source(here::here("scripts", "compare_meta_analysis_estimators.R"))
+## Fit PET-PEESE and multilevel random-effects models, save their effect-level
+## analysis data, and write the meta-analysis estimates used below.
+source(here::here("scripts", "compute_meta_estimates.R"))
 
 ## Build setup-specific datasets and any missing counterfactual simulations before
 ## rendering. Existing counterfactual files are reused unless explicitly rebuilt.
