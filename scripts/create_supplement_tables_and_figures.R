@@ -164,7 +164,7 @@ esr_plot_data <- readr::read_csv(esr_path, show_col_types = FALSE) %>%
   extract(confidence_interval, c("ci_lower", "ci_upper"),
           regex = "\\[([^,]+),\\s*([^]]+)\\]", convert = TRUE) %>%
   mutate(
-    estimator = recode(
+    estimator = dplyr::recode(
       estimator,
       multilevel_random = "Random effects",
       pet_peese = "PET-PEESE"

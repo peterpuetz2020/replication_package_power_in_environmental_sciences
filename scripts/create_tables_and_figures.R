@@ -378,7 +378,7 @@ esr_plot_data <- all_esr_results %>%
     estimate = as.numeric(estimate),
     ci_lower = as.numeric(stringr::str_match(confidence_interval, "\\[([^,]+),")[, 2]),
     ci_upper = as.numeric(stringr::str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
-    estimator = recode(estimator, pet_peese = "PET-PEESE", multilevel_random = "Random effects")
+    estimator = dplyr::recode(estimator, pet_peese = "PET-PEESE", multilevel_random = "Random effects")
   )
 esr_plot <- ggplot(esr_plot_data, aes(heterogeneity_multiplier, estimate, color = estimator)) +
   geom_hline(yintercept = 0, color = "grey70") +
