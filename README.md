@@ -55,7 +55,7 @@ To recreate the manuscript tables and figures in publication order, use the dedi
 source("scripts/create_tables_and_figures.R")
 ```
 
-This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Every table and figure is written for every combination of `meta_average_multipliers` and `heterogeneity_multipliers`. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
+This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Figure 1 and Table 2 are written for every combination of `meta_average_multiplier` and `heterogeneity_multiplier`. Because heterogeneity is not used by Table 1, Table 3, or Figure 2, those outputs are written once per meta-average multiplier, using the first heterogeneity value only. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
 
 The workflow renders each setup for PET-PEESE, multilevel random effects, and
 fixed effects. Before the first run, create the conventional-estimator datasets:
@@ -71,7 +71,7 @@ effect-level inputs under `results/main/multilevel_random/` and
 `_multilevel_random`, or `_fixed`, so results from each estimator remain
 separate.
 
-Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
+Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. Figures are saved in both PDF and EPS format. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 
 ### Optional setup-specific data creation
 
@@ -100,7 +100,7 @@ In `scripts/analysis_setup.R`, adjust:
 - `meta_average_multiplier`: vector of multipliers applied to the meta-analytic average when calculating power (default `c(0.5, 1)`).
 - `heterogeneity_multiplier`: vector of multipliers applied to the between-effect heterogeneity in the counterfactual calculations (default `c(0.25, 0.5, 0.75)`).
 
-The two multiplier vectors are independent. P-value outputs and setup-specific data generation evaluate every combination of their values. Power Table 3 is saved once for each heterogeneity multiplier (with the first supplied meta-average multiplier), while the remaining manuscript outputs use the first combination. Define custom vectors before sourcing `scripts/main.R`; the setup script retains supplied values:
+The two multiplier vectors are independent. Setup-specific data generation, Figure 1, and Table 2 evaluate every combination of their values. Table 1, Table 3, and Figure 2 are saved once for each meta-average multiplier, using the first supplied heterogeneity multiplier in their filenames. Define custom vectors before sourcing `scripts/main.R`:
 
 ```r
 meta_average_multiplier <- c(0.5, 0.75, 1)

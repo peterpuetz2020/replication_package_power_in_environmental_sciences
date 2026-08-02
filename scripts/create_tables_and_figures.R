@@ -30,6 +30,14 @@ meta_average_multiplier <- analysis_setups$meta_average_multiplier[[1]]
 heterogeneity_multiplier <- analysis_setups$heterogeneity_multiplier[[1]]
 setup_label <- analysis_setups$setup_label[[1]]
 
+## Heterogeneity affects only the counterfactual outputs (Figure 1 and Table 2).
+## For all descriptive and power outputs, retain one row per meta-average value
+## so identical files are not emitted once for every heterogeneity value.
+heterogeneity_independent_setups <- analysis_setups %>%
+  group_by(meta_average_multiplier) %>%
+  slice(1) %>%
+  ungroup()
+
 ensure_output_dirs <- function() {
   invisible(lapply(
     list(
@@ -44,6 +52,21 @@ ensure_output_dirs <- function() {
     recursive = TRUE,
     showWarnings = FALSE
   ))
+}
+
+save_plot <- function(filename_stem, width, height, draw) {
+  pdf(paste0(filename_stem, ".pdf"), width = width, height = height)
+  draw()
+  dev.off()
+
+  cairo_ps(
+    paste0(filename_stem, ".eps"),
+    width = width,
+    height = height,
+    onefile = FALSE
+  )
+  draw()
+  dev.off()
 }
 
 load_estimator_data <- function(estimator, setup_label_value = setup_label) {
@@ -210,7 +233,7 @@ colnames(d.tab) <- c("M", "N", "Mean", "Median", "Min", "Q25", "Q50", "Q75", "Ma
 write.csv(d.tab, here("results", "main", paste0("Table_1_", setup_label, "_", estimator, ".csv")))
 }
 
-tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>% pwalk(write_table_1)
+tidyr::crossing(heterogeneity_independent_setups, estimator = meta_analysis_estimators) %>% pwalk(write_table_1)
 
 ## -------------------------------
 ## Figure 1
@@ -236,8 +259,7 @@ datFull <- as.data.frame(cbind(
   n.cf = as.vector(z.plot / N)
 ))
 
-pdf(here("results", "main", paste0("Figure_1_", setup_label, "_", estimator, ".pdf")), width = 10, height = 5)
-ggplot(datFull) +
+figure_1 <- ggplot(datFull) +
   geom_line(aes(xs, q025), color = "orange", lty = 3) +
   geom_line(aes(xs, n.cf), color = "orange", lty = 1) +
   geom_point(aes(xs, n.cf), shape = 20, fill = "orange", color = "orange", size = 1) +
@@ -249,7 +271,12 @@ ggplot(datFull) +
   geom_vline(xintercept = c(1.64, 1.96, 2.58), lty = 2, color = c(3, 2, 6), linewidth = 0.5) +
   scale_x_continuous(breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8)) +
   theme(panel.background = element_rect(fill = "gray100"), panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(linewidth = 0.5, color = "gray"))
-dev.off()
+save_plot(
+  here("results", "main", paste0("Figure_1_", setup_label, "_", estimator)),
+  width = 10,
+  height = 5,
+  draw = function() print(figure_1)
+)
 }
 
 tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>% pwalk(write_figure_1)
@@ -304,7 +331,7 @@ rownames(power.tab3) <- c("All meta-analyses", "Ecology", "Environmental Chemist
 write.csv(power.tab3, here("results", "main", paste0("Table_3_", setup_label, "_", estimator, ".csv")))
 }
 
-tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>% pwalk(write_table_3)
+tidyr::crossing(heterogeneity_independent_setups, estimator = meta_analysis_estimators) %>% pwalk(write_table_3)
 
 ## -------------------------------
 ## Figure 2
@@ -315,9 +342,13 @@ pps_rstandard_median <- pps_rstandard %>% group_by(cID) %>% summarise(metaID = m
 write.xlsx(pps_rstandard_median, here("results", "main", paste0("Figure_2_data_", setup_label, "_", estimator, ".xlsx")), overwrite = TRUE)
 med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
 sape <- pps_rstandard_median %>% ggplot(aes(x = sape100)) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1, fill = "skyblue2") + xlab("Share of adequately powered primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(b)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
-pdf(here("results", "main", paste0("Figure_2_", setup_label, "_", estimator, ".pdf")), width = 10, height = 4)
-grid.arrange(med_pwr, sape, ncol = 2)
-dev.off()
+figure_2 <- arrangeGrob(med_pwr, sape, ncol = 2)
+save_plot(
+  here("results", "main", paste0("Figure_2_", setup_label, "_", estimator)),
+  width = 10,
+  height = 4,
+  draw = function() grid::grid.draw(figure_2)
+)
 }
 
-tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>% pwalk(write_figure_2)
+tidyr::crossing(heterogeneity_independent_setups, estimator = meta_analysis_estimators) %>% pwalk(write_figure_2)
