@@ -22,6 +22,9 @@ source(here::here("scripts", "create_analysis_data.R"))
 ## Recreate the ordered manuscript tables and figures from available data.
 source(here::here("scripts", "create_tables_and_figures.R"))
 
+## Recreate supplementary sensitivity and excess-significance figures.
+source(here::here("scripts", "create_supplement_tables_and_figures.R"))
+
 ## Optional: recreate the original counterfactual, subfield, and robustness data
 ## and render the complete legacy collection of tables and figures.
 source(here::here("scripts", "create_full_tables_figures_and_robustness.R"))
