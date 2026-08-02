@@ -352,7 +352,7 @@ all_combination_results <- map2_dfr(
       heterogeneity_multiplier = parameters$heterogeneity_multiplier,
       setup_label = parameters$setup_label,
       .before = 1
-    ) %>% select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1")))
+    ) %>% dplyr::select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1")))
   }
 )
 write.csv(all_combination_results, here("results", "main", "ESR_results_all_combinations.csv"), row.names = FALSE)
