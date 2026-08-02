@@ -66,6 +66,25 @@ save_plot <- function(filename_stem, width, height, draw) {
   )
   draw()
   dev.off()
+
+  svg(
+    paste0(filename_stem, ".svg"),
+    width = width,
+    height = height
+  )
+  draw()
+  dev.off()
+
+  png(
+    paste0(filename_stem, ".png"),
+    width = width,
+    height = height,
+    units = "in",
+    res = 300,
+    type = "cairo"
+  )
+  draw()
+  dev.off()
 }
 
 load_estimator_data <- function(estimator, setup_label_value = setup_label) {
@@ -268,7 +287,10 @@ ggplot(datFull) +
   xlab("|z|-value") + ylab("Frequency") +
   ggtitle(paste0(heterogeneity_multiplier * 100, "% genuine heterogeneity")) +
   geom_vline(xintercept = c(1.64, 1.96, 2.58), lty = 2, color = c(3, 2, 6), linewidth = 0.5) +
-  scale_x_continuous(breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8)) +
+  scale_x_continuous(
+    breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8),
+    guide = guide_axis(n.dodge = 2)
+  ) +
   theme(panel.background = element_rect(fill = "gray100"), panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(linewidth = 0.5, color = "gray"))
 }
 

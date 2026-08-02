@@ -61,7 +61,10 @@ This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 
 The workflow renders each setup for PET-PEESE and multilevel random effects.
 The supplementary script writes Figure S1 (meta-average multiplier 0.25),
 Figure S2 (meta-average multiplier 1), and the across-combination ESR plot in
-Figure S3 to `results/supplement/`, in both PDF and EPS format. It should be run
+Figure S3 to `results/supplement/`, in PDF, EPS, SVG, and 300 dpi PNG format. SVG is
+the preferred format for insertion into recent versions of Microsoft Word and
+LibreOffice Writer because it remains sharp when resized; PNG is the compatible
+fallback for applications that do not support SVG. It should be run
 after the main script because Figure S3 reads
 `results/main/ESR_results_all_combinations.csv`.
 Before the first run, create the random-effects estimator datasets:
@@ -76,7 +79,7 @@ effect-level inputs under `results/main/multilevel_random/`. Output filenames
 end in `_pet_peese` or `_multilevel_random`, so results from each estimator
 remain separate.
 
-Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. Figures are saved in both PDF and EPS format. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
+Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. Figures are saved as PDF, EPS, SVG, and 300 dpi PNG files. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 
 ### Optional setup-specific data creation
 
