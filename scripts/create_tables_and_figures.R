@@ -236,7 +236,7 @@ tidyr::crossing(heterogeneity_independent_setups, estimator = meta_analysis_esti
 ## -------------------------------
 ## Figure 1
 ## -------------------------------
-write_figure_1 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, estimator, ...) {
+make_figure_1_panel <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, estimator) {
 pps_rstandard <- load_estimator_data(estimator, setup_label)
 grids <- make_grids()
 my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
@@ -257,7 +257,7 @@ datFull <- as.data.frame(cbind(
   n.cf = as.vector(z.plot / N)
 ))
 
-figure_1 <- ggplot(datFull) +
+ggplot(datFull) +
   geom_line(aes(xs, q025), color = "orange", lty = 3) +
   geom_line(aes(xs, n.cf), color = "orange", lty = 1) +
   geom_point(aes(xs, n.cf), shape = 20, fill = "orange", color = "orange", size = 1) +
@@ -266,23 +266,33 @@ figure_1 <- ggplot(datFull) +
   geom_point(aes(xs, n.f), shape = 20, fill = "blue", color = "blue", size = 1) +
   coord_cartesian(xlim = c(0, 8)) +
   xlab("|z|-value") + ylab("Frequency") +
+  ggtitle(paste0("Heterogeneity multiplier = ", heterogeneity_multiplier)) +
   geom_vline(xintercept = c(1.64, 1.96, 2.58), lty = 2, color = c(3, 2, 6), linewidth = 0.5) +
   scale_x_continuous(breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8)) +
   theme(panel.background = element_rect(fill = "gray100"), panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(linewidth = 0.5, color = "gray"))
-save_plot(
-  here("results", "main", paste0("Figure_1_", setup_label, "_", estimator)),
-  width = 10,
-  height = 5,
-  draw = function() print(figure_1)
-)
 }
 
-tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>% pwalk(write_figure_1)
+figure_1_setups <- analysis_setups %>%
+  filter(meta_average_multiplier == 0.5, heterogeneity_multiplier %in% c(0, 0.5)) %>%
+  arrange(heterogeneity_multiplier)
+figure_1_panels <- purrr::pmap(
+  figure_1_setups,
+  function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
+    make_figure_1_panel(meta_average_multiplier, heterogeneity_multiplier, setup_label, "multilevel_random")
+  }
+)
+figure_1 <- arrangeGrob(grobs = figure_1_panels, ncol = 2)
+save_plot(
+  here("results", "main", "Figure_1_multilevel_random"),
+  width = 10,
+  height = 5,
+  draw = function() grid::grid.draw(figure_1)
+)
 
 ## -------------------------------
 ## Table 2
 ## -------------------------------
-write_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, estimator, ...) {
+calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, estimator, ...) {
   pps_rstandard <- load_estimator_data(estimator, setup_label)
   grids <- make_grids()
   my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
@@ -292,13 +302,16 @@ write_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier, set
   p.tab <- get_counterfactual(here("results", "main", paste0("p_tab_", setup_label, "_", estimator, ".rds")), myDat, grids$p_grid_tab, heterogeneity_multiplier_value = heterogeneity_multiplier)
   p.tab.ci <- get_counterfactual(here("results", "main", paste0("p_tab_ci_", setup_label, "_", estimator, ".rds")), myDat, grids$p_grid_tab, ci = TRUE, cluster = unique(pps_rstandard$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
-  p.table <- matrix(ncol = 2, nrow = length(grids$p_grid_tab2) - 1)
-  colnames(p.table) <- c("Difference", "0.95 CI")
+  include_p_value_intervals <- estimator == "multilevel_random" && meta_average_multiplier == 0.5
+  p.table <- matrix(NA_character_, ncol = 2, nrow = length(grids$p_grid_tab2) - 1)
+  colnames(p.table) <- c("estimate", "confidence_interval")
   N <- sum(p.orig.tab)
-  p.table[, 1] <- round((p.orig.tab - p.tab) / N, 3)
-  q025 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.025))
-  q975 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.975))
-  p.table[, 2] <- paste("[", round(q025, 3), ", ", round(q975, 3), "]", sep = "")
+  if (include_p_value_intervals) {
+    p.table[, 1] <- round((p.orig.tab - p.tab) / N, 3)
+    q025 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.025))
+    q975 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.975))
+    p.table[, 2] <- paste("[", round(q025, 3), ", ", round(q975, 3), "]", sep = "")
+  }
   for (level in list(c(10, 13, 1, "all"), c(11, 13, 1, "all"), c(10, 13, 2, "sig"), c(11, 13, 3, "sig"))) {
     lo <- as.integer(level[[1]]); hi <- as.integer(level[[2]]); ci_idx <- as.integer(level[[3]]); denom <- if (level[[4]] == "all") N else sum(p.orig.tab[lo:hi])
     point <- round(sum((p.orig.tab - p.tab)[lo:hi] / denom), 3)
@@ -308,10 +321,77 @@ write_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier, set
   }
   p.table <- rbind(p.table, c(length(myDat), 0), c(N, 0))
   rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0.7", "0.5 < p < 0.6", "0.4 < p < 0.5", "0.3 < p < 0.4", "0.2 < p < 0.3", "0.1 < p < 0.2", "0.05 < p < 0.1", "0.01 < p < 0.05", "0.001 < p < 0.01", "p < 0.001", "ESR_{0.1}^{all}", "ESR_{0.05}^{all}", "ESR_{0.1}^{sig}", "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests")
-  write.csv(p.table, here("results", "main", paste0("Table_2_", setup_label, "_", estimator, ".csv")))
+  summary_rows <- c("ESR_{0.05}^{all}", "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests")
+  list(
+    detailed = as.data.frame(p.table) %>% rownames_to_column("measure"),
+    summary = as.data.frame(p.table) %>% rownames_to_column("measure") %>%
+      filter(measure %in% summary_rows) %>%
+      mutate(estimator = estimator, meta_average_multiplier = meta_average_multiplier,
+             heterogeneity_multiplier = heterogeneity_multiplier, setup_label = setup_label,
+             .before = 1)
+  )
 }
 
-tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>% pwalk(write_table_2)
+table_2_results <- tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>%
+  pmap(calculate_table_2)
+
+all_esr_results <- map_dfr(table_2_results, "summary")
+all_combination_results <- map2_dfr(
+  table_2_results,
+  seq_len(nrow(tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators))),
+  function(result, i) {
+    parameters <- tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators)[i, ]
+    rows <- if (parameters$estimator == "multilevel_random" && parameters$meta_average_multiplier == 0.5) {
+      result$detailed
+    } else {
+      result$summary
+    }
+    rows %>% mutate(
+      estimator = parameters$estimator,
+      meta_average_multiplier = parameters$meta_average_multiplier,
+      heterogeneity_multiplier = parameters$heterogeneity_multiplier,
+      setup_label = parameters$setup_label,
+      .before = 1
+    ) %>% select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1")))
+  }
+)
+write.csv(all_combination_results, here("results", "main", "ESR_results_all_combinations.csv"), row.names = FALSE)
+
+table_2_indices <- tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>%
+  mutate(result_index = row_number()) %>%
+  filter(estimator == "multilevel_random", meta_average_multiplier == 0.5) %>%
+  arrange(heterogeneity_multiplier)
+table_2_columns <- map2(
+  table_2_indices$result_index,
+  table_2_indices$heterogeneity_multiplier,
+  function(i, h) table_2_results[[i]]$detailed %>%
+    transmute(measure, !!paste0("heterogeneity_", h) := if_else(
+      confidence_interval == "0", estimate, paste(estimate, confidence_interval)
+    ))
+)
+table_2 <- reduce(table_2_columns, full_join, by = "measure")
+write.csv(table_2, here("results", "main", "Table_2_multilevel_random_meta_0p5.csv"), row.names = FALSE)
+
+esr_plot_data <- all_esr_results %>%
+  filter(measure == "ESR_{0.05}^{sig}") %>%
+  mutate(
+    estimate = as.numeric(estimate),
+    ci_lower = as.numeric(stringr::str_match(confidence_interval, "\\[([^,]+),")[, 2]),
+    ci_upper = as.numeric(stringr::str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
+    estimator = recode(estimator, pet_peese = "PET-PEESE", multilevel_random = "Random effects")
+  )
+esr_plot <- ggplot(esr_plot_data, aes(heterogeneity_multiplier, estimate, color = estimator)) +
+  geom_hline(yintercept = 0, color = "grey70") +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.03,
+                position = position_dodge(width = 0.06)) +
+  geom_point(position = position_dodge(width = 0.06)) +
+  facet_wrap(~ meta_average_multiplier, labeller = label_both) +
+  labs(x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig), color = "Estimator") +
+  theme_bw()
+save_plot(
+  here("results", "main", "Figure_ESR_0p05_sign_all_combinations"),
+  width = 10, height = 4.5, draw = function() print(esr_plot)
+)
 
 ## -------------------------------
 ## Table 3
