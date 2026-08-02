@@ -44,7 +44,6 @@ ensure_output_dirs <- function() {
       here("results", "main"),
       here("results", "main", "pet_peese_rstandard"),
       here("results", "main", "multilevel_random"),
-      here("results", "main", "fixed"),
       here("results", "main", "derived_data"),
       here("results", "robustness")
     ),
@@ -82,7 +81,6 @@ load_estimator_data <- function(estimator, setup_label_value = setup_label) {
     estimator,
     pet_peese = here("results", "main", "pet_peese_rstandard"),
     multilevel_random = here("results", "main", "multilevel_random"),
-    fixed = here("results", "main", "fixed"),
     stop("Unknown estimator: ", estimator)
   )
   estimator_files <- list.files(
