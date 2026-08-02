@@ -266,7 +266,7 @@ ggplot(datFull) +
   geom_point(aes(xs, n.f), shape = 20, fill = "blue", color = "blue", size = 1) +
   coord_cartesian(xlim = c(0, 8)) +
   xlab("|z|-value") + ylab("Frequency") +
-  ggtitle(paste0("Heterogeneity multiplier = ", heterogeneity_multiplier)) +
+  ggtitle(paste0(heterogeneity_multiplier * 100, "% genuine heterogeneity")) +
   geom_vline(xintercept = c(1.64, 1.96, 2.58), lty = 2, color = c(3, 2, 6), linewidth = 0.5) +
   scale_x_continuous(breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8)) +
   theme(panel.background = element_rect(fill = "gray100"), panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(linewidth = 0.5, color = "gray"))
@@ -281,11 +281,11 @@ figure_1_panels <- purrr::pmap(
     make_figure_1_panel(meta_average_multiplier, heterogeneity_multiplier, setup_label, "multilevel_random")
   }
 )
-figure_1 <- arrangeGrob(grobs = figure_1_panels, ncol = 2)
+figure_1 <- arrangeGrob(grobs = figure_1_panels, ncol = 1)
 save_plot(
   here("results", "main", "Figure_1_multilevel_random"),
-  width = 10,
-  height = 5,
+  width = 5,
+  height = 10,
   draw = function() grid::grid.draw(figure_1)
 )
 

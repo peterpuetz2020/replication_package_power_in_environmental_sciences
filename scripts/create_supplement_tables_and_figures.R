@@ -109,20 +109,28 @@ make_figure_1_panel <- function(meta_average_multiplier, heterogeneity_multiplie
     counterfactual = as.vector(counterfactual) / n_tests
   )
 
-  ggplot(plot_data, aes(z)) +
-    geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper), fill = "#E69F00", alpha = 0.18) +
-    geom_line(aes(y = counterfactual, color = "Expected"), linewidth = 0.65) +
-    geom_line(aes(y = observed, color = "Observed"), linewidth = 0.65, linetype = 2) +
-    geom_vline(xintercept = c(1.64, 1.96, 2.58), linetype = 3, color = "grey45") +
+  ggplot(plot_data) +
+    geom_line(aes(z, ci_lower), color = "orange", linetype = 3) +
+    geom_line(aes(z, counterfactual), color = "orange", linetype = 1) +
+    geom_point(aes(z, counterfactual), shape = 20, fill = "orange", color = "orange", size = 1) +
+    geom_line(aes(z, ci_upper), color = "orange", linetype = 3) +
+    geom_line(aes(z, observed), color = "blue", linetype = 2) +
+    geom_point(aes(z, observed), shape = 20, fill = "blue", color = "blue", size = 1) +
     coord_cartesian(xlim = c(0, 8)) +
-    scale_x_continuous(breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8)) +
-    scale_color_manual(values = c("Expected" = "#E69F00", "Observed" = "#0072B2")) +
-    labs(
-      x = "|z|-value", y = "Frequency", color = NULL,
-      title = paste0("Heterogeneity multiplier = ", heterogeneity_multiplier)
+    xlab("|z|-value") + ylab("Frequency") +
+    ggtitle(paste0(heterogeneity_multiplier * 100, "% genuine heterogeneity")) +
+    geom_vline(
+      xintercept = c(1.64, 1.96, 2.58), linetype = 2,
+      color = c(3, 2, 6), linewidth = 0.5
     ) +
-    theme_bw(base_size = 11) +
-    theme(legend.position = "bottom", panel.grid.minor = element_blank())
+    scale_x_continuous(breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8)) +
+    theme(
+      panel.background = element_rect(fill = "gray100"),
+      panel.border = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.line = element_line(linewidth = 0.5, color = "gray")
+    )
 }
 
 write_counterfactual_figure <- function(meta_multiplier, figure_number) {
@@ -141,10 +149,10 @@ write_counterfactual_figure <- function(meta_multiplier, figure_number) {
                                          setup_label, ...) {
     make_figure_1_panel(meta_average_multiplier, heterogeneity_multiplier, setup_label)
   })
-  combined <- arrangeGrob(grobs = panels, ncol = 2)
+  combined <- arrangeGrob(grobs = panels, ncol = 1)
   save_supplement_plot(
     file.path(supplement_dir, paste0("Figure_S", figure_number, "_multilevel_random")),
-    width = 10, height = 5,
+    width = 5, height = 10,
     draw = function() grid::grid.draw(combined)
   )
 }
