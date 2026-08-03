@@ -147,17 +147,33 @@ fit_pet_peese <- function(dat) {
   )
 }
 
-fit_random_effects <- function(dat) {
+fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
   if (nrow(dat) <= 1) {
-    return(fit_sparse_effects(dat))
+    result <- fit_sparse_effects(dat)
+    result$model_warnings <- character()
+    return(result)
   }
 
-  model <- rma.mv(
-    yi, vi, mods = ~ 1,
-    random = list(~ 1 | eID, ~ 1 | sID),
-    method = "REML", test = "t", data = dat,
-    control = list(rel.tol = 1e-8)
-  )
+  model_warnings <- character()
+  fit_model <- function() {
+    rma.mv(
+      yi, vi, mods = ~ 1,
+      random = list(~ 1 | eID, ~ 1 | sID),
+      method = "REML", test = "t", data = dat,
+      control = list(rel.tol = 1e-8)
+    )
+  }
+  model <- if (capture_model_warnings) {
+    withCallingHandlers(
+      fit_model(),
+      warning = function(warning_condition) {
+        model_warnings <<- c(model_warnings, conditionMessage(warning_condition))
+        invokeRestart("muffleWarning")
+      }
+    )
+  } else {
+    fit_model()
+  }
   model_test <- coef_test(model, vcov = vcovCR(model, type = "CR2"))
   list(
     estimate = extract_coefficient_statistic(model_test, "intrcpt", "beta"),
@@ -165,8 +181,37 @@ fit_random_effects <- function(dat) {
     p_value = extract_coefficient_statistic(model_test, "intrcpt", "p_Satt"),
     tau2 = extract_between_study_variance(model),
     isq = extract_total_isq(model),
-    fallback = FALSE
+    fallback = FALSE,
+    model = model,
+    model_warnings = model_warnings
   )
+}
+
+fit_random_effects_with_outlier_removal <- function(dat, cutoff = 7, n_rounds = 2) {
+  analysis_data <- dat
+
+  ## Screen and refit twice. Each screen is based on the random-effects model
+  ## fitted to the observations retained by the preceding screen.
+  for (round in seq_len(n_rounds)) {
+    if (nrow(analysis_data) <= 1) break
+    screening_fit <- fit_random_effects(analysis_data)
+    standardized_residuals <- as.data.frame(
+      rstandard.rma.mv(screening_fit$model)
+    )$resid
+    keep <- is.na(standardized_residuals) |
+      abs(standardized_residuals) <= cutoff
+    analysis_data <- analysis_data[keep, , drop = FALSE]
+  }
+
+  ## Capture warnings from the final refit so the affected cIDs can be reported
+  ## after the parallel workers have returned.
+  final_fit <- fit_random_effects(
+    analysis_data,
+    capture_model_warnings = TRUE
+  )
+  final_fit$model <- NULL
+
+  list(data = analysis_data, result = final_fit)
 }
 
 fit_one_meta_analysis <- function(dat) {
@@ -180,20 +225,26 @@ fit_one_meta_analysis <- function(dat) {
   standardized_residuals <- as.data.frame(rstandard.rma.mv(outlier_model))$resid
   outlier_removed_data <- dat[abs(standardized_residuals) < 3, , drop = FALSE]
 
+  random_effect_outlier_removed <- fit_random_effects_with_outlier_removal(dat)
+
   analyses <- list(all_data = dat, outlier_removed = outlier_removed_data)
   results <- lapply(analyses, function(analysis_data) {
     list(
-      data = analysis_data,
       pet_peese = fit_pet_peese(analysis_data),
-      random_effect = fit_random_effects(analysis_data)
+      pet_peese_data = analysis_data
     )
   })
+  results$all_data$random_effect <- fit_random_effects(dat)
+  results$all_data$random_effect$model <- NULL
+  results$all_data$random_effect_data <- dat
+  results$outlier_removed$random_effect <- random_effect_outlier_removed$result
+  results$outlier_removed$random_effect_data <- random_effect_outlier_removed$data
 
   for (variant in names(results)) {
     result <- results[[variant]]
     saveRDS(
       make_effect_data(
-        result$data, result$pet_peese,
+        result$pet_peese_data, result$pet_peese,
         result$pet_peese$small_study_effect_p_value
       ),
       file.path(
@@ -202,7 +253,7 @@ fit_one_meta_analysis <- function(dat) {
       )
     )
     saveRDS(
-      make_effect_data(result$data, result$random_effect),
+      make_effect_data(result$random_effect_data, result$random_effect),
       file.path(
         output_dirs[[paste0("random_effect_", variant)]],
         paste0("meta_", dat$cID[[1]], ".rds")
@@ -213,14 +264,22 @@ fit_one_meta_analysis <- function(dat) {
   tibble(
     cID = as.character(dat$cID[[1]]),
     k_all_data = nrow(dat),
+    ## Retain these two legacy columns for the PET-based outlier sample.
     k_outlier_removed = nrow(outlier_removed_data),
     n_outliers_removed = nrow(dat) - nrow(outlier_removed_data),
+    k_random_effect_outlier_removed = nrow(random_effect_outlier_removed$data),
+    n_random_effect_outliers_removed =
+      nrow(dat) - nrow(random_effect_outlier_removed$data),
     pet_peese_method_all_data = results$all_data$pet_peese$method,
     pet_peese_method_outlier_removed = results$outlier_removed$pet_peese$method,
     pet_peese_estimate_all_data = results$all_data$pet_peese$estimate,
     pet_peese_estimate_outlier_removed = results$outlier_removed$pet_peese$estimate,
     random_effect_estimate_all_data = results$all_data$random_effect$estimate,
-    random_effect_estimate_outlier_removed = results$outlier_removed$random_effect$estimate
+    random_effect_estimate_outlier_removed = results$outlier_removed$random_effect$estimate,
+    random_effect_final_model_warnings = paste(
+      results$outlier_removed$random_effect$model_warnings,
+      collapse = " | "
+    )
   )
 }
 
@@ -232,6 +291,18 @@ meta_analysis_estimates <- foreach(
   .combine = bind_rows
 ) %dopar% fit_one_meta_analysis(dat)
 stopCluster(cluster)
+
+variance_ratio_warning <- grepl(
+  "Ratio of largest to smallest sampling variance extremely large",
+  meta_analysis_estimates$random_effect_final_model_warnings,
+  fixed = TRUE
+)
+if (any(variance_ratio_warning)) {
+  message(
+    "Final random-effects model sampling-variance warning for cID(s): ",
+    paste(meta_analysis_estimates$cID[variance_ratio_warning], collapse = ", ")
+  )
+}
 
 meta_analysis_estimates <- meta_analysis_estimates %>% arrange(cID)
 write_csv(

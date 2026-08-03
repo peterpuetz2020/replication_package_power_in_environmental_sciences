@@ -58,7 +58,13 @@ source("scripts/create_supplement_tables_and_figures.R")
 
 This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Main-text Figure 1 uses a meta-average multiplier of 0.5 and heterogeneity multipliers 0 and 0.5; its 0.25 and 1 meta-average sensitivity counterparts are Figures S1 and S2. Table 2 is written for every combination of `meta_average_multiplier` and `heterogeneity_multiplier`, using both the outlier-removed and all-observation estimator data. The two main Table 2 files end in `_outliers_removed.csv` and `_all_data.csv`; variant-specific counterfactual filenames prevent results computed from one dataset from being reused for the other. Because heterogeneity is not used by Table 1, Table 3, or Figure 2, those outputs are written once per meta-average multiplier, using the first heterogeneity value only. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
 
-The workflow renders each setup for PET-PEESE and multilevel random effects.
+The workflow renders each setup for PET-PEESE and multilevel random effects. The
+outlier-removed samples are estimator-specific: PET-PEESE uses its PET residual
+screen, while the multilevel random-effects model removes observations with an
+absolute standardized residual above 7, refits, repeats that screen once, and
+then performs a final refit. If that final random-effects fit warns that the
+ratio of the largest to smallest sampling variance is extremely large, the
+model-fitting script prints the affected `cID`.
 The supplementary script writes Figure S1 (meta-average multiplier 0.25),
 Figure S2 (meta-average multiplier 1), and the across-combination ESR plot in
 Figure S3 to `results/supplement/`, in PDF, EPS, SVG, and 300 dpi PNG format. SVG is
