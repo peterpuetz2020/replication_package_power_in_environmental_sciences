@@ -63,9 +63,9 @@ fit_sparse_effects <- function(dat) {
 
   estimate <- dat$yi[[1]]
   standard_error <- sqrt(dat$vi[[1]])
-  p_value <- if (standard_error > 0) {
+  p_value <- if (is.finite(standard_error) && standard_error > 0) {
     2 * pnorm(-abs(estimate / standard_error))
-  } else if (estimate == 0) 1 else 0
+  } else if (is.finite(estimate) && estimate == 0) 1 else NA_real_
 
   list(
     estimate = estimate, standard_error = standard_error,
@@ -92,7 +92,14 @@ fit_pet_peese <- function(dat) {
     pet_test, "intrcpt", "p_Satt"
   )
 
-  if (pet_intercept_p_value > 0.10) {
+  ## CR2/Satterthwaite inference can return NA when a meta-analysis has too few
+  ## independent clusters. In that case the PET-to-PEESE switch cannot be
+  ## justified, so retain the already fitted PET model instead of evaluating an
+  ## NA in `if` (which aborts the entire parallel foreach job).
+  use_pet <- !is.finite(pet_intercept_p_value) ||
+    pet_intercept_p_value > 0.10
+
+  if (use_pet) {
     selected_model <- pet
     selected_test <- pet_test
     method <- "PET"
