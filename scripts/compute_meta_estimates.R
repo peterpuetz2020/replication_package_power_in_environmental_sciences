@@ -104,10 +104,19 @@ fit_pet_peese <- function(dat) {
     selected_test <- pet_test
     method <- "PET"
     slope_term <- "sei"
+    outcome_scale <- 1
   } else {
-    ## Multiplying vi by 100 for this PEESE fit avoids convergence issues. This
-    ## constant rescaling does not alter the extracted PEESE results.
-    peese_data <- dat %>% mutate(vi = 100 * vi)
+    ## Put the complete PEESE model on a numerically more stable scale, rather
+    ## than scaling vi alone (which would change the inverse-variance weights
+    ## and the fitted variance components). If y* = c*y, then its sampling
+    ## variance is c^2*vi. Fitting y* ~ c^2*vi is the same PEESE model in new
+    ## units; the intercept/SE and variance components are transformed back
+    ## below. The slope test and I-squared are invariant to this change of units.
+    outcome_scale <- 10
+    peese_data <- dat %>% mutate(
+      yi = outcome_scale * yi,
+      vi = outcome_scale^2 * vi
+    )
     selected_model <- rma.mv(
       yi, vi, mods = ~ 1 + vi,
       random = list(~ 1 | eID, ~ 1 | sID),
@@ -123,13 +132,17 @@ fit_pet_peese <- function(dat) {
 
   list(
     method = method,
-    estimate = extract_coefficient_statistic(selected_test, "intrcpt", "beta"),
-    standard_error = extract_coefficient_statistic(selected_test, "intrcpt", "SE"),
+    estimate = extract_coefficient_statistic(
+      selected_test, "intrcpt", "beta"
+    ) / outcome_scale,
+    standard_error = extract_coefficient_statistic(
+      selected_test, "intrcpt", "SE"
+    ) / outcome_scale,
     p_value = extract_coefficient_statistic(selected_test, "intrcpt", "p_Satt"),
     small_study_effect_p_value = extract_coefficient_statistic(
       selected_test, slope_term, "p_Satt"
     ),
-    tau2 = extract_between_study_variance(selected_model),
+    tau2 = extract_between_study_variance(selected_model) / outcome_scale^2,
     isq = extract_total_isq(selected_model)
   )
 }
