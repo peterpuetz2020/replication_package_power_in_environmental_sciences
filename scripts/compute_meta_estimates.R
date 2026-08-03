@@ -37,7 +37,9 @@ extract_between_study_variance <- function(model) {
 
 extract_total_isq <- function(model) {
   isq_statistics <- i2_ml(model, method = "matrix")
-  as.numeric(isq_statistics[["I2_total"]])
+  ## i2_ml() returns total I-squared as its first value. It is not named
+  ## "I2_total", so indexing it by that name causes "subscript out of bounds".
+  as.numeric(isq_statistics[1])
 }
 
 make_effect_data <- function(dat, result, small_study_effect_p_value = NA_real_) {
@@ -51,7 +53,34 @@ make_effect_data <- function(dat, result, small_study_effect_p_value = NA_real_)
     )
 }
 
+fit_sparse_effects <- function(dat) {
+  if (nrow(dat) == 0) {
+    return(list(
+      estimate = NA_real_, standard_error = NA_real_, p_value = NA_real_,
+      tau2 = NA_real_, isq = NA_real_, fallback = TRUE
+    ))
+  }
+
+  estimate <- dat$yi[[1]]
+  standard_error <- sqrt(dat$vi[[1]])
+  p_value <- if (standard_error > 0) {
+    2 * pnorm(-abs(estimate / standard_error))
+  } else if (estimate == 0) 1 else 0
+
+  list(
+    estimate = estimate, standard_error = standard_error,
+    p_value = p_value, tau2 = 0, isq = 0, fallback = TRUE
+  )
+}
+
 fit_pet_peese <- function(dat) {
+  if (nrow(dat) <= 1) {
+    result <- fit_sparse_effects(dat)
+    result$method <- "PET-PEESE not estimable"
+    result$small_study_effect_p_value <- NA_real_
+    return(result)
+  }
+
   pet <- rma.mv(
     yi, vi, mods = ~ 1 + sei,
     random = list(~ 1 | eID, ~ 1 | sID),
@@ -99,16 +128,8 @@ fit_pet_peese <- function(dat) {
 }
 
 fit_random_effects <- function(dat) {
-  if (nrow(dat) == 1) {
-    estimate <- dat$yi[[1]]
-    standard_error <- sqrt(dat$vi[[1]])
-    p_value <- if (standard_error > 0) {
-      2 * pnorm(-abs(estimate / standard_error))
-    } else if (estimate == 0) 1 else 0
-    return(list(
-      estimate = estimate, standard_error = standard_error,
-      p_value = p_value, tau2 = 0, isq = 0, fallback = TRUE
-    ))
+  if (nrow(dat) <= 1) {
+    return(fit_sparse_effects(dat))
   }
 
   model <- rma.mv(
@@ -188,11 +209,6 @@ registerDoParallel(cluster)
 meta_analysis_estimates <- foreach(
   dat = meta_analyses,
   .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),
-  .export = c(
-    "fit_one_meta_analysis", "fit_pet_peese", "fit_random_effects",
-    "make_effect_data", "extract_coefficient_statistic",
-    "extract_between_study_variance", "extract_total_isq", "output_dirs"
-  ),
   .combine = bind_rows
 ) %dopar% fit_one_meta_analysis(dat)
 stopCluster(cluster)
