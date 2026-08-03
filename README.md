@@ -85,6 +85,16 @@ effect-level inputs under `results/main/multilevel_random/`. Output filenames
 end in `_pet_peese` or `_multilevel_random`, so results from each estimator
 remain separate.
 
+To compare the two random-effects heterogeneity components directly, run
+`scripts/compute_meta_estimates.R`. In addition to the estimator inputs, it
+writes `results/main/derived_data/random_effect_heterogeneity_comparison.csv`.
+For the all-data and outlier-removed samples, that file reports the median
+between-study variance, median within-study effect-size variance, their ratio,
+the median ratio calculated within each meta-analysis, and the between-study
+share of total estimated heterogeneity. Meta-analyses whose within-study
+component is estimated on the zero boundary are excluded only from the
+within-meta-analysis ratio and are reported separately in the final column.
+
 Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. Figures are saved as PDF, EPS, SVG, and 300 dpi PNG files. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 
 ### Optional setup-specific data creation

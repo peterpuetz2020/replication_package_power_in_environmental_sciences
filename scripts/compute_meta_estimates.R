@@ -30,9 +30,12 @@ extract_coefficient_statistic <- function(test, term, statistic) {
   as.numeric(test[term, statistic])
 }
 
-extract_between_study_variance <- function(model) {
+extract_variance_components <- function(model) {
   variance_components <- setNames(as.numeric(model$sigma2), model$s.names)
-  as.numeric(variance_components[["sID"]])
+  list(
+    within_study_effect_size = as.numeric(variance_components[["eID"]]),
+    between_study = as.numeric(variance_components[["sID"]])
+  )
 }
 
 extract_total_isq <- function(model) {
@@ -57,7 +60,8 @@ fit_sparse_effects <- function(dat) {
   if (nrow(dat) == 0) {
     return(list(
       estimate = NA_real_, standard_error = NA_real_, p_value = NA_real_,
-      tau2 = NA_real_, isq = NA_real_, fallback = TRUE
+      tau2 = NA_real_, within_study_tau2 = NA_real_, isq = NA_real_,
+      fallback = TRUE
     ))
   }
 
@@ -69,7 +73,8 @@ fit_sparse_effects <- function(dat) {
 
   list(
     estimate = estimate, standard_error = standard_error,
-    p_value = p_value, tau2 = 0, isq = 0, fallback = TRUE
+    p_value = p_value, tau2 = 0, within_study_tau2 = 0, isq = 0,
+    fallback = TRUE
   )
 }
 
@@ -142,7 +147,11 @@ fit_pet_peese <- function(dat) {
     small_study_effect_p_value = extract_coefficient_statistic(
       selected_test, slope_term, "p_Satt"
     ),
-    tau2 = extract_between_study_variance(selected_model) / outcome_scale^2,
+    tau2 = extract_variance_components(selected_model)$between_study /
+      outcome_scale^2,
+    within_study_tau2 =
+      extract_variance_components(selected_model)$within_study_effect_size /
+      outcome_scale^2,
     isq = extract_total_isq(selected_model)
   )
 }
@@ -175,11 +184,13 @@ fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
     fit_model()
   }
   model_test <- coef_test(model, vcov = vcovCR(model, type = "CR2"))
+  variance_components <- extract_variance_components(model)
   list(
     estimate = extract_coefficient_statistic(model_test, "intrcpt", "beta"),
     standard_error = extract_coefficient_statistic(model_test, "intrcpt", "SE"),
     p_value = extract_coefficient_statistic(model_test, "intrcpt", "p_Satt"),
-    tau2 = extract_between_study_variance(model),
+    tau2 = variance_components$between_study,
+    within_study_tau2 = variance_components$within_study_effect_size,
     isq = extract_total_isq(model),
     fallback = FALSE,
     model = model,
@@ -276,6 +287,14 @@ fit_one_meta_analysis <- function(dat) {
     pet_peese_estimate_outlier_removed = results$outlier_removed$pet_peese$estimate,
     random_effect_estimate_all_data = results$all_data$random_effect$estimate,
     random_effect_estimate_outlier_removed = results$outlier_removed$random_effect$estimate,
+    random_effect_between_study_variance_all_data =
+      results$all_data$random_effect$tau2,
+    random_effect_within_study_effect_size_variance_all_data =
+      results$all_data$random_effect$within_study_tau2,
+    random_effect_between_study_variance_outlier_removed =
+      results$outlier_removed$random_effect$tau2,
+    random_effect_within_study_effect_size_variance_outlier_removed =
+      results$outlier_removed$random_effect$within_study_tau2,
     random_effect_final_model_warnings = paste(
       results$outlier_removed$random_effect$model_warnings,
       collapse = " | "
@@ -344,4 +363,45 @@ write_csv(
 write_csv(
   random_effect_outlier_comparison,
   file.path(derived_data_dir, "random_effect_outlier_comparison.csv")
+)
+
+summarize_heterogeneity_components <- function(variant, between_study, within_study) {
+  eligible <- is.finite(between_study) & is.finite(within_study)
+  between_study <- between_study[eligible]
+  within_study <- within_study[eligible]
+  total <- between_study + within_study
+  positive_within <- within_study > 0
+  positive_total <- total > 0
+
+  tibble(
+    sample = variant,
+    n_meta_analyses = length(between_study),
+    median_between_study_variance = median(between_study),
+    median_within_study_effect_size_variance = median(within_study),
+    ratio_of_median_variances = median(between_study) / median(within_study),
+    median_within_meta_analysis_variance_ratio =
+      median(between_study[positive_within] / within_study[positive_within]),
+    median_between_study_percentage_of_total_heterogeneity =
+      100 * median(between_study[positive_total] / total[positive_total]),
+    percentage_with_zero_within_study_effect_size_variance =
+      100 * mean(within_study == 0)
+  )
+}
+
+random_effect_heterogeneity_comparison <- bind_rows(
+  summarize_heterogeneity_components(
+    "All data",
+    meta_analysis_estimates$random_effect_between_study_variance_all_data,
+    meta_analysis_estimates$random_effect_within_study_effect_size_variance_all_data
+  ),
+  summarize_heterogeneity_components(
+    "Outliers removed",
+    meta_analysis_estimates$random_effect_between_study_variance_outlier_removed,
+    meta_analysis_estimates$random_effect_within_study_effect_size_variance_outlier_removed
+  )
+)
+
+write_csv(
+  random_effect_heterogeneity_comparison,
+  file.path(derived_data_dir, "random_effect_heterogeneity_comparison.csv")
 )
