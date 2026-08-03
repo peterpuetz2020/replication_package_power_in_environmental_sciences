@@ -87,10 +87,19 @@ save_plot <- function(filename_stem, width, height, draw) {
   dev.off()
 }
 
-load_estimator_data <- function(estimator, setup_label_value = setup_label) {
+load_estimator_data <- function(estimator, setup_label_value = setup_label,
+                                outlier_variant = "outliers_removed") {
+  if (!outlier_variant %in% c("outliers_removed", "all_data")) {
+    stop("Unknown outlier variant: ", outlier_variant)
+  }
+
+  variant_suffix <- if (outlier_variant == "all_data") "_all_data" else ""
   derived_path <- here(
     "results", "main", "derived_data",
-    paste0("pps_rstandard_raw_", setup_label_value, "_", estimator, ".rds")
+    paste0(
+      "pps_rstandard_raw_", setup_label_value, "_", estimator,
+      variant_suffix, ".rds"
+    )
   )
   if (file.exists(derived_path)) {
     return(readRDS(derived_path))
@@ -98,8 +107,14 @@ load_estimator_data <- function(estimator, setup_label_value = setup_label) {
 
   estimator_dir <- switch(
     estimator,
-    pet_peese = here("results", "main", "pet_peese_rstandard"),
-    multilevel_random = here("results", "main", "multilevel_random"),
+    pet_peese = here(
+      "results", "main",
+      if (outlier_variant == "all_data") "pet_peese_all_data" else "pet_peese_rstandard"
+    ),
+    multilevel_random = here(
+      "results", "main",
+      if (outlier_variant == "all_data") "multilevel_random_all_data" else "multilevel_random"
+    ),
     stop("Unknown estimator: ", estimator)
   )
   estimator_files <- list.files(
@@ -111,7 +126,7 @@ load_estimator_data <- function(estimator, setup_label_value = setup_label) {
   if (length(estimator_files) == 0) {
     stop(
       "No ", estimator, " RDS files found in ", estimator_dir, ". ",
-      "Run scripts/compare_meta_analysis_estimators.R first."
+      "Run scripts/compute_meta_estimates.R first."
     )
   }
 
@@ -314,15 +329,19 @@ save_plot(
 ## -------------------------------
 ## Table 2
 ## -------------------------------
-calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, estimator, ...) {
-  pps_rstandard <- load_estimator_data(estimator, setup_label)
+calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
+                              setup_label, estimator, outlier_variant, ...) {
+  pps_rstandard <- load_estimator_data(
+    estimator, setup_label, outlier_variant
+  )
   grids <- make_grids()
   my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
   myDat <- split_meta_analyses(my_dat)
   facz <- abs(my_dat$yi / sqrt(my_dat$vi))
   p.orig.tab <- count_intervals(facz, grids$p_grid_tab2)
-  p.tab <- get_counterfactual(here("results", "main", paste0("p_tab_", setup_label, "_", estimator, ".rds")), myDat, grids$p_grid_tab, heterogeneity_multiplier_value = heterogeneity_multiplier)
-  p.tab.ci <- get_counterfactual(here("results", "main", paste0("p_tab_ci_", setup_label, "_", estimator, ".rds")), myDat, grids$p_grid_tab, ci = TRUE, cluster = unique(pps_rstandard$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
+  result_suffix <- paste(setup_label, estimator, outlier_variant, sep = "_")
+  p.tab <- get_counterfactual(here("results", "main", paste0("p_tab_", result_suffix, ".rds")), myDat, grids$p_grid_tab, heterogeneity_multiplier_value = heterogeneity_multiplier)
+  p.tab.ci <- get_counterfactual(here("results", "main", paste0("p_tab_ci_", result_suffix, ".rds")), myDat, grids$p_grid_tab, ci = TRUE, cluster = unique(pps_rstandard$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
   include_p_value_intervals <- estimator == "multilevel_random" && meta_average_multiplier == 0.5
   p.table <- matrix(NA_character_, ncol = 2, nrow = length(grids$p_grid_tab2) - 1)
@@ -350,19 +369,25 @@ calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
       filter(measure %in% summary_rows) %>%
       mutate(estimator = estimator, meta_average_multiplier = meta_average_multiplier,
              heterogeneity_multiplier = heterogeneity_multiplier, setup_label = setup_label,
+             outlier_variant = outlier_variant,
              .before = 1)
   )
 }
 
-table_2_results <- tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>%
+table_2_parameters <- tidyr::crossing(
+  analysis_setups,
+  estimator = meta_analysis_estimators,
+  outlier_variant = c("outliers_removed", "all_data")
+)
+table_2_results <- table_2_parameters %>%
   pmap(calculate_table_2)
 
 all_esr_results <- map_dfr(table_2_results, "summary")
 all_combination_results <- map2_dfr(
   table_2_results,
-  seq_len(nrow(tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators))),
+  seq_len(nrow(table_2_parameters)),
   function(result, i) {
-    parameters <- tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators)[i, ]
+    parameters <- table_2_parameters[i, ]
     rows <- if (parameters$estimator == "multilevel_random" && parameters$meta_average_multiplier == 0.5) {
       result$detailed
     } else {
@@ -373,26 +398,37 @@ all_combination_results <- map2_dfr(
       meta_average_multiplier = parameters$meta_average_multiplier,
       heterogeneity_multiplier = parameters$heterogeneity_multiplier,
       setup_label = parameters$setup_label,
+      outlier_variant = parameters$outlier_variant,
       .before = 1
-    ) %>% dplyr::select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1")))
+    ) %>% dplyr::select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1", "outlier_variant1")))
   }
 )
 write.csv(all_combination_results, here("results", "main", "ESR_results_all_combinations.csv"), row.names = FALSE)
 
-table_2_indices <- tidyr::crossing(analysis_setups, estimator = meta_analysis_estimators) %>%
+table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
   filter(estimator == "multilevel_random", meta_average_multiplier == 0.5) %>%
-  arrange(heterogeneity_multiplier)
-table_2_columns <- map2(
-  table_2_indices$result_index,
-  table_2_indices$heterogeneity_multiplier,
-  function(i, h) table_2_results[[i]]$detailed %>%
-    transmute(measure, !!paste0("heterogeneity_", h) := if_else(
-      confidence_interval == "0", estimate, paste(estimate, confidence_interval)
-    ))
-)
-table_2 <- reduce(table_2_columns, full_join, by = "measure")
-write.csv(table_2, here("results", "main", "Table_2_multilevel_random_meta_0p5.csv"), row.names = FALSE)
+  arrange(outlier_variant, heterogeneity_multiplier)
+walk(c("outliers_removed", "all_data"), function(variant) {
+  variant_indices <- table_2_indices %>% filter(outlier_variant == variant)
+  table_2_columns <- map2(
+    variant_indices$result_index,
+    variant_indices$heterogeneity_multiplier,
+    function(i, h) table_2_results[[i]]$detailed %>%
+      transmute(measure, !!paste0("heterogeneity_", h) := if_else(
+        confidence_interval == "0", estimate, paste(estimate, confidence_interval)
+      ))
+  )
+  table_2 <- reduce(table_2_columns, full_join, by = "measure")
+  write.csv(
+    table_2,
+    here(
+      "results", "main",
+      paste0("Table_2_multilevel_random_meta_0p5_", variant, ".csv")
+    ),
+    row.names = FALSE
+  )
+})
 
 esr_plot_data <- all_esr_results %>%
   filter(measure == "ESR_{0.05}^{sig}") %>%
@@ -407,7 +443,7 @@ esr_plot <- ggplot(esr_plot_data, aes(heterogeneity_multiplier, estimate, color 
   geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.03,
                 position = position_dodge(width = 0.06)) +
   geom_point(position = position_dodge(width = 0.06)) +
-  facet_wrap(~ meta_average_multiplier, labeller = label_both) +
+  facet_grid(outlier_variant ~ meta_average_multiplier, labeller = label_both) +
   labs(x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig), color = "Estimator") +
   theme_bw()
 save_plot(
