@@ -36,7 +36,7 @@ extract_between_study_variance <- function(model) {
 }
 
 extract_total_isq <- function(model) {
-  isq_statistics <- i2_ml(model, method = "matrix")
+  isq_statistics <- i2_ml(model, method = "ratio")
   ## i2_ml() returns total I-squared as its first value. It is not named
   ## "I2_total", so indexing it by that name causes "subscript out of bounds".
   as.numeric(isq_statistics[1])

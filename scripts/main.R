@@ -7,10 +7,7 @@
 
 source(here::here("scripts", "analysis_setup.R"))
 
-## Optional: refit PET-PEESE models and replace the per-meta-analysis RDS files.
-# source(here::here("scripts", "fit_pet_peese_models.R"))
-
-## Fit PET-PEESE and multilevel random-effects models, save their effect-level
+## Optional: Fit PET-PEESE and multilevel random-effects models, save their effect-level
 ## analysis data, and write the meta-analysis estimates used below.
 source(here::here("scripts", "compute_meta_estimates.R"))
 

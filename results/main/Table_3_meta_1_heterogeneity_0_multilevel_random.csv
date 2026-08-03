@@ -1,9 +1,9 @@
 "","M","N","mmedian","median","mean","Q25","Q75","SAPE"
-"All meta-analyses",704,63251,0.31,0.48,0.53,0.13,0.99,0.18
-"Ecology",162,19804,0.29,0.41,0.5,0.1,0.98,0.35
-"Environmental Chemistry",65,8346,0.3,0.23,0.4,0.11,0.73,0.23
+"All meta-analyses",701,62942,0.31,0.48,0.53,0.13,0.99,0.18
+"Ecology",160,19526,0.28,0.39,0.5,0.1,0.97,0.35
+"Environmental Chemistry",63,8332,0.3,0.23,0.4,0.11,0.73,0.23
 "Environmental Engineering",40,12499,0.74,0.64,0.63,0.37,0.98,0.39
-"Health, Toxicology and Mutagenesis",279,7949,0.24,0.8,0.61,0.14,1,0.5
+"Health, Toxicology and Mutagenesis",280,8008,0.25,0.8,0.61,0.14,1,0.5
 "Management, Monitoring, Policy and Law",19,818,0.27,0.2,0.37,0.05,0.68,0.21
-"Nature and Landscape Conservation",98,13052,0.27,0.47,0.52,0.1,1,0.38
+"Nature and Landscape Conservation",98,12976,0.26,0.46,0.52,0.1,0.99,0.38
 "Water Science and Technology",41,783,0.51,0.72,0.62,0.26,1,0.45
