@@ -61,8 +61,8 @@ This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 
 The workflow renders each setup for PET-PEESE and multilevel random effects. The
 outlier-removed samples are estimator-specific: PET-PEESE uses its PET residual
 screen, while the multilevel random-effects model removes observations with an
-absolute standardized residual above 7, refits, repeats that screen once, and
-then performs a final refit. If that final random-effects fit warns that the
+absolute standardized residual above 3 in one screening round and then performs
+a single final refit. If that final random-effects fit warns that the
 ratio of the largest to smallest sampling variance is extremely large, the
 model-fitting script prints the affected `cID`.
 The supplementary script writes Figure S1 (meta-average multiplier 0.25),
@@ -94,6 +94,24 @@ the median ratio calculated within each meta-analysis, and the between-study
 share of total estimated heterogeneity. Meta-analyses whose within-study
 component is estimated on the zero boundary are excluded only from the
 within-meta-analysis ratio and are reported separately in the final column.
+
+The models in that script are multilevel random-effects models; cluster-robust
+variance estimation (CR2 with Satterthwaite tests) is used only as an additional
+inference layer for their regression coefficients. The random intercepts model
+the effect-size and study-level heterogeneity, whereas CR2 guards the reported
+coefficient standard errors and tests against remaining within-study
+dependence or misspecification of that working covariance. Robust variance
+estimation is therefore not restricted to fixed-effects models and does not
+replace the multilevel random effects. The workflow applies the stricter
+eligibility rule below before requesting CR2 inference.
+
+Meta-analyses are eligible only when at least five distinct primary studies
+(`sID`) remain after outlier removal. This threshold is checked separately for
+the PET residual screen and the multilevel random-effects residual screen; if
+either estimator's retained sample has fewer than five studies, the entire
+meta-analysis is omitted from both the all-data and outlier-removed outputs.
+The script removes any stale per-meta-analysis RDS files and records all such
+omissions in `results/main/derived_data/excluded_meta_analyses.csv`.
 
 Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. Figures are saved as PDF, EPS, SVG, and 300 dpi PNG files. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 

@@ -11,6 +11,7 @@ library(here)
 
 if (!exists("n_cores")) n_cores <- 6
 if (!exists("show_progress")) show_progress <- TRUE
+minimum_primary_studies <- 5L
 if (!exists("new_progress_bar")) {
   new_progress_bar <- function(total, label) {
     if (!isTRUE(show_progress)) return(NULL)
@@ -42,6 +43,17 @@ invisible(lapply(
 
 extract_coefficient_statistic <- function(test, term, statistic) {
   as.numeric(test[term, statistic])
+}
+
+coefficient_test <- function(model, dat) {
+  study_cluster <- droplevels(factor(dat$sID))
+
+  ## The workflow checks that at least five primary studies remain before any
+  ## final model is fitted, so CR2 always has multiple independent clusters.
+  coef_test(
+    model,
+    vcov = vcovCR(model, cluster = study_cluster, type = "CR2")
+  )
 }
 
 random_effect_structure <- function(dat) {
@@ -89,6 +101,28 @@ make_effect_data <- function(dat, result, small_study_effect_p_value = NA_real_)
     )
 }
 
+primary_study_count <- function(dat) {
+  dplyr::n_distinct(dat$sID, na.rm = TRUE)
+}
+
+drop_meta_analysis <- function(dat, reason, pet_studies = NA_integer_,
+                               random_effect_studies = NA_integer_) {
+  c_id <- as.character(dat$cID[[1]])
+
+  ## A rerun must not leave output files from an earlier, less restrictive run.
+  invisible(lapply(output_dirs, function(output_dir) {
+    unlink(file.path(output_dir, paste0("meta_", c_id, ".rds")))
+  }))
+
+  tibble(
+    cID = c_id,
+    exclusion_reason = reason,
+    n_primary_studies_pet_outlier_removed = as.integer(pet_studies),
+    n_primary_studies_random_effect_outlier_removed =
+      as.integer(random_effect_studies)
+  )
+}
+
 fit_sparse_effects <- function(dat) {
   if (nrow(dat) == 0) {
     return(list(
@@ -125,7 +159,7 @@ fit_pet_peese <- function(dat) {
     method = "REML", test = "t", data = dat,
     control = list(rel.tol = 1e-8)
   )
-  pet_test <- coef_test(pet, vcov = vcovCR(pet, type = "CR2"))
+  pet_test <- coefficient_test(pet, dat)
   pet_intercept_p_value <- extract_coefficient_statistic(
     pet_test, "intrcpt", "p_Satt"
   )
@@ -161,9 +195,7 @@ fit_pet_peese <- function(dat) {
       method = "REML", test = "t", data = peese_data,
       control = list(rel.tol = 1e-8)
     )
-    selected_test <- coef_test(
-      selected_model, vcov = vcovCR(selected_model, type = "CR2")
-    )
+    selected_test <- coefficient_test(selected_model, peese_data)
     method <- "PEESE"
     slope_term <- "vi"
   }
@@ -216,7 +248,7 @@ fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
   } else {
     fit_model()
   }
-  model_test <- coef_test(model, vcov = vcovCR(model, type = "CR2"))
+  model_test <- coefficient_test(model, dat)
   variance_components <- extract_variance_components(model)
   list(
     estimate = extract_coefficient_statistic(model_test, "intrcpt", "beta"),
@@ -231,20 +263,27 @@ fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
   )
 }
 
-fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3, n_rounds = 1) {
+fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3) {
   analysis_data <- dat
 
-  ## Screen and refit twice. Each screen is based on the random-effects model
-  ## fitted to the observations retained by the preceding screen.
-  for (round in seq_len(n_rounds)) {
-    if (nrow(analysis_data) <= 1) break
-    screening_fit <- fit_random_effects(analysis_data)
-    standardized_residuals <- as.data.frame(
-      rstandard.rma.mv(screening_fit$model)
-    )$resid
-    keep <- is.na(standardized_residuals) |
-      abs(standardized_residuals) <= cutoff
-    analysis_data <- analysis_data[keep, , drop = FALSE]
+  if (primary_study_count(analysis_data) < minimum_primary_studies) {
+    return(list(data = analysis_data, result = NULL))
+  }
+
+  ## Fit once to identify outliers, remove them once, and then perform the
+  ## single final refit below. Outlier detection is deliberately not iterated.
+  screening_fit <- fit_random_effects(analysis_data)
+  standardized_residuals <- as.data.frame(
+    rstandard.rma.mv(screening_fit$model)
+  )$resid
+  keep <- is.na(standardized_residuals) |
+    abs(standardized_residuals) <= cutoff
+  analysis_data <- analysis_data[keep, , drop = FALSE]
+
+  ## Let the caller exclude the complete meta-analysis before attempting the
+  ## final fit (and, in particular, before requesting CR2 inference).
+  if (primary_study_count(analysis_data) < minimum_primary_studies) {
+    return(list(data = analysis_data, result = NULL))
   }
 
   ## Capture warnings from the final refit so the affected cIDs can be reported
@@ -259,6 +298,13 @@ fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3, n_rounds = 
 }
 
 fit_one_meta_analysis <- function(dat) {
+  if (primary_study_count(dat) < minimum_primary_studies) {
+    return(drop_meta_analysis(
+      dat,
+      paste0("Fewer than ", minimum_primary_studies, " primary studies")
+    ))
+  }
+
   ## Identify outliers from the initial PET fit, as in the original workflow.
   outlier_model <- rma.mv(
     yi, vi, mods = ~ 1 + sei,
@@ -268,8 +314,33 @@ fit_one_meta_analysis <- function(dat) {
   )
   standardized_residuals <- as.data.frame(rstandard.rma.mv(outlier_model))$resid
   outlier_removed_data <- dat[abs(standardized_residuals) < 3, , drop = FALSE]
+  pet_studies <- primary_study_count(outlier_removed_data)
+
+  if (pet_studies < minimum_primary_studies) {
+    return(drop_meta_analysis(
+      dat,
+      paste0(
+        "PET outlier removal left fewer than ", minimum_primary_studies,
+        " primary studies"
+      ),
+      pet_studies = pet_studies
+    ))
+  }
 
   random_effect_outlier_removed <- fit_random_effects_with_outlier_removal(dat)
+  random_effect_studies <- primary_study_count(random_effect_outlier_removed$data)
+
+  if (random_effect_studies < minimum_primary_studies) {
+    return(drop_meta_analysis(
+      dat,
+      paste0(
+        "Random-effects outlier removal left fewer than ",
+        minimum_primary_studies, " primary studies"
+      ),
+      pet_studies = pet_studies,
+      random_effect_studies = random_effect_studies
+    ))
+  }
 
   analyses <- list(all_data = dat, outlier_removed = outlier_removed_data)
   results <- lapply(analyses, function(analysis_data) {
@@ -307,6 +378,9 @@ fit_one_meta_analysis <- function(dat) {
 
   tibble(
     cID = as.character(dat$cID[[1]]),
+    exclusion_reason = NA_character_,
+    n_primary_studies_pet_outlier_removed = pet_studies,
+    n_primary_studies_random_effect_outlier_removed = random_effect_studies,
     k_all_data = nrow(dat),
     ## Retain these two legacy columns for the PET-based outlier sample.
     k_outlier_removed = nrow(outlier_removed_data),
@@ -353,6 +427,28 @@ for (batch_index in seq_along(analysis_batches)) {
 meta_analysis_estimates <- bind_rows(meta_analysis_estimates)
 stopCluster(cluster)
 close_progress_bar(model_progress)
+
+excluded_meta_analyses <- meta_analysis_estimates %>%
+  filter(!is.na(exclusion_reason)) %>%
+  select(
+    cID, exclusion_reason,
+    n_primary_studies_pet_outlier_removed,
+    n_primary_studies_random_effect_outlier_removed
+  ) %>%
+  arrange(cID)
+write_csv(
+  excluded_meta_analyses,
+  file.path(derived_data_dir, "excluded_meta_analyses.csv")
+)
+if (nrow(excluded_meta_analyses) > 0) {
+  message(
+    "Excluded ", nrow(excluded_meta_analyses), " meta-analysis/analyses with ",
+    "fewer than ", minimum_primary_studies,
+    " primary studies after outlier removal; see excluded_meta_analyses.csv."
+  )
+}
+meta_analysis_estimates <- meta_analysis_estimates %>%
+  filter(is.na(exclusion_reason))
 
 variance_ratio_warning <- grepl(
   "Ratio of largest to smallest sampling variance extremely large",
