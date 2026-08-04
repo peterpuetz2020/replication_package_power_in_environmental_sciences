@@ -10,6 +10,20 @@ library(orchaRd)
 library(here)
 
 if (!exists("n_cores")) n_cores <- 4
+if (!exists("show_progress")) show_progress <- TRUE
+if (!exists("new_progress_bar")) {
+  new_progress_bar <- function(total, label) {
+    if (!isTRUE(show_progress)) return(NULL)
+    message(label)
+    utils::txtProgressBar(min = 0, max = max(1, total), style = 3)
+  }
+  update_progress_bar <- function(progress_bar, value) {
+    if (!is.null(progress_bar)) utils::setTxtProgressBar(progress_bar, value)
+  }
+  close_progress_bar <- function(progress_bar) {
+    if (!is.null(progress_bar)) close(progress_bar)
+  }
+}
 
 meta <- read_excel(here("data", "MasterData.xlsx"))
 meta_analyses <- split(meta, meta$cID)
@@ -323,12 +337,22 @@ fit_one_meta_analysis <- function(dat) {
 
 cluster <- makeCluster(n_cores)
 registerDoParallel(cluster)
-meta_analysis_estimates <- foreach(
-  dat = meta_analyses,
-  .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),
-  .combine = bind_rows
-) %dopar% fit_one_meta_analysis(dat)
+model_progress <- new_progress_bar(length(meta_analyses), "Meta-analysis model progress")
+meta_analysis_estimates <- vector("list", ceiling(length(meta_analyses) / n_cores))
+analysis_batches <- split(meta_analyses, ceiling(seq_along(meta_analyses) / n_cores))
+completed_analyses <- 0
+for (batch_index in seq_along(analysis_batches)) {
+  meta_analysis_estimates[[batch_index]] <- foreach(
+    dat = analysis_batches[[batch_index]],
+    .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),
+    .combine = bind_rows
+  ) %dopar% fit_one_meta_analysis(dat)
+  completed_analyses <- completed_analyses + length(analysis_batches[[batch_index]])
+  update_progress_bar(model_progress, completed_analyses)
+}
+meta_analysis_estimates <- bind_rows(meta_analysis_estimates)
 stopCluster(cluster)
+close_progress_bar(model_progress)
 
 variance_ratio_warning <- grepl(
   "Ratio of largest to smallest sampling variance extremely large",

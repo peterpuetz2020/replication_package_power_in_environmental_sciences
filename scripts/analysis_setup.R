@@ -10,6 +10,27 @@ library(gridExtra); library(ggeasy)
 library(orchaRd)
 library(scales); library(here)
 
+## Console progress bars use base R so they also work in a restored renv and in
+## non-interactive batch jobs. Callers can set show_progress <- FALSE before
+## sourcing a script when its output is being redirected to a log.
+if (!exists("show_progress")) show_progress <- TRUE
+
+new_progress_bar <- function(total, label) {
+  if (!isTRUE(show_progress)) return(NULL)
+  message(label)
+  utils::txtProgressBar(min = 0, max = max(1, total), style = 3)
+}
+
+update_progress_bar <- function(progress_bar, value) {
+  if (!is.null(progress_bar)) utils::setTxtProgressBar(progress_bar, value)
+  invisible(value)
+}
+
+close_progress_bar <- function(progress_bar) {
+  if (!is.null(progress_bar)) close(progress_bar)
+  invisible(NULL)
+}
+
 ## Set analysis parameters here. All downstream scripts consume these settings.
 n_cores <- 4
 n_iterations <- 4
