@@ -263,21 +263,22 @@ fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
   )
 }
 
-fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3, n_rounds = 1) {
+fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3) {
   analysis_data <- dat
 
-  ## Screen and refit twice. Each screen is based on the random-effects model
-  ## fitted to the observations retained by the preceding screen.
-  for (round in seq_len(n_rounds)) {
-    if (primary_study_count(analysis_data) < minimum_primary_studies) break
-    screening_fit <- fit_random_effects(analysis_data)
-    standardized_residuals <- as.data.frame(
-      rstandard.rma.mv(screening_fit$model)
-    )$resid
-    keep <- is.na(standardized_residuals) |
-      abs(standardized_residuals) <= cutoff
-    analysis_data <- analysis_data[keep, , drop = FALSE]
+  if (primary_study_count(analysis_data) < minimum_primary_studies) {
+    return(list(data = analysis_data, result = NULL))
   }
+
+  ## Fit once to identify outliers, remove them once, and then perform the
+  ## single final refit below. Outlier detection is deliberately not iterated.
+  screening_fit <- fit_random_effects(analysis_data)
+  standardized_residuals <- as.data.frame(
+    rstandard.rma.mv(screening_fit$model)
+  )$resid
+  keep <- is.na(standardized_residuals) |
+    abs(standardized_residuals) <= cutoff
+  analysis_data <- analysis_data[keep, , drop = FALSE]
 
   ## Let the caller exclude the complete meta-analysis before attempting the
   ## final fit (and, in particular, before requesting CR2 inference).

@@ -61,8 +61,8 @@ This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 
 The workflow renders each setup for PET-PEESE and multilevel random effects. The
 outlier-removed samples are estimator-specific: PET-PEESE uses its PET residual
 screen, while the multilevel random-effects model removes observations with an
-absolute standardized residual above 7, refits, repeats that screen once, and
-then performs a final refit. If that final random-effects fit warns that the
+absolute standardized residual above 3 in one screening round and then performs
+a single final refit. If that final random-effects fit warns that the
 ratio of the largest to smallest sampling variance is extremely large, the
 model-fitting script prints the affected `cID`.
 The supplementary script writes Figure S1 (meta-average multiplier 0.25),
