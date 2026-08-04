@@ -95,6 +95,26 @@ share of total estimated heterogeneity. Meta-analyses whose within-study
 component is estimated on the zero boundary are excluded only from the
 within-meta-analysis ratio and are reported separately in the final column.
 
+The models in that script are multilevel random-effects models; cluster-robust
+variance estimation (CR2 with Satterthwaite tests) is used only as an additional
+inference layer for their regression coefficients. The random intercepts model
+the effect-size and study-level heterogeneity, whereas CR2 guards the reported
+coefficient standard errors and tests against remaining within-study
+dependence or misspecification of that working covariance. Robust variance
+estimation is therefore not restricted to fixed-effects models and does not
+replace the multilevel random effects. Because a sandwich variance requires at
+least two independent study clusters, the coefficient helper defensively falls
+back to `metafor`'s model-based inference if it is called directly with only one
+study. The complete workflow applies the stricter eligibility rule below.
+
+Meta-analyses are eligible only when at least five distinct primary studies
+(`sID`) remain after outlier removal. This threshold is checked separately for
+the PET residual screen and the multilevel random-effects residual screen; if
+either estimator's retained sample has fewer than five studies, the entire
+meta-analysis is omitted from both the all-data and outlier-removed outputs.
+The script removes any stale per-meta-analysis RDS files and records all such
+omissions in `results/main/derived_data/excluded_meta_analyses.csv`.
+
 Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. Figures are saved as PDF, EPS, SVG, and 300 dpi PNG files. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 
 ### Optional setup-specific data creation
