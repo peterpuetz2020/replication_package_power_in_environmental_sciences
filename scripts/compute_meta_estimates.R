@@ -9,7 +9,7 @@ library(doParallel)
 library(orchaRd)
 library(here)
 
-if (!exists("n_cores")) n_cores <- 4
+if (!exists("n_cores")) n_cores <- 6
 if (!exists("show_progress")) show_progress <- TRUE
 if (!exists("new_progress_bar")) {
   new_progress_bar <- function(total, label) {
@@ -231,7 +231,7 @@ fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
   )
 }
 
-fit_random_effects_with_outlier_removal <- function(dat, cutoff = 7, n_rounds = 2) {
+fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3, n_rounds = 1) {
   analysis_data <- dat
 
   ## Screen and refit twice. Each screen is based on the random-effects model
