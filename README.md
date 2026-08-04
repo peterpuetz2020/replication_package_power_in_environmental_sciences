@@ -102,10 +102,8 @@ the effect-size and study-level heterogeneity, whereas CR2 guards the reported
 coefficient standard errors and tests against remaining within-study
 dependence or misspecification of that working covariance. Robust variance
 estimation is therefore not restricted to fixed-effects models and does not
-replace the multilevel random effects. Because a sandwich variance requires at
-least two independent study clusters, the coefficient helper defensively falls
-back to `metafor`'s model-based inference if it is called directly with only one
-study. The complete workflow applies the stricter eligibility rule below.
+replace the multilevel random effects. The workflow applies the stricter
+eligibility rule below before requesting CR2 inference.
 
 Meta-analyses are eligible only when at least five distinct primary studies
 (`sID`) remain after outlier removal. This threshold is checked separately for

@@ -48,27 +48,12 @@ extract_coefficient_statistic <- function(test, term, statistic) {
 coefficient_test <- function(model, dat) {
   study_cluster <- droplevels(factor(dat$sID))
 
-  if (nlevels(study_cluster) >= 2) {
-    ## CR2 is an inference layer on top of the fitted multilevel model. It
-    ## protects coefficient SEs/tests against residual dependence within a
-    ## study that the working random-effects covariance may not fully capture.
-    return(coef_test(
-      model,
-      vcov = vcovCR(model, cluster = study_cluster, type = "CR2")
-    ))
-  }
-
-  ## A sandwich variance cannot be estimated from one independent cluster.
-  ## Keep the multilevel point/variance-component fit, but use metafor's
-  ## model-based inference for its coefficients in this exceptional case.
-  model_test <- data.frame(
-    beta = as.numeric(coef(model)),
-    SE = as.numeric(model$se),
-    p_Satt = as.numeric(model$pval),
-    row.names = names(coef(model)),
-    check.names = FALSE
+  ## The workflow checks that at least five primary studies remain before any
+  ## final model is fitted, so CR2 always has multiple independent clusters.
+  coef_test(
+    model,
+    vcov = vcovCR(model, cluster = study_cluster, type = "CR2")
   )
-  model_test
 }
 
 random_effect_structure <- function(dat) {
@@ -284,7 +269,7 @@ fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3, n_rounds = 
   ## Screen and refit twice. Each screen is based on the random-effects model
   ## fitted to the observations retained by the preceding screen.
   for (round in seq_len(n_rounds)) {
-    if (nrow(analysis_data) <= 1) break
+    if (primary_study_count(analysis_data) < minimum_primary_studies) break
     screening_fit <- fit_random_effects(analysis_data)
     standardized_residuals <- as.data.frame(
       rstandard.rma.mv(screening_fit$model)
