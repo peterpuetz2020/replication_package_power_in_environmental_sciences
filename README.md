@@ -134,6 +134,10 @@ source("scripts/main.R")
 
 The paper uses `n_iterations <- 1000`. Smaller values are useful for quick checks only and should not be used for final replication.
 
+Long-running model fits and counterfactual calculations display console progress
+bars. Set `show_progress <- FALSE` before sourcing a script to suppress them,
+for example when redirecting output to a log file.
+
 Useful `n_cores` choices depend on the computer:
 
 - `n_cores <- 1`: low-memory laptops or troubleshooting.

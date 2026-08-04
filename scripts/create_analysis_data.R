@@ -17,10 +17,11 @@ source(here("scripts", "analysis_setup.R"))
 ## These steps can be very time consuming with n_iterations <- 1000.
 recreate_counterfactuals <- if (exists("recreate_counterfactuals")) recreate_counterfactuals else FALSE
 
-save_counterfactual <- function(path, calculate) {
+save_counterfactual <- function(path, calculate, progress_bar = NULL, progress_value = NULL) {
   if (recreate_counterfactuals || !file.exists(path)) {
     saveRDS(calculate(), path)
   }
+  if (!is.null(progress_value)) update_progress_bar(progress_bar, progress_value)
 }
 
 ensure_output_dirs <- function() {
@@ -120,7 +121,7 @@ run_parallel_cf_ci <- function(dat, grid, cluster, heterogeneity_multiplier) {
   )
 }
 
-write_analysis_setup <- function(pps_rstandard_raw, grids, meta_average_multiplier, heterogeneity_multiplier, setup_label) {
+write_analysis_setup <- function(pps_rstandard_raw, grids, meta_average_multiplier, heterogeneity_multiplier, setup_label, progress_bar = NULL, progress_offset = 0) {
   pps_rstandard_power <- add_power_variables(pps_rstandard_raw, meta_average_multiplier)
   pps_counterfactual <- pps_rstandard_raw %>% mutate(GE = meta_average_multiplier * GE)
   myDat_counterfactual <- split_meta_analyses(pps_counterfactual)
@@ -149,10 +150,10 @@ write_analysis_setup <- function(pps_rstandard_raw, grids, meta_average_multipli
   p_tab_path <- here("results", "main", paste0("p_tab_pps_rstandard_", setup_label, ".rds"))
   p_tab_ci_path <- here("results", "main", paste0("p_tab_ci_pps_rstandard_", setup_label, ".rds"))
 
-  save_counterfactual(z_plot_path, function() run_parallel_cf(myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier))
-  save_counterfactual(z_plot_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$z_grid_plot, unique(pps_rstandard_raw$cID), heterogeneity_multiplier))
-  save_counterfactual(p_tab_path, function() run_parallel_cf(myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier))
-  save_counterfactual(p_tab_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$p_grid_tab, unique(pps_rstandard_raw$cID), heterogeneity_multiplier))
+  save_counterfactual(z_plot_path, function() run_parallel_cf(myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier), progress_bar, progress_offset + 1)
+  save_counterfactual(z_plot_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$z_grid_plot, unique(pps_rstandard_raw$cID), heterogeneity_multiplier), progress_bar, progress_offset + 2)
+  save_counterfactual(p_tab_path, function() run_parallel_cf(myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier), progress_bar, progress_offset + 3)
+  save_counterfactual(p_tab_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$p_grid_tab, unique(pps_rstandard_raw$cID), heterogeneity_multiplier), progress_bar, progress_offset + 4)
 }
 
 ensure_output_dirs()
@@ -160,7 +161,16 @@ ensure_output_dirs()
 pps_rstandard_raw <- load_pet_peese_data()
 grids <- make_grids()
 
-analysis_setups %>%
-  pwalk(function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
-    write_analysis_setup(pps_rstandard_raw, grids, meta_average_multiplier, heterogeneity_multiplier, setup_label)
-  })
+counterfactual_progress <- new_progress_bar(
+  4 * nrow(analysis_setups),
+  "Counterfactual data progress"
+)
+for (setup_index in seq_len(nrow(analysis_setups))) {
+  setup <- analysis_setups[setup_index, ]
+  write_analysis_setup(
+    pps_rstandard_raw, grids,
+    setup$meta_average_multiplier, setup$heterogeneity_multiplier,
+    setup$setup_label, counterfactual_progress, 4 * (setup_index - 1)
+  )
+}
+close_progress_bar(counterfactual_progress)
