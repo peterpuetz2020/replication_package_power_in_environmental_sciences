@@ -30,10 +30,29 @@ extract_coefficient_statistic <- function(test, term, statistic) {
   as.numeric(test[term, statistic])
 }
 
+random_effect_structure <- function(dat) {
+  effect_sizes_by_study <- split(dat$eID, dat$sID, drop = TRUE)
+  has_within_study_effect_sizes <- any(vapply(
+    effect_sizes_by_study,
+    function(effect_size_ids) length(unique(effect_size_ids)) > 1,
+    logical(1)
+  ))
+
+  if (has_within_study_effect_sizes) {
+    ~ 1 | sID/eID
+  } else {
+    ~ 1 | sID
+  }
+}
+
 extract_variance_components <- function(model) {
   variance_components <- setNames(as.numeric(model$sigma2), model$s.names)
   list(
-    within_study_effect_size = as.numeric(variance_components[["eID"]]),
+    within_study_effect_size = if ("sID/eID" %in% names(variance_components)) {
+      as.numeric(variance_components[["sID/eID"]])
+    } else {
+      0
+    },
     between_study = as.numeric(variance_components[["sID"]])
   )
 }
@@ -88,7 +107,7 @@ fit_pet_peese <- function(dat) {
 
   pet <- rma.mv(
     yi, vi, mods = ~ 1 + sei,
-    random = list(~ 1 | eID, ~ 1 | sID),
+    random = random_effect_structure(dat),
     method = "REML", test = "t", data = dat,
     control = list(rel.tol = 1e-8)
   )
@@ -124,7 +143,7 @@ fit_pet_peese <- function(dat) {
     )
     selected_model <- rma.mv(
       yi, vi, mods = ~ 1 + vi,
-      random = list(~ 1 | eID, ~ 1 | sID),
+      random = random_effect_structure(peese_data),
       method = "REML", test = "t", data = peese_data,
       control = list(rel.tol = 1e-8)
     )
@@ -167,7 +186,7 @@ fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
   fit_model <- function() {
     rma.mv(
       yi, vi, mods = ~ 1,
-      random = list(~ 1 | eID, ~ 1 | sID),
+      random = random_effect_structure(dat),
       method = "REML", test = "t", data = dat,
       control = list(rel.tol = 1e-8)
     )
@@ -229,7 +248,7 @@ fit_one_meta_analysis <- function(dat) {
   ## Identify outliers from the initial PET fit, as in the original workflow.
   outlier_model <- rma.mv(
     yi, vi, mods = ~ 1 + sei,
-    random = list(~ 1 | eID, ~ 1 | sID),
+    random = random_effect_structure(dat),
     method = "REML", test = "t", data = dat,
     control = list(rel.tol = 1e-8)
   )
