@@ -275,7 +275,7 @@ fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3) {
   screening_fit <- fit_random_effects(analysis_data)
   standardized_residuals <- as.data.frame(
     rstandard.rma.mv(screening_fit$model)
-  )$resid
+  )$z
   keep <- is.na(standardized_residuals) |
     abs(standardized_residuals) <= cutoff
   analysis_data <- analysis_data[keep, , drop = FALSE]
@@ -312,7 +312,7 @@ fit_one_meta_analysis <- function(dat) {
     method = "REML", test = "t", data = dat,
     control = list(rel.tol = 1e-8)
   )
-  standardized_residuals <- as.data.frame(rstandard.rma.mv(outlier_model))$resid
+  standardized_residuals <- as.data.frame(rstandard.rma.mv(outlier_model))$z
   outlier_removed_data <- dat[abs(standardized_residuals) < 3, , drop = FALSE]
   pet_studies <- primary_study_count(outlier_removed_data)
 
@@ -430,7 +430,7 @@ close_progress_bar(model_progress)
 
 excluded_meta_analyses <- meta_analysis_estimates %>%
   filter(!is.na(exclusion_reason)) %>%
-  select(
+  dplyr::select(
     cID, exclusion_reason,
     n_primary_studies_pet_outlier_removed,
     n_primary_studies_random_effect_outlier_removed
