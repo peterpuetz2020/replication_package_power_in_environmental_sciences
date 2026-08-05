@@ -450,17 +450,17 @@ if (nrow(excluded_meta_analyses) > 0) {
 meta_analysis_estimates <- meta_analysis_estimates %>%
   filter(is.na(exclusion_reason))
 
-variance_ratio_warning <- grepl(
-  "Ratio of largest to smallest sampling variance extremely large",
-  meta_analysis_estimates$random_effect_final_model_warnings,
-  fixed = TRUE
-)
-if (any(variance_ratio_warning)) {
-  message(
-    "Final random-effects model sampling-variance warning for cID(s): ",
-    paste(meta_analysis_estimates$cID[variance_ratio_warning], collapse = ", ")
-  )
-}
+# variance_ratio_warning <- grepl(
+#   "Ratio of largest to smallest sampling variance extremely large",
+#   meta_analysis_estimates$random_effect_final_model_warnings,
+#   fixed = TRUE
+# )
+# if (any(variance_ratio_warning)) {
+#   message(
+#     "Final random-effects model sampling-variance warning for cID(s): ",
+#     paste(meta_analysis_estimates$cID[variance_ratio_warning], collapse = ", ")
+#   )
+# }
 
 meta_analysis_estimates <- meta_analysis_estimates %>% arrange(cID)
 write_csv(
