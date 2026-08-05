@@ -38,6 +38,10 @@ heterogeneity_independent_setups <- analysis_setups %>%
   slice(1) %>%
   ungroup()
 
+safe_quantile <- function(x, probs, ...) {
+  stats::quantile(x, probs = probs, na.rm = TRUE, ...)
+}
+
 ensure_output_dirs <- function() {
   invisible(lapply(
     list(
@@ -349,15 +353,15 @@ calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
   N <- sum(p.orig.tab)
   if (include_p_value_intervals) {
     p.table[, 1] <- round((p.orig.tab - p.tab) / N, 3)
-    q025 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.025))
-    q975 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, quantile, probs = c(0.975))
+    q025 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, safe_quantile, probs = c(0.025))
+    q975 <- apply(matrix(p.orig.tab / N, nrow = nrow(p.tab.ci[[1]]), ncol = ncol(p.tab.ci[[1]]), byrow = TRUE) - p.tab.ci[[1]], 2, safe_quantile, probs = c(0.975))
     p.table[, 2] <- paste("[", round(q025, 3), ", ", round(q975, 3), "]", sep = "")
   }
   for (level in list(c(10, 13, 1, "all"), c(11, 13, 1, "all"), c(10, 13, 2, "sig"), c(11, 13, 3, "sig"))) {
     lo <- as.integer(level[[1]]); hi <- as.integer(level[[2]]); ci_idx <- as.integer(level[[3]]); denom <- if (level[[4]] == "all") N else sum(p.orig.tab[lo:hi])
     point <- round(sum((p.orig.tab - p.tab)[lo:hi] / denom), 3)
     bs <- apply(p.tab.ci[[ci_idx]][, lo:hi], 1, sum)
-    q <- round(quantile(sum((p.orig.tab / denom)[lo:hi]) - bs, probs = c(0.025, 0.975)), 3)
+    q <- round(safe_quantile(sum((p.orig.tab / denom)[lo:hi]) - bs, probs = c(0.025, 0.975)), 3)
     p.table <- rbind(p.table, c(point, paste("[", q[1], ", ", q[2], "]", sep = "")))
   }
   p.table <- rbind(p.table, c(length(myDat), 0), c(N, 0))
