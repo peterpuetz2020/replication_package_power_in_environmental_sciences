@@ -359,7 +359,7 @@ calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
   }
   for (level in list(c(10, 13, 1, "all"), c(11, 13, 1, "all"), c(10, 13, 2, "sig"), c(11, 13, 3, "sig"))) {
     lo <- as.integer(level[[1]]); hi <- as.integer(level[[2]]); ci_idx <- as.integer(level[[3]]); denom <- if (level[[4]] == "all") N else sum(p.orig.tab[lo:hi])
-    point <- round(sum((p.orig.tab - p.tab)[lo:hi] / denom), 3)
+    point <- round(sum((p.orig.tab - p.tab)[lo:hi] / denom, na.rm = TRUE), 3)
     bs <- apply(p.tab.ci[[ci_idx]][, lo:hi], 1, sum)
     q <- round(safe_quantile(sum((p.orig.tab / denom)[lo:hi]) - bs, probs = c(0.025, 0.975)), 3)
     p.table <- rbind(p.table, c(point, paste("[", q[1], ", ", q[2], "]", sep = "")))

@@ -189,10 +189,29 @@ if (!file.exists(esr_path)) {
   stop("Missing ", esr_path, ". Run create_tables_and_figures.R first.")
 }
 
-esr_plot_data <- readr::read_csv(esr_path, show_col_types = FALSE) %>%
+esr_plot_data_raw <- readr::read_csv(esr_path, show_col_types = FALSE) %>%
   filter(measure == "ESR_{0.05}^{sig}") %>%
   extract(confidence_interval, c("ci_lower", "ci_upper"),
           regex = "\\[([^,]+),\\s*([^]]+)\\]", convert = TRUE) %>%
+  mutate(estimate = as.numeric(estimate))
+
+if (nrow(esr_plot_data_raw) == 0) {
+  stop("ESR results do not contain any ESR_{0.05}^{sig} rows.")
+}
+
+incomplete_esr_rows <- esr_plot_data_raw %>%
+  filter(if_any(c(estimate, ci_lower, ci_upper), is.na))
+if (nrow(incomplete_esr_rows) > 0) {
+  warning(
+    "Omitting ", nrow(incomplete_esr_rows),
+    " incomplete ESR_{0.05}^{sig} row(s) from Figure S3. ",
+    "Regenerate ESR_results_all_combinations.csv with create_tables_and_figures.R ",
+    "to restore missing point estimates."
+  )
+}
+
+esr_plot_data <- esr_plot_data_raw %>%
+  filter(if_all(c(estimate, ci_lower, ci_upper), ~ !is.na(.x))) %>%
   mutate(
     estimator = dplyr::recode(
       estimator,
@@ -205,8 +224,8 @@ esr_plot_data <- readr::read_csv(esr_path, show_col_types = FALSE) %>%
     )
   )
 
-if (nrow(esr_plot_data) == 0 || anyNA(esr_plot_data[c("estimate", "ci_lower", "ci_upper")])) {
-  stop("ESR results do not contain complete ESR_{0.05}^{sig} estimates and confidence intervals.")
+if (nrow(esr_plot_data) == 0) {
+  stop("ESR results do not contain plottable ESR_{0.05}^{sig} estimates and confidence intervals.")
 }
 
 esr_plot <- ggplot(
