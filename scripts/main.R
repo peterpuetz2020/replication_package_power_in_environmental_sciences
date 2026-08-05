@@ -7,6 +7,9 @@
 
 source(here::here("scripts", "analysis_setup.R"))
 
+## Set to TRUE to overwrite and rebuild counterfactual simulation files.
+recreate_counterfactuals <- FALSE
+
 analysis_steps <- c(
   "Fit meta-analysis models",
   "Create analysis data",
