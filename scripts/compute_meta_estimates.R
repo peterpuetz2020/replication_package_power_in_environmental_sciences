@@ -145,6 +145,15 @@ fit_sparse_effects <- function(dat) {
   )
 }
 
+empty_meta_estimate <- function(method = NA_character_) {
+  list(
+    method = method, estimate = NA_real_, standard_error = NA_real_,
+    p_value = NA_real_, small_study_effect_p_value = NA_real_,
+    tau2 = NA_real_, within_study_tau2 = NA_real_, isq = NA_real_,
+    fallback = TRUE
+  )
+}
+
 fit_pet_peese <- function(dat) {
   if (nrow(dat) <= 1) {
     result <- fit_sparse_effects(dat)
@@ -153,12 +162,12 @@ fit_pet_peese <- function(dat) {
     return(result)
   }
 
-  pet <- rma.mv(
+  pet <- suppressWarnings(rma.mv(
     yi, vi, mods = ~ 1 + sei,
     random = random_effect_structure(dat),
     method = "REML", test = "t", data = dat,
     control = list(rel.tol = 1e-8)
-  )
+  ))
   pet_test <- coefficient_test(pet, dat)
   pet_intercept_p_value <- extract_coefficient_statistic(
     pet_test, "intrcpt", "p_Satt"
@@ -189,12 +198,12 @@ fit_pet_peese <- function(dat) {
       yi = outcome_scale * yi,
       vi = outcome_scale^2 * vi
     )
-    selected_model <- rma.mv(
+    selected_model <- suppressWarnings(rma.mv(
       yi, vi, mods = ~ 1 + vi,
       random = random_effect_structure(peese_data),
       method = "REML", test = "t", data = peese_data,
       control = list(rel.tol = 1e-8)
-    )
+    ))
     selected_test <- coefficient_test(selected_model, peese_data)
     method <- "PEESE"
     slope_term <- "vi"
@@ -221,14 +230,12 @@ fit_pet_peese <- function(dat) {
   )
 }
 
-fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
+fit_random_effects <- function(dat) {
   if (nrow(dat) <= 1) {
     result <- fit_sparse_effects(dat)
-    result$model_warnings <- character()
     return(result)
   }
 
-  model_warnings <- character()
   fit_model <- function() {
     rma.mv(
       yi, vi, mods = ~ 1,
@@ -237,17 +244,7 @@ fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
       control = list(rel.tol = 1e-8)
     )
   }
-  model <- if (capture_model_warnings) {
-    withCallingHandlers(
-      fit_model(),
-      warning = function(warning_condition) {
-        model_warnings <<- c(model_warnings, conditionMessage(warning_condition))
-        invokeRestart("muffleWarning")
-      }
-    )
-  } else {
-    fit_model()
-  }
+  model <- suppressWarnings(fit_model())
   model_test <- coefficient_test(model, dat)
   variance_components <- extract_variance_components(model)
   list(
@@ -258,8 +255,7 @@ fit_random_effects <- function(dat, capture_model_warnings = FALSE) {
     within_study_tau2 = variance_components$within_study_effect_size,
     isq = extract_total_isq(model),
     fallback = FALSE,
-    model = model,
-    model_warnings = model_warnings
+    model = model
   )
 }
 
@@ -286,12 +282,7 @@ fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3) {
     return(list(data = analysis_data, result = NULL))
   }
 
-  ## Capture warnings from the final refit so the affected cIDs can be reported
-  ## after the parallel workers have returned.
-  final_fit <- fit_random_effects(
-    analysis_data,
-    capture_model_warnings = TRUE
-  )
+  final_fit <- fit_random_effects(analysis_data)
   final_fit$model <- NULL
 
   list(data = analysis_data, result = final_fit)
@@ -305,36 +296,27 @@ fit_one_meta_analysis <- function(dat) {
     ))
   }
 
-  ## Identify outliers from the initial PET fit, as in the original workflow.
-  outlier_model <- rma.mv(
+  ## Identify PET-PEESE outliers from the initial PET fit, as in the original
+  ## workflow, but decide estimator eligibility separately after removal.
+  outlier_model <- suppressWarnings(rma.mv(
     yi, vi, mods = ~ 1 + sei,
     random = random_effect_structure(dat),
     method = "REML", test = "t", data = dat,
     control = list(rel.tol = 1e-8)
-  )
+  ))
   standardized_residuals <- as.data.frame(rstandard.rma.mv(outlier_model))$z
-  outlier_removed_data <- dat[abs(standardized_residuals) < 3, , drop = FALSE]
-  pet_studies <- primary_study_count(outlier_removed_data)
-
-  if (pet_studies < minimum_primary_studies) {
-    return(drop_meta_analysis(
-      dat,
-      paste0(
-        "PET outlier removal left fewer than ", minimum_primary_studies,
-        " primary studies"
-      ),
-      pet_studies = pet_studies
-    ))
-  }
+  pet_outlier_removed_data <- dat[abs(standardized_residuals) < 3, , drop = FALSE]
+  pet_studies <- primary_study_count(pet_outlier_removed_data)
 
   random_effect_outlier_removed <- fit_random_effects_with_outlier_removal(dat)
   random_effect_studies <- primary_study_count(random_effect_outlier_removed$data)
 
-  if (random_effect_studies < minimum_primary_studies) {
+  if (pet_studies < minimum_primary_studies &&
+      random_effect_studies < minimum_primary_studies) {
     return(drop_meta_analysis(
       dat,
       paste0(
-        "Random-effects outlier removal left fewer than ",
+        "Both PET-PEESE and random-effects outlier removal left fewer than ",
         minimum_primary_studies, " primary studies"
       ),
       pet_studies = pet_studies,
@@ -342,18 +324,32 @@ fit_one_meta_analysis <- function(dat) {
     ))
   }
 
-  analyses <- list(all_data = dat, outlier_removed = outlier_removed_data)
-  results <- lapply(analyses, function(analysis_data) {
-    list(
-      pet_peese = fit_pet_peese(analysis_data),
-      pet_peese_data = analysis_data
+  results <- list(
+    all_data = list(
+      pet_peese = fit_pet_peese(dat),
+      pet_peese_data = dat,
+      random_effect = fit_random_effects(dat),
+      random_effect_data = dat
+    ),
+    outlier_removed = list(
+      pet_peese = if (pet_studies >= minimum_primary_studies) {
+        fit_pet_peese(pet_outlier_removed_data)
+      } else {
+        empty_meta_estimate("PET-PEESE not estimable after outlier removal")
+      },
+      pet_peese_data = pet_outlier_removed_data,
+      random_effect = if (random_effect_studies >= minimum_primary_studies) {
+        random_effect_outlier_removed$result
+      } else {
+        empty_meta_estimate("Random effects not estimable after outlier removal")
+      },
+      random_effect_data = random_effect_outlier_removed$data
     )
-  })
-  results$all_data$random_effect <- fit_random_effects(dat)
+  )
   results$all_data$random_effect$model <- NULL
-  results$all_data$random_effect_data <- dat
-  results$outlier_removed$random_effect <- random_effect_outlier_removed$result
-  results$outlier_removed$random_effect_data <- random_effect_outlier_removed$data
+  if (!is.null(results$outlier_removed$random_effect$model)) {
+    results$outlier_removed$random_effect$model <- NULL
+  }
 
   for (variant in names(results)) {
     result <- results[[variant]]
@@ -382,9 +378,8 @@ fit_one_meta_analysis <- function(dat) {
     n_primary_studies_pet_outlier_removed = pet_studies,
     n_primary_studies_random_effect_outlier_removed = random_effect_studies,
     k_all_data = nrow(dat),
-    ## Retain these two legacy columns for the PET-based outlier sample.
-    k_outlier_removed = nrow(outlier_removed_data),
-    n_outliers_removed = nrow(dat) - nrow(outlier_removed_data),
+    k_outlier_removed = nrow(pet_outlier_removed_data),
+    n_outliers_removed = nrow(dat) - nrow(pet_outlier_removed_data),
     k_random_effect_outlier_removed = nrow(random_effect_outlier_removed$data),
     n_random_effect_outliers_removed =
       nrow(dat) - nrow(random_effect_outlier_removed$data),
@@ -401,11 +396,7 @@ fit_one_meta_analysis <- function(dat) {
     random_effect_between_study_variance_outlier_removed =
       results$outlier_removed$random_effect$tau2,
     random_effect_within_study_effect_size_variance_outlier_removed =
-      results$outlier_removed$random_effect$within_study_tau2,
-    random_effect_final_model_warnings = paste(
-      results$outlier_removed$random_effect$model_warnings,
-      collapse = " | "
-    )
+      results$outlier_removed$random_effect$within_study_tau2
   )
 }
 
@@ -428,119 +419,12 @@ meta_analysis_estimates <- bind_rows(meta_analysis_estimates)
 stopCluster(cluster)
 close_progress_bar(model_progress)
 
-excluded_meta_analyses <- meta_analysis_estimates %>%
-  filter(!is.na(exclusion_reason)) %>%
-  dplyr::select(
-    cID, exclusion_reason,
-    n_primary_studies_pet_outlier_removed,
-    n_primary_studies_random_effect_outlier_removed
-  ) %>%
-  arrange(cID)
-write_csv(
-  excluded_meta_analyses,
-  file.path(derived_data_dir, "excluded_meta_analyses.csv")
-)
-if (nrow(excluded_meta_analyses) > 0) {
-  message(
-    "Excluded ", nrow(excluded_meta_analyses), " meta-analysis/analyses with ",
-    "fewer than ", minimum_primary_studies,
-    " primary studies after outlier removal; see excluded_meta_analyses.csv."
-  )
-}
 meta_analysis_estimates <- meta_analysis_estimates %>%
-  filter(is.na(exclusion_reason))
-
-# variance_ratio_warning <- grepl(
-#   "Ratio of largest to smallest sampling variance extremely large",
-#   meta_analysis_estimates$random_effect_final_model_warnings,
-#   fixed = TRUE
-# )
-# if (any(variance_ratio_warning)) {
-#   message(
-#     "Final random-effects model sampling-variance warning for cID(s): ",
-#     paste(meta_analysis_estimates$cID[variance_ratio_warning], collapse = ", ")
-#   )
-# }
+  filter(is.na(exclusion_reason)) %>%
+  dplyr::select(-exclusion_reason)
 
 meta_analysis_estimates <- meta_analysis_estimates %>% arrange(cID)
 write_csv(
   meta_analysis_estimates,
   file.path(derived_data_dir, "meta_analysis_estimates.csv")
-)
-
-summarize_outlier_difference <- function(estimator, all_data, outlier_removed) {
-  eligible <- is.finite(all_data) & is.finite(outlier_removed)
-  all_data <- all_data[eligible]
-  outlier_removed <- outlier_removed[eligible]
-  sign_change <- all_data != 0 & outlier_removed != 0 &
-    sign(all_data) != sign(outlier_removed)
-
-  tibble(
-    estimator = estimator,
-    n_meta_analyses = length(all_data),
-    median_absolute_difference = median(abs(outlier_removed - all_data)),
-    mean_absolute_difference = mean(abs(outlier_removed - all_data)),
-    percentage_sign_changes = 100 * mean(sign_change)
-  )
-}
-
-pet_peese_outlier_comparison <- summarize_outlier_difference(
-  "PET-PEESE",
-  meta_analysis_estimates$pet_peese_estimate_all_data,
-  meta_analysis_estimates$pet_peese_estimate_outlier_removed
-)
-random_effect_outlier_comparison <- summarize_outlier_difference(
-  "Multilevel random effects",
-  meta_analysis_estimates$random_effect_estimate_all_data,
-  meta_analysis_estimates$random_effect_estimate_outlier_removed
-)
-
-write_csv(
-  pet_peese_outlier_comparison,
-  file.path(derived_data_dir, "pet_peese_outlier_comparison.csv")
-)
-write_csv(
-  random_effect_outlier_comparison,
-  file.path(derived_data_dir, "random_effect_outlier_comparison.csv")
-)
-
-summarize_heterogeneity_components <- function(variant, between_study, within_study) {
-  eligible <- is.finite(between_study) & is.finite(within_study)
-  between_study <- between_study[eligible]
-  within_study <- within_study[eligible]
-  total <- between_study + within_study
-  positive_within <- within_study > 0
-  positive_total <- total > 0
-
-  tibble(
-    sample = variant,
-    n_meta_analyses = length(between_study),
-    median_between_study_variance = median(between_study),
-    median_within_study_effect_size_variance = median(within_study),
-    ratio_of_median_variances = median(between_study) / median(within_study),
-    median_within_meta_analysis_variance_ratio =
-      median(between_study[positive_within] / within_study[positive_within]),
-    median_between_study_percentage_of_total_heterogeneity =
-      100 * median(between_study[positive_total] / total[positive_total]),
-    percentage_with_zero_within_study_effect_size_variance =
-      100 * mean(within_study == 0)
-  )
-}
-
-random_effect_heterogeneity_comparison <- bind_rows(
-  summarize_heterogeneity_components(
-    "All data",
-    meta_analysis_estimates$random_effect_between_study_variance_all_data,
-    meta_analysis_estimates$random_effect_within_study_effect_size_variance_all_data
-  ),
-  summarize_heterogeneity_components(
-    "Outliers removed",
-    meta_analysis_estimates$random_effect_between_study_variance_outlier_removed,
-    meta_analysis_estimates$random_effect_within_study_effect_size_variance_outlier_removed
-  )
-)
-
-write_csv(
-  random_effect_heterogeneity_comparison,
-  file.path(derived_data_dir, "random_effect_heterogeneity_comparison.csv")
 )
