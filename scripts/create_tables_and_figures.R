@@ -46,8 +46,8 @@ ensure_output_dirs <- function() {
   invisible(lapply(
     list(
       here("results", "main"),
-      here("results", "main", "pet_peese_rstandard"),
-      here("results", "main", "multilevel_random"),
+      here("results", "intermediate_results", "pet_peese_rstandard"),
+      here("results", "intermediate_results", "multilevel_random"),
       here("data", "derived_data"),
       here("results", "robustness")
     ),
@@ -112,11 +112,11 @@ load_estimator_data <- function(estimator, setup_label_value = setup_label,
   estimator_dir <- switch(
     estimator,
     pet_peese = here(
-      "results", "main",
+      "results", "intermediate_results",
       if (outlier_variant == "all_data") "pet_peese_all_data" else "pet_peese_rstandard"
     ),
     multilevel_random = here(
-      "results", "main",
+      "results", "intermediate_results",
       if (outlier_variant == "all_data") "multilevel_random_all_data" else "multilevel_random"
     ),
     stop("Unknown estimator: ", estimator)
