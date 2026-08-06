@@ -48,7 +48,7 @@ ensure_output_dirs <- function() {
       here("results", "main"),
       here("results", "main", "pet_peese_rstandard"),
       here("results", "main", "multilevel_random"),
-      here("results", "main", "derived_data"),
+      here("data", "derived_data"),
       here("results", "robustness")
     ),
     dir.create,
@@ -99,7 +99,7 @@ load_estimator_data <- function(estimator, setup_label_value = setup_label,
 
   variant_suffix <- if (outlier_variant == "all_data") "_all_data" else ""
   derived_path <- here(
-    "results", "main", "derived_data",
+    "data", "derived_data",
     paste0(
       "pps_rstandard_raw_", setup_label_value, "_", estimator,
       variant_suffix, ".rds"
@@ -159,7 +159,7 @@ add_power_variables <- function(dat, meta_average_multiplier = 0.5) {
 }
 
 load_power_data <- function(estimator, setup_label_value = setup_label, meta_average_multiplier_value = meta_average_multiplier) {
-  derived_path <- here("results", "main", "derived_data", paste0("pps_rstandard_power_", setup_label_value, "_", estimator, ".rds"))
+  derived_path <- here("data", "derived_data", paste0("pps_rstandard_power_", setup_label_value, "_", estimator, ".rds"))
   if (file.exists(derived_path)) {
     return(readRDS(derived_path))
   }

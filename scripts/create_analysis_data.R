@@ -33,7 +33,7 @@ ensure_output_dirs <- function() {
       here("results", "main", "pet_peese_all_data"),
       here("results", "main", "multilevel_random"),
       here("results", "main", "multilevel_random_all_data"),
-      here("results", "main", "derived_data")
+      here("data", "derived_data")
     ),
     dir.create,
     recursive = TRUE,
@@ -141,7 +141,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
   saveRDS(
     estimator_raw,
     here(
-      "results", "main", "derived_data",
+      "data", "derived_data",
       paste0("pps_rstandard_raw_", setup_label, "_", estimator, variant_suffix, ".rds")
     )
   )
@@ -149,7 +149,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
     saveRDS(
       estimator_power,
       here(
-        "results", "main", "derived_data",
+        "data", "derived_data",
         paste0("pps_rstandard_power_", setup_label, "_", estimator, ".rds")
       )
     )
@@ -164,7 +164,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
       estimator = estimator,
       outlier_variant = outlier_variant
     ),
-    here("results", "main", "derived_data", paste0("analysis_settings_", result_suffix, ".rds"))
+    here("data", "derived_data", paste0("analysis_settings_", result_suffix, ".rds"))
   )
 
   z_plot_path <- here("results", "main", paste0("z_plot_", setup_label, "_", estimator, ".rds"))

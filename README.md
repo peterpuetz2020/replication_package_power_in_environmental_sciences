@@ -87,7 +87,7 @@ remain separate.
 
 To compare the two random-effects heterogeneity components directly, run
 `scripts/compute_meta_estimates.R`. In addition to the estimator inputs, it
-writes `results/main/derived_data/random_effect_heterogeneity_comparison.csv`.
+writes `data/derived_data/random_effect_heterogeneity_comparison.csv`.
 For the all-data and outlier-removed samples, that file reports the median
 between-study variance, median within-study effect-size variance, their ratio,
 the median ratio calculated within each meta-analysis, and the between-study
@@ -111,7 +111,7 @@ the PET residual screen and the multilevel random-effects residual screen; if
 either estimator's retained sample has fewer than five studies, the entire
 meta-analysis is omitted from both the all-data and outlier-removed outputs.
 The script removes any stale per-meta-analysis RDS files and records all such
-omissions in `results/main/derived_data/excluded_meta_analyses.csv`.
+omissions in `data/derived_data/excluded_meta_analyses.csv`.
 
 Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. Figures are saved as PDF, EPS, SVG, and 300 dpi PNG files. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 
@@ -123,7 +123,7 @@ The data-preparation step is separated from table/figure rendering. To generate 
 source("scripts/create_analysis_data.R")
 ```
 
-This writes setup-specific derived datasets under `results/main/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. The script also creates any missing setup-specific counterfactual z-value and p-value RDS files needed by the tables and plots, while reusing files that already exist. Define `recreate_counterfactuals <- TRUE` before sourcing the script to overwrite and rebuild all matching counterfactual files. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
+This writes setup-specific derived datasets under `data/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. The script also creates any missing setup-specific counterfactual z-value and p-value RDS files needed by the tables and plots, while reusing files that already exist. Define `recreate_counterfactuals <- TRUE` before sourcing the script to overwrite and rebuild all matching counterfactual files. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
 
 ### Optional data-recreation step
 
