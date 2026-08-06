@@ -381,7 +381,7 @@ calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
 table_2_parameters <- tidyr::crossing(
   analysis_setups,
   estimator = meta_analysis_estimators,
-  outlier_variant = c("outliers_removed", "all_data")
+  outlier_variant = "outliers_removed"
 )
 table_2_results <- table_2_parameters %>%
   pmap(calculate_table_2)
@@ -412,27 +412,21 @@ write.csv(all_combination_results, here("results", "main", "ESR_results_all_comb
 table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
   filter(estimator == "multilevel_random", meta_average_multiplier == 0.5) %>%
-  arrange(outlier_variant, heterogeneity_multiplier)
-walk(c("outliers_removed", "all_data"), function(variant) {
-  variant_indices <- table_2_indices %>% filter(outlier_variant == variant)
-  table_2_columns <- map2(
-    variant_indices$result_index,
-    variant_indices$heterogeneity_multiplier,
-    function(i, h) table_2_results[[i]]$detailed %>%
-      transmute(measure, !!paste0("heterogeneity_", h) := if_else(
-        confidence_interval == "0", estimate, paste(estimate, confidence_interval)
-      ))
-  )
-  table_2 <- reduce(table_2_columns, full_join, by = "measure")
-  write.csv(
-    table_2,
-    here(
-      "results", "main",
-      paste0("Table_2_multilevel_random_meta_0p5_", variant, ".csv")
-    ),
-    row.names = FALSE
-  )
-})
+  arrange(heterogeneity_multiplier)
+table_2_columns <- map2(
+  table_2_indices$result_index,
+  table_2_indices$heterogeneity_multiplier,
+  function(i, h) table_2_results[[i]]$detailed %>%
+    transmute(measure, !!paste0("heterogeneity_", h) := if_else(
+      confidence_interval == "0", estimate, paste(estimate, confidence_interval)
+    ))
+)
+table_2 <- reduce(table_2_columns, full_join, by = "measure")
+write.csv(
+  table_2,
+  here("results", "main", "Table_2_multilevel_random_meta_0p5_outliers_removed.csv"),
+  row.names = FALSE
+)
 
 esr_plot_data <- all_esr_results %>%
   filter(measure == "ESR_{0.05}^{sig}") %>%
@@ -447,7 +441,7 @@ esr_plot <- ggplot(esr_plot_data, aes(heterogeneity_multiplier, estimate, color 
   geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.03,
                 position = position_dodge(width = 0.06)) +
   geom_point(position = position_dodge(width = 0.06)) +
-  facet_grid(outlier_variant ~ meta_average_multiplier, labeller = label_both) +
+  facet_grid(. ~ meta_average_multiplier, labeller = label_both) +
   labs(x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig), color = "Estimator") +
   theme_bw()
 save_plot(

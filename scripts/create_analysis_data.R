@@ -189,7 +189,7 @@ grids <- make_grids()
 analysis_data_parameters <- tidyr::crossing(
   analysis_setups,
   estimator = meta_analysis_estimators,
-  outlier_variant = c("outliers_removed", "all_data")
+  outlier_variant = "outliers_removed"
 )
 
 counterfactual_progress <- new_progress_bar(
