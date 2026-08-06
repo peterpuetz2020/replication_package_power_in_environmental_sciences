@@ -17,13 +17,8 @@ library(readxl)
 dir.create(here("data"), recursive = TRUE, showWarnings = FALSE)
 
 ## Import meta-articles. Note that 32 articles were dropped as they don't have list of references when imported from Scopus
-my_data <- read_excel(here("data", "meta-articles imported from scopus.xlsx"), sheet = "original")
+my_data <- read_excel(here("data", "meta-articles.xlsx"))
 dim(my_data)
-
-## Cleaning references
-my_data$references <- gsub("\\.", "", my_data$references, perl = TRUE)
-my_data$references <- tolower(my_data$references)
-my_data$references <- stripWhitespace(my_data$references)
 
 ## Import all journal names (both full & abbreviated names) with their corresponding scimago category
 scimago <- read_excel(here("data", "scimago_sjr.xlsx"))
@@ -46,8 +41,20 @@ pattern <- str_c(scimago$jname, collapse = "|")
 id <- sjr_cat <- jnames <- freq <- nref <- nenvir <- perc <- list()
 year <- journal <- references <- list()
 
-ref_env <- data.frame(id = NA, title = NA, year = NA, journal = NA, sjr_cat = NA,
-                      references = NA, nref = NA, nenvir = NA, perc = NA)
+## Preallocate one row per article. Extending an individual data-frame column with
+## ref_env$id[i] fails as soon as i exceeds the data frame's current row count.
+ref_env <- data.frame(
+  id = my_data$id,
+  authors = my_data$authors,
+  title = my_data$title,
+  year = my_data$year,
+  journal = my_data$journal,
+  sjr_cat = my_data$sjr_category,
+  references = my_data$references,
+  nref = rep(NA_integer_, nrow(my_data)),
+  nenvir = rep(NA_integer_, nrow(my_data)),
+  perc = rep(NA_real_, nrow(my_data))
+)
 
 s.time <- Sys.time()
 for (i in seq_along(my_data$references)) {
@@ -62,13 +69,6 @@ for (i in seq_along(my_data$references)) {
   )
   freq[[i]] <- table(jnames[[i]])
   nenvir[[i]] <- sum(freq[[i]])
-  
-  ref_env$id[i] <- my_data$id[i]
-  ref_env$title[i] <- my_data$title[i]
-  ref_env$year[i] <- my_data$year[i]
-  ref_env$journal[i] <- my_data$journal[i]
-  ref_env$sjr_cat[i] <- my_data$sjr_category[i]
-  ref_env$references[i] <- my_data$references[i]
   ref_env$nref[i] <- nref[[i]]
   ref_env$nenvir[i] <- nenvir[[i]]
   ref_env$perc[i] <- ifelse(nref[[i]] > 0, nenvir[[i]] / nref[[i]] * 100, NA)
@@ -94,10 +94,10 @@ write.csv(ref_env_final, here("data", "ref_env_percentage.csv"), row.names = FAL
 ## Meta-classification into subfields
 refenv <- read.csv(here("data", "ref_env_percentage.csv"), header = TRUE, sep = ",")
 
-## Older generated files did not contain titles. Recover them from the source data
-## so the subfield loop never attempts to assign a zero-length value to subMeta.
+## Older generated files did not contain titles. Add an explicit value for every
+## row so this stage also works when it is run on its own with the supplied CSV.
 if (!"title" %in% names(refenv)) {
-  refenv$title <- my_data$title[match(refenv$id, my_data$id)]
+  refenv$title <- rep(NA_character_, nrow(refenv))
 }
 dim(refenv)
 
