@@ -46,7 +46,7 @@ pattern <- str_c(scimago$jname, collapse = "|")
 id <- sjr_cat <- jnames <- freq <- nref <- nenvir <- perc <- list()
 year <- journal <- references <- list()
 
-ref_env <- data.frame(id = NA, year = NA, journal = NA, sjr_cat = NA, 
+ref_env <- data.frame(id = NA, title = NA, year = NA, journal = NA, sjr_cat = NA,
                       references = NA, nref = NA, nenvir = NA, perc = NA)
 
 s.time <- Sys.time()
@@ -63,14 +63,15 @@ for (i in seq_along(my_data$references)) {
   freq[[i]] <- table(jnames[[i]])
   nenvir[[i]] <- sum(freq[[i]])
   
-  ref_env[i, 1] <- my_data$id[i]
-  ref_env[i, 2] <- my_data$year[i]
-  ref_env[i, 3] <- my_data$journal[i]
-  ref_env[i, 4] <- my_data$sjr_category[i]
-  ref_env[i, 5] <- my_data$references[i]
-  ref_env[i, 6] <- nref[[i]]
-  ref_env[i, 7] <- nenvir[[i]]
-  ref_env[i, 8] <- ifelse(nref[[i]] > 0, nenvir[[i]] / nref[[i]] * 100, NA)
+  ref_env$id[i] <- my_data$id[i]
+  ref_env$title[i] <- my_data$title[i]
+  ref_env$year[i] <- my_data$year[i]
+  ref_env$journal[i] <- my_data$journal[i]
+  ref_env$sjr_cat[i] <- my_data$sjr_category[i]
+  ref_env$references[i] <- my_data$references[i]
+  ref_env$nref[i] <- nref[[i]]
+  ref_env$nenvir[i] <- nenvir[[i]]
+  ref_env$perc[i] <- ifelse(nref[[i]] > 0, nenvir[[i]] / nref[[i]] * 100, NA)
 }
 e.time <- Sys.time()
 print(e.time - s.time)  # about 15 minutes
@@ -92,6 +93,12 @@ write.csv(ref_env_final, here("data", "ref_env_percentage.csv"), row.names = FAL
 
 ## Meta-classification into subfields
 refenv <- read.csv(here("data", "ref_env_percentage.csv"), header = TRUE, sep = ",")
+
+## Older generated files did not contain titles. Recover them from the source data
+## so the subfield loop never attempts to assign a zero-length value to subMeta.
+if (!"title" %in% names(refenv)) {
+  refenv$title <- my_data$title[match(refenv$id, my_data$id)]
+}
 dim(refenv)
 
 ## Identifying the most frequent subfield for each meta-article
