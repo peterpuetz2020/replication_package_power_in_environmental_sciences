@@ -108,12 +108,12 @@ make_figure_1_panel <- function(meta_average_multiplier, heterogeneity_multiplie
 
   filename_suffix <- paste0(setup_label, "_multilevel_random.rds")
   counterfactual <- get_counterfactual(
-    here("results", "main", paste0("z_plot_", filename_suffix)),
+    here("data", "derived_data", paste0("z_plot_", filename_suffix)),
     split_dat, z_grid,
     heterogeneity_multiplier = heterogeneity_multiplier
   )
   counterfactual_ci <- get_counterfactual(
-    here("results", "main", paste0("z_plot_ci_", filename_suffix)),
+    here("data", "derived_data", paste0("z_plot_ci_", filename_suffix)),
     split_dat, z_grid, ci = TRUE, cluster = unique(dat$cID),
     heterogeneity_multiplier = heterogeneity_multiplier
   )
