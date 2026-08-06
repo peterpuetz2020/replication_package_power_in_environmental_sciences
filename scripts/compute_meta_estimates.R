@@ -16,13 +16,24 @@ if (!exists("new_progress_bar")) {
   new_progress_bar <- function(total, label) {
     if (!isTRUE(show_progress)) return(NULL)
     message(label)
-    utils::txtProgressBar(min = 0, max = max(1, total), style = 3)
+    progress_bar <- utils::txtProgressBar(
+      min = 0, max = max(1, total), initial = 0, style = 3,
+      file = stderr()
+    )
+    flush.console()
+    progress_bar
   }
   update_progress_bar <- function(progress_bar, value) {
-    if (!is.null(progress_bar)) utils::setTxtProgressBar(progress_bar, value)
+    if (!is.null(progress_bar)) {
+      utils::setTxtProgressBar(progress_bar, value)
+      flush.console()
+    }
   }
   close_progress_bar <- function(progress_bar) {
-    if (!is.null(progress_bar)) close(progress_bar)
+    if (!is.null(progress_bar)) {
+      close(progress_bar)
+      flush.console()
+    }
   }
 }
 
