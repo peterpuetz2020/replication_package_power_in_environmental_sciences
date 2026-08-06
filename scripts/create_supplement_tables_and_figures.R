@@ -51,7 +51,7 @@ save_supplement_plot <- function(filename_stem, width, height, draw) {
 
 load_multilevel_data <- function(setup_label) {
   derived_path <- here(
-    "results", "main", "derived_data",
+    "data", "derived_data",
     paste0("pps_rstandard_raw_", setup_label, "_multilevel_random.rds")
   )
   if (file.exists(derived_path)) {

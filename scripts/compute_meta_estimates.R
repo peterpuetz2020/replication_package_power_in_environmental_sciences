@@ -46,7 +46,7 @@ output_dirs <- c(
   random_effect_outlier_removed = here("results", "main", "multilevel_random"),
   random_effect_all_data = here("results", "main", "multilevel_random_all_data")
 )
-derived_data_dir <- here("results", "main", "derived_data")
+derived_data_dir <- here("data", "derived_data")
 invisible(lapply(
   c(output_dirs, derived_data_dir), dir.create,
   recursive = TRUE, showWarnings = FALSE
