@@ -78,7 +78,11 @@ count_intervals <- function(values, grid) {
 get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL,
                                heterogeneity_multiplier) {
   if (file.exists(path)) {
-    return(readRDS(path))
+    cached_result <- readRDS(path)
+    if (!ci || (is.list(cached_result) && length(cached_result) > 0 &&
+                isTRUE(nrow(cached_result[[1]]) == n_iterations))) {
+      return(cached_result)
+    }
   }
 
   cl <- makeCluster(n_cores)
