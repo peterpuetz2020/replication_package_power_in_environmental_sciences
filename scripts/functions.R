@@ -70,10 +70,15 @@ cf <- function(dat, z.grid, heterogeneity_multiplier = 0.25) {
 
 ## Function for confidence intervals of counterfactual z-values (MC simulation)
 
-cf.ci.cluster <- function(dat, z.grid, iters, cluster, heterogeneity_multiplier = 0.25) {
+cf.ci.cluster <- function(dat, z.grid, iters, cluster, heterogeneity_multiplier = 0.25,
+                          iteration_ids = seq_len(iters)) {
+
+  if (length(iteration_ids) != iters) {
+    stop("iteration_ids must contain exactly iters values.")
+  }
 
   # This is the loop over iterations indexed by dd
-  freqs <- foreach(dd = 1:iters) %dopar% {
+  freqs <- foreach(dd = iteration_ids) %dopar% {
 
     # within each foreach loop the random numbers are set in a reproducible way.
     set.seed(dd+12)
@@ -349,4 +354,3 @@ cf.disagg <- function(dat, z.grid) {
   # or absolute z-values for visualization.
   return(freqs.per.meta)
 }
-
