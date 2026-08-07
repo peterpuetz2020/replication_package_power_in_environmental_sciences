@@ -3,6 +3,39 @@
 ## functions.R
 ## ------------
 
+counterfactual_cache_version <- 2L
+
+counterfactual_cache_key <- function(dat, z.grid, heterogeneity_multiplier,
+                                     ci = FALSE, cluster = NULL, iters = NULL) {
+  cache_input <- tempfile("counterfactual-cache-")
+  on.exit(unlink(cache_input), add = TRUE)
+  saveRDS(
+    list(dat = dat, z.grid = z.grid,
+         heterogeneity_multiplier = heterogeneity_multiplier,
+         ci = ci, cluster = cluster, iters = iters),
+    cache_input, version = 2
+  )
+  unname(tools::md5sum(cache_input))
+}
+
+read_counterfactual_cache <- function(path, key) {
+  if (!file.exists(path)) return(NULL)
+  cached <- readRDS(path)
+  if (!is.list(cached) || !identical(cached$version, counterfactual_cache_version) ||
+      !identical(cached$key, key) || is.null(cached$result)) {
+    message("Ignoring stale counterfactual cache: ", basename(path))
+    return(NULL)
+  }
+  cached$result
+}
+
+write_counterfactual_cache <- function(result, path, key) {
+  saveRDS(
+    list(version = counterfactual_cache_version, key = key, result = result),
+    path
+  )
+}
+
 ## Vectorized counterfactual calculations. Probability masses depend on an
 ## effect size and setup, but not on a bootstrap draw, so calculate and sum them
 ## once per meta-analysis. Bootstrap iterations then only resample rows of this

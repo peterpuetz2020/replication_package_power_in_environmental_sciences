@@ -258,13 +258,14 @@ cf_ci_with_progress <- function(dat, grid, cluster, heterogeneity_multiplier, la
 }
 
 get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL, heterogeneity_multiplier_value = heterogeneity_multiplier) {
-  if (file.exists(path)) {
-    cached_result <- readRDS(path)
-    if (!ci || (is.list(cached_result) && length(cached_result) > 0 &&
-                isTRUE(nrow(cached_result[[1]]) == n_iterations))) {
-      message("Using cached counterfactual: ", basename(path))
-      return(cached_result)
-    }
+  cache_key <- counterfactual_cache_key(
+    dat, grid, heterogeneity_multiplier_value, ci, cluster,
+    if (ci) n_iterations else NULL
+  )
+  cached_result <- read_counterfactual_cache(path, cache_key)
+  if (!is.null(cached_result)) {
+    message("Using cached counterfactual: ", basename(path))
+    return(cached_result)
   }
   cl <- makeCluster(n_cores)
   registerDoParallel(cl)
@@ -281,7 +282,7 @@ get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL, hete
     message("Computing counterfactual: ", basename(path))
     cf(dat = dat, z.grid = grid, heterogeneity_multiplier = heterogeneity_multiplier_value)
   }
-  saveRDS(result, path)
+  write_counterfactual_cache(result, path, cache_key)
   result
 }
 
