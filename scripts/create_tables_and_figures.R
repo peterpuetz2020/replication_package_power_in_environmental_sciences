@@ -377,13 +377,18 @@ write_table_1()
 make_figure_1_panel <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, estimator) {
 pps_rstandard <- load_estimator_data(estimator, setup_label)
 grids <- make_grids()
-my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
+my_dat <- pps_rstandard %>%
+  mutate(GE = meta_average_multiplier * GE) %>%
+  filter_counterfactual_data(
+    heterogeneity_multiplier,
+    context = paste("Figure 1", setup_label, estimator)
+  )
 myDat <- split_meta_analyses(my_dat)
 facz <- abs(my_dat$yi / sqrt(my_dat$vi))
 z.orig <- count_intervals(facz, grids$z_grid_plot2)
 p.orig.plot <- count_intervals(facz, grids$p_grid_plot[which(grids$p_grid_plot >= 0)])
 z.plot <- get_counterfactual(here("data", "derived_data", paste0("z_plot_", setup_label, "_", estimator, ".rds")), myDat, grids$z_grid_plot, heterogeneity_multiplier_value = heterogeneity_multiplier)
-z.plot.ci <- get_counterfactual(here("data", "derived_data", paste0("z_plot_ci_", setup_label, "_", estimator, ".rds")), myDat, grids$z_grid_plot, ci = TRUE, cluster = unique(pps_rstandard$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
+z.plot.ci <- get_counterfactual(here("data", "derived_data", paste0("z_plot_ci_", setup_label, "_", estimator, ".rds")), myDat, grids$z_grid_plot, ci = TRUE, cluster = unique(my_dat$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
 xs <- as.vector(grids$z_grid_plot2[-length(grids$z_grid_plot2)] + (grids$z_grid_plot2[2] - grids$z_grid_plot2[1]) / 2)
 ## cf.ci.cluster() normalizes every bootstrap draw by the number of effects in
@@ -442,13 +447,18 @@ calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
     estimator, setup_label, outlier_variant
   )
   grids <- make_grids()
-  my_dat <- pps_rstandard %>% mutate(GE = meta_average_multiplier * GE)
+  my_dat <- pps_rstandard %>%
+    mutate(GE = meta_average_multiplier * GE) %>%
+    filter_counterfactual_data(
+      heterogeneity_multiplier,
+      context = paste("Table 2", setup_label, estimator)
+    )
   myDat <- split_meta_analyses(my_dat)
   facz <- abs(my_dat$yi / sqrt(my_dat$vi))
   p.orig.tab <- count_intervals(facz, grids$p_grid_tab2)
   result_suffix <- paste(setup_label, estimator, outlier_variant, sep = "_")
   p.tab <- get_counterfactual(here("data", "derived_data", paste0("p_tab_", result_suffix, ".rds")), myDat, grids$p_grid_tab, heterogeneity_multiplier_value = heterogeneity_multiplier)
-  p.tab.ci <- get_counterfactual(here("data", "derived_data", paste0("p_tab_ci_", result_suffix, ".rds")), myDat, grids$p_grid_tab, ci = TRUE, cluster = unique(pps_rstandard$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
+  p.tab.ci <- get_counterfactual(here("data", "derived_data", paste0("p_tab_ci_", result_suffix, ".rds")), myDat, grids$p_grid_tab, ci = TRUE, cluster = unique(my_dat$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
   include_p_value_intervals <- estimator == "multilevel_random" && meta_average_multiplier == 0.5
   p.table <- matrix(NA_character_, ncol = 2, nrow = length(grids$p_grid_tab2) - 1)

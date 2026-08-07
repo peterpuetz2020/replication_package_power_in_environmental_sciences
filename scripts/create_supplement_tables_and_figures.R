@@ -147,7 +147,11 @@ get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL,
 make_figure_1_panel <- function(meta_average_multiplier, heterogeneity_multiplier,
                                 setup_label) {
   dat <- load_multilevel_data(setup_label) %>%
-    mutate(GE = meta_average_multiplier * GE)
+    mutate(GE = meta_average_multiplier * GE) %>%
+    filter_counterfactual_data(
+      heterogeneity_multiplier,
+      context = paste("supplement Figure 1", setup_label)
+    )
   split_dat <- split(dat, dat$cID)
   z_grid <- seq(-10.25, 10.25, 0.1025)
   z_grid_positive <- seq(0, 10.25, 0.1025)
