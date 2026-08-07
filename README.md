@@ -67,13 +67,12 @@ ratio of the largest to smallest sampling variance is extremely large, the
 model-fitting script prints the affected `cID`.
 The supplementary script writes Figure S1 (meta-average multiplier 0.25),
 Figure S2 (meta-average multiplier 1), the across-combination ESR plot in
-Figure S3, and the non-main-text Figure 2 power-distribution variants to
+the non-main-text Figure 2 power-distribution variants to
 `results/supplement/`, in PDF, EPS, SVG, and 300 dpi PNG format. SVG is
 the preferred format for insertion into recent versions of Microsoft Word and
 LibreOffice Writer because it remains sharp when resized; PNG is the compatible
-fallback for applications that do not support SVG. It should be run
-after the main script because Figure S3 reads
-`results/main/ESR_results_all_combinations.csv`.
+fallback for applications that do not support SVG. Figure S3 and its source
+numbers are created directly by the main table-and-figure script.
 Before the first run, create the random-effects estimator datasets:
 
 ```r
@@ -114,7 +113,7 @@ meta-analysis is omitted from both the all-data and outlier-removed outputs.
 The script removes any stale per-meta-analysis RDS files and records all such
 omissions in `data/derived_data/excluded_meta_analyses.csv`.
 
-Publication outputs use the consistent names `Table_<number>_<setup_label>.<ext>` and `Figure_<number>_<setup_label>.<ext>`. Figures are saved as PDF, EPS, SVG, and 300 dpi PNG files. The workbook underlying Figure 2 is named `Figure_2_data_<setup_label>.xlsx`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
+Publication outputs use numbered table and figure names. Figures are saved as PDF, EPS, SVG, and 300 dpi PNG files. The workbook underlying Figure 2 is saved in `data/derived_data`, while Figure S3 and its source numbers are saved in `results/supplement`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 
 ### Optional setup-specific data creation
 
