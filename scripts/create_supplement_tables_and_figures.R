@@ -9,6 +9,7 @@ library(foreach)
 library(doParallel)
 library(gridExtra)
 library(here)
+library(openxlsx)
 
 source(here("scripts", "analysis_setup.R"))
 
@@ -166,7 +167,11 @@ make_figure_1_panel <- function(meta_average_multiplier, heterogeneity_multiplie
   )
 
   bin_midpoints <- z_grid_positive[-length(z_grid_positive)] + diff(z_grid_positive)[1] / 2
-  n_tests <- sum(observed_counts)
+  ## Match cf.ci.cluster(), which divides each bootstrap replication by its
+  ## sampled number of effects. A count over the finite plotting grid omits any
+  ## observed |z| above its upper boundary and gives the point curve a different
+  ## denominator from its confidence interval.
+  n_tests <- nrow(dat)
   plot_data <- tibble(
     z = bin_midpoints,
     ci_lower = apply(counterfactual_ci[[1]], 2, quantile, na.rm = TRUE, probs = 0.025),
@@ -221,7 +226,7 @@ write_counterfactual_figure <- function(meta_multiplier, figure_number) {
   combined <- arrangeGrob(grobs = panels, ncol = 1)
   save_supplement_plot(
     file.path(supplement_dir, paste0("Figure_S", figure_number, "_multilevel_random")),
-    width = 5, height = 10,
+    width = 10, height = 10,
     draw = function() grid::grid.draw(combined)
   )
 }
@@ -229,6 +234,77 @@ write_counterfactual_figure <- function(meta_multiplier, figure_number) {
 ## Figures S1 and S2: Figure 1 sensitivity analyses.
 write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 1)
 write_counterfactual_figure(meta_multiplier = 1, figure_number = 2)
+
+## Supplementary Figure 2 variants: power distributions for every estimator and
+## meta-average multiplier not used for main-text Figure 2. Heterogeneity does
+## not enter the power calculation, so these are intentionally generated only
+## from the zero-heterogeneity setups.
+load_power_data <- function(estimator, setup_label, meta_average_multiplier) {
+  power_path <- here(
+    "data", "derived_data",
+    paste0("pps_rstandard_power_", setup_label, "_", estimator, ".rds")
+  )
+  if (!file.exists(power_path)) {
+    stop("Missing ", power_path, ". Run create_tables_and_figures.R first.")
+  }
+  readRDS(power_path)
+}
+
+write_supplement_figure_2 <- function(meta_average_multiplier,
+                                      heterogeneity_multiplier,
+                                      setup_label, estimator, ...) {
+  power_data <- load_power_data(estimator, setup_label, meta_average_multiplier)
+  plot_data <- power_data %>%
+    group_by(cID) %>%
+    summarise(
+      median = median(power, na.rm = TRUE),
+      sape = sum(power >= 0.8, na.rm = TRUE) / sum(!is.na(power)),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      adequately_powered = median >= 0.8,
+      median = 100 * median,
+      sape = 100 * sape
+    )
+
+  median_plot <- ggplot(plot_data, aes(median, fill = adequately_powered)) +
+    geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30,
+                   alpha = 0.6, linewidth = 0.1) +
+    scale_fill_manual(values = c("brown2", "skyblue2")) +
+    scale_x_continuous(breaks = scales::breaks_width(20),
+                       labels = scales::label_percent(scale = 1)) +
+    scale_y_continuous(labels = scales::label_percent(scale = 1)) +
+    labs(x = "Median statistical power of primary estimates per meta-analysis",
+         y = "Percentage", title = "(a)") +
+    theme(legend.position = "none", panel.background = element_rect(fill = "white"))
+  sape_plot <- ggplot(plot_data, aes(sape)) +
+    geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30,
+                   alpha = 0.6, linewidth = 0.1, fill = "skyblue2") +
+    scale_x_continuous(breaks = scales::breaks_width(20),
+                       labels = scales::label_percent(scale = 1)) +
+    scale_y_continuous(labels = scales::label_percent(scale = 1)) +
+    labs(x = "Share of adequately powered primary estimates per meta-analysis",
+         y = "Percentage", title = "(b)") +
+    theme(panel.background = element_rect(fill = "white"))
+
+  stem <- paste0("Figure_2_", setup_label, "_", estimator)
+  openxlsx::write.xlsx(plot_data, file.path(
+    supplement_dir, paste0("Figure_2_data_", setup_label, "_", estimator, ".xlsx")
+  ),
+                       overwrite = TRUE)
+  combined <- arrangeGrob(median_plot, sape_plot, ncol = 2)
+  save_supplement_plot(
+    file.path(supplement_dir, stem), width = 10, height = 4,
+    draw = function() grid::grid.draw(combined)
+  )
+}
+
+tidyr::crossing(
+  analysis_setups %>% filter(heterogeneity_multiplier == 0),
+  estimator = meta_analysis_estimators
+) %>%
+  filter(!(meta_average_multiplier == 0.5 & estimator == "multilevel_random")) %>%
+  pwalk(write_supplement_figure_2)
 
 ## Figure S3: excess significant results across every analysis combination.
 esr_path <- here("results", "main", "ESR_results_all_combinations.csv")
@@ -250,8 +326,8 @@ incomplete_esr_rows <- esr_plot_data_raw %>%
   filter(if_any(c(estimate, ci_lower, ci_upper), is.na))
 if (nrow(incomplete_esr_rows) > 0) {
   warning(
-    "Omitting ", nrow(incomplete_esr_rows),
-    " incomplete ESR_{0.05}^{sig} row(s) from Figure S3. ",
+    "Drawing ", nrow(incomplete_esr_rows),
+    " ESR_{0.05}^{sig} point estimate(s) without confidence intervals in Figure S3. ",
     "Regenerate ESR_results_all_combinations.csv with create_tables_and_figures.R ",
     "to restore missing point estimates."
   )
@@ -272,7 +348,6 @@ if (nrow(inconsistent_esr_rows) > 0) {
 }
 
 esr_plot_data <- esr_plot_data_raw %>%
-  filter(if_all(c(estimate, ci_lower, ci_upper), ~ !is.na(.x))) %>%
   mutate(
     estimator = dplyr::recode(
       estimator,
@@ -286,7 +361,7 @@ esr_plot_data <- esr_plot_data_raw %>%
   )
 
 if (nrow(esr_plot_data) == 0) {
-  stop("ESR results do not contain plottable ESR_{0.05}^{sig} estimates and confidence intervals.")
+  stop("ESR results do not contain plottable ESR_{0.05}^{sig} estimates.")
 }
 
 esr_plot <- ggplot(
@@ -297,6 +372,7 @@ esr_plot <- ggplot(
   geom_line(position = position_dodge(width = 0.035), linewidth = 0.55) +
   geom_errorbar(
     aes(ymin = ci_lower, ymax = ci_upper), width = 0.025,
+    data = ~ filter(.x, if_all(c(ci_lower, ci_upper), ~ !is.na(.x))),
     position = position_dodge(width = 0.035), linewidth = 0.5
   ) +
   geom_point(position = position_dodge(width = 0.035), size = 2) +

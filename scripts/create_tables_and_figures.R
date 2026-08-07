@@ -386,7 +386,11 @@ z.plot <- get_counterfactual(here("data", "derived_data", paste0("z_plot_", setu
 z.plot.ci <- get_counterfactual(here("data", "derived_data", paste0("z_plot_ci_", setup_label, "_", estimator, ".rds")), myDat, grids$z_grid_plot, ci = TRUE, cluster = unique(pps_rstandard$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
 xs <- as.vector(grids$z_grid_plot2[-length(grids$z_grid_plot2)] + (grids$z_grid_plot2[2] - grids$z_grid_plot2[1]) / 2)
-N <- sum(p.orig.plot)
+## cf.ci.cluster() normalizes every bootstrap draw by the number of effects in
+## that draw. Use the corresponding full-sample denominator for the point
+## estimate; sum(p.orig.plot) can be smaller when an observed |z| falls beyond
+## the finite plotting grid, shifting the orange curve above its bootstrap CI.
+N <- nrow(my_dat)
 datFull <- as.data.frame(cbind(
   xs = xs,
   q025 = as.vector(apply(z.plot.ci[[1]], 2, quantile, na.rm = TRUE, probs = c(0.025))),
@@ -394,7 +398,6 @@ datFull <- as.data.frame(cbind(
   n.f = as.vector(z.orig / N),
   n.cf = as.vector(z.plot / N)
 ))
-
 ggplot(datFull) +
   geom_line(aes(xs, q025), color = "orange", lty = 3) +
   geom_line(aes(xs, n.cf), color = "orange", lty = 1) +
@@ -425,7 +428,7 @@ figure_1_panels <- purrr::pmap(
 figure_1 <- arrangeGrob(grobs = figure_1_panels, ncol = 1)
 save_plot(
   here("results", "main", "Figure_1_multilevel_random"),
-  width = 5,
+  width = 10,
   height = 10,
   draw = function() grid::grid.draw(figure_1)
 )
@@ -578,11 +581,16 @@ med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(y
 sape <- pps_rstandard_median %>% ggplot(aes(x = sape100)) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1, fill = "skyblue2") + xlab("Share of adequately powered primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(b)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
 figure_2 <- arrangeGrob(med_pwr, sape, ncol = 2)
 save_plot(
-  here("results", "main", paste0("Figure_2_", setup_label, "_", estimator)),
+  here("results", "main", "Figure_2"),
   width = 10,
   height = 4,
   draw = function() grid::grid.draw(figure_2)
 )
 }
 
-tidyr::crossing(heterogeneity_independent_setups, estimator = meta_analysis_estimators) %>% pwalk(write_figure_2)
+analysis_setups %>%
+  filter(
+    setup_label == "meta_0p5_heterogeneity_0"
+  ) %>%
+  mutate(estimator = "multilevel_random") %>%
+  pwalk(write_figure_2)
