@@ -38,13 +38,13 @@ if (!exists("new_progress_bar")) {
 meta <- read_excel(here("data", "MasterData.xlsx"))
 meta_analyses <- split(meta, meta$cID)
 
-output_dirs <- c(
-  pet_peese_outlier_removed = here("results", "main", "pet_peese_rstandard"),
-  pet_peese_all_data = here("results", "main", "pet_peese_all_data"),
-  random_effect_outlier_removed = here("results", "main", "multilevel_random"),
-  random_effect_all_data = here("results", "main", "multilevel_random_all_data")
-)
 derived_data_dir <- here("data", "derived_data")
+output_dirs <- c(
+  pet_peese_outlier_removed = here(derived_data_dir, "pet_peese_rstandard"),
+  pet_peese_all_data = here(derived_data_dir, "pet_peese_all_data"),
+  random_effect_outlier_removed = here(derived_data_dir, "multilevel_random"),
+  random_effect_all_data = here(derived_data_dir, "multilevel_random_all_data")
+)
 invisible(lapply(
   c(output_dirs, derived_data_dir), dir.create,
   recursive = TRUE, showWarnings = FALSE
