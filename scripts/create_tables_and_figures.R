@@ -610,6 +610,42 @@ write_figure_2 <- function(meta_average_multiplier, heterogeneity_multiplier, se
 pps_rstandard <- load_power_data(estimator, setup_label, meta_average_multiplier)
 pps_rstandard_median <- pps_rstandard %>% group_by(cID) %>% summarise(metaID = metaID[1], median = median(power, na.rm = TRUE), sape = sum(power >= 0.8, na.rm = TRUE) / sum(!is.na(power)), nips = length(unique(sID)), esty = unique(etype), guid = unique(guide), prer = unique(prere), subf = unique(subfd), sdes = unique(sdesn), .groups = "drop") %>% mutate(yn80 = ifelse(median >= 0.8, "yes", "no"), median100 = round(100 * median, 2), sape100 = round(100 * sape, 2))
 write.xlsx(pps_rstandard_median, here("data", "derived_data", paste0("Figure_2_data_", setup_label, "_", estimator, ".xlsx")), overwrite = TRUE)
+
+figure_2_summary <- tibble(
+  result = c(
+    "Median power of 20% or less",
+    "Median power greater than 80%",
+    "No adequately powered estimates",
+    "Share of adequately powered estimates greater than 20%"
+  ),
+  count = c(
+    sum(pps_rstandard_median$median <= 0.2, na.rm = TRUE),
+    sum(pps_rstandard_median$median > 0.8, na.rm = TRUE),
+    sum(pps_rstandard_median$sape == 0, na.rm = TRUE),
+    sum(pps_rstandard_median$sape > 0.2, na.rm = TRUE)
+  ),
+  total_meta_analyses = nrow(pps_rstandard_median)
+) %>%
+  mutate(percentage = round(100 * count / total_meta_analyses, 1))
+
+high_power_subfields <- pps_rstandard_median %>%
+  filter(median > 0.8) %>%
+  count(subf, name = "count") %>%
+  mutate(
+    total_high_power_meta_analyses = sum(count),
+    percentage = round(100 * count / total_high_power_meta_analyses, 1)
+  ) %>%
+  arrange(desc(count)) %>%
+  rename(subfield = subf)
+
+write.xlsx(
+  list(
+    `Figure 2 summary` = figure_2_summary,
+    `High-power subfields` = high_power_subfields
+  ),
+  here("results", "main", "Figure_2_summary.xlsx"),
+  overwrite = TRUE
+)
 med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
 sape <- pps_rstandard_median %>% ggplot(aes(x = sape100)) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1, fill = "skyblue2") + xlab("Share of adequately powered primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(b)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
 figure_2 <- arrangeGrob(med_pwr, sape, ncol = 2)
