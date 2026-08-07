@@ -40,8 +40,8 @@ close_progress_bar <- function(progress_bar) {
 }
 
 ## Set analysis parameters here. All downstream scripts consume these settings.
-n_cores <- 4
-n_iterations <- 30
+n_cores <- 6
+n_iterations <- 1000
 meta_average_multiplier <- c(0.25, 0.5, 1)
 heterogeneity_multiplier <- c(0, 0.25, 0.5, 0.75)
 
