@@ -159,5 +159,3 @@ print(e.time - s.time)
 
 write.csv(subMeta, here("data", "meta-classified into subfields.csv"), row.names = FALSE)
 
-## When I'm unable to resolve the tie issue even after adding the Scimago category to the most frequent categories,
-## I resort to manual inspection for few meta-papers (7) and decide the subfield myself.
