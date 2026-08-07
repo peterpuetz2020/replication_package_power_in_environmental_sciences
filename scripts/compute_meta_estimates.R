@@ -163,7 +163,7 @@ empty_meta_estimate <- function(method = NA_character_) {
   )
 }
 
-fit_pet_peese <- function(dat) {
+fit_pet_peese <- function(dat, pet = NULL, pet_test = NULL) {
   if (nrow(dat) <= 1) {
     result <- fit_sparse_effects(dat)
     result$method <- "PET-PEESE not estimable"
@@ -171,13 +171,15 @@ fit_pet_peese <- function(dat) {
     return(result)
   }
 
-  pet <- suppressWarnings(rma.mv(
-    yi, vi, mods = ~ 1 + sei,
-    random = random_effect_structure(dat),
-    method = "REML", test = "t", data = dat,
-    control = list(rel.tol = 1e-8)
-  ))
-  pet_test <- coefficient_test(pet, dat)
+  if (is.null(pet)) {
+    pet <- suppressWarnings(rma.mv(
+      yi, vi, mods = ~ 1 + sei,
+      random = random_effect_structure(dat),
+      method = "REML", test = "t", data = dat,
+      control = list(rel.tol = 1e-8)
+    ))
+  }
+  if (is.null(pet_test)) pet_test <- coefficient_test(pet, dat)
   pet_intercept_p_value <- extract_coefficient_statistic(
     pet_test, "intrcpt", "p_Satt"
   )
@@ -268,7 +270,8 @@ fit_random_effects <- function(dat) {
   )
 }
 
-fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3) {
+fit_random_effects_with_outlier_removal <- function(
+    dat, cutoff = 3, screening_fit = NULL) {
   analysis_data <- dat
 
   if (primary_study_count(analysis_data) < minimum_primary_studies) {
@@ -277,7 +280,7 @@ fit_random_effects_with_outlier_removal <- function(dat, cutoff = 3) {
 
   ## Fit once to identify outliers, remove them once, and then perform the
   ## single final refit below. Outlier detection is deliberately not iterated.
-  screening_fit <- fit_random_effects(analysis_data)
+  if (is.null(screening_fit)) screening_fit <- fit_random_effects(analysis_data)
   standardized_residuals <- as.data.frame(
     rstandard.rma.mv(screening_fit$model)
   )$z
@@ -313,11 +316,15 @@ fit_one_meta_analysis <- function(dat) {
     method = "REML", test = "t", data = dat,
     control = list(rel.tol = 1e-8)
   ))
+  outlier_model_test <- coefficient_test(outlier_model, dat)
   standardized_residuals <- as.data.frame(rstandard.rma.mv(outlier_model))$z
   pet_outlier_removed_data <- dat[abs(standardized_residuals) < 3, , drop = FALSE]
   pet_studies <- primary_study_count(pet_outlier_removed_data)
 
-  random_effect_outlier_removed <- fit_random_effects_with_outlier_removal(dat)
+  random_effect_all_data <- fit_random_effects(dat)
+  random_effect_outlier_removed <- fit_random_effects_with_outlier_removal(
+    dat, screening_fit = random_effect_all_data
+  )
   random_effect_studies <- primary_study_count(random_effect_outlier_removed$data)
 
   if (pet_studies < minimum_primary_studies &&
@@ -335,9 +342,9 @@ fit_one_meta_analysis <- function(dat) {
 
   results <- list(
     all_data = list(
-      pet_peese = fit_pet_peese(dat),
+      pet_peese = fit_pet_peese(dat, outlier_model, outlier_model_test),
       pet_peese_data = dat,
-      random_effect = fit_random_effects(dat),
+      random_effect = random_effect_all_data,
       random_effect_data = dat
     ),
     outlier_removed = list(
@@ -411,30 +418,14 @@ fit_one_meta_analysis <- function(dat) {
 
 cluster <- makeCluster(n_cores)
 registerDoParallel(cluster)
-model_progress <- new_progress_bar(length(meta_analyses), "Meta-analysis model progress")
-meta_analysis_estimates <- vector("list", ceiling(length(meta_analyses) / n_cores))
-analysis_batches <- split(meta_analyses, ceiling(seq_along(meta_analyses) / n_cores))
-completed_analyses <- 0
-for (batch_index in seq_along(analysis_batches)) {
-  batch_start <- completed_analyses + 1L
-  batch_end <- completed_analyses + length(analysis_batches[[batch_index]])
-  message(
-    sprintf(
-      "Fitting meta-analyses %d-%d of %d",
-      batch_start, batch_end, length(meta_analyses)
-    )
-  )
-  meta_analysis_estimates[[batch_index]] <- foreach(
-    dat = analysis_batches[[batch_index]],
-    .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),
-    .combine = bind_rows
-  ) %dopar% fit_one_meta_analysis(dat)
-  completed_analyses <- completed_analyses + length(analysis_batches[[batch_index]])
-  update_progress_bar(model_progress, completed_analyses)
-}
-meta_analysis_estimates <- bind_rows(meta_analysis_estimates)
+message("Fitting ", length(meta_analyses), " meta-analyses")
+meta_analysis_estimates <- foreach(
+  dat = meta_analyses,
+  .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),
+  .combine = bind_rows,
+  .options.snow = list(preschedule = FALSE)
+) %dopar% fit_one_meta_analysis(dat)
 stopCluster(cluster)
-close_progress_bar(model_progress)
 
 meta_analysis_estimates <- meta_analysis_estimates %>%
   filter(is.na(exclusion_reason)) %>%

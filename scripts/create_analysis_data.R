@@ -116,26 +116,6 @@ make_grids <- function() {
   )
 }
 
-run_parallel_cf <- function(dat, grid, heterogeneity_multiplier) {
-  cl <- makeCluster(n_cores)
-  registerDoParallel(cl)
-  on.exit(stopCluster(cl), add = TRUE)
-  cf(dat = dat, z.grid = grid, heterogeneity_multiplier = heterogeneity_multiplier)
-}
-
-run_parallel_cf_ci <- function(dat, grid, cluster, heterogeneity_multiplier) {
-  cl <- makeCluster(n_cores)
-  registerDoParallel(cl)
-  on.exit(stopCluster(cl), add = TRUE)
-  cf.ci.cluster(
-    dat = dat,
-    z.grid = grid,
-    iters = n_iterations,
-    cluster = cluster,
-    heterogeneity_multiplier = heterogeneity_multiplier
-  )
-}
-
 write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
                                  heterogeneity_multiplier, setup_label,
                                  estimator, outlier_variant = "outliers_removed",
@@ -145,6 +125,19 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
   estimator_power <- add_power_variables(estimator_raw, meta_average_multiplier)
   counterfactual_data <- estimator_raw %>% mutate(GE = meta_average_multiplier * GE)
   myDat_counterfactual <- split_meta_analyses(counterfactual_data)
+  component_cache <- new.env(parent = emptyenv())
+  get_components <- function(grid_name, grid) {
+    if (!exists(grid_name, envir = component_cache, inherits = FALSE)) {
+      assign(
+        grid_name,
+        counterfactual_components(
+          myDat_counterfactual, grid, heterogeneity_multiplier
+        ),
+        envir = component_cache
+      )
+    }
+    get(grid_name, envir = component_cache, inherits = FALSE)
+  }
 
   saveRDS(
     estimator_raw,
@@ -181,14 +174,28 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
   p_tab_ci_path <- here("data", "derived_data", paste0("p_tab_ci_", result_suffix, ".rds"))
 
   if (outlier_variant == "outliers_removed") {
-    save_counterfactual(z_plot_path, function() run_parallel_cf(myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier), progress_bar, progress_offset + 1)
-    save_counterfactual(z_plot_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$z_grid_plot, unique(estimator_raw$cID), heterogeneity_multiplier), progress_bar, progress_offset + 2, n_iterations)
+    save_counterfactual(z_plot_path, function() cf(
+      myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier,
+      components = get_components("z", grids$z_grid_plot)
+    ), progress_bar, progress_offset + 1)
+    save_counterfactual(z_plot_ci_path, function() cf.ci.cluster(
+      myDat_counterfactual, grids$z_grid_plot, n_iterations,
+      unique(estimator_raw$cID), heterogeneity_multiplier,
+      components = get_components("z", grids$z_grid_plot)
+    ), progress_bar, progress_offset + 2, n_iterations)
   } else {
     update_progress_bar(progress_bar, progress_offset + 1)
     update_progress_bar(progress_bar, progress_offset + 2)
   }
-  save_counterfactual(p_tab_path, function() run_parallel_cf(myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier), progress_bar, progress_offset + 3)
-  save_counterfactual(p_tab_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$p_grid_tab, unique(estimator_raw$cID), heterogeneity_multiplier), progress_bar, progress_offset + 4, n_iterations)
+  save_counterfactual(p_tab_path, function() cf(
+    myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier,
+    components = get_components("p", grids$p_grid_tab)
+  ), progress_bar, progress_offset + 3)
+  save_counterfactual(p_tab_ci_path, function() cf.ci.cluster(
+    myDat_counterfactual, grids$p_grid_tab, n_iterations,
+    unique(estimator_raw$cID), heterogeneity_multiplier,
+    components = get_components("p", grids$p_grid_tab)
+  ), progress_bar, progress_offset + 4, n_iterations)
 }
 
 ensure_output_dirs()
@@ -204,14 +211,39 @@ counterfactual_progress <- new_progress_bar(
   4 * nrow(analysis_data_parameters),
   "Counterfactual data progress"
 )
-for (parameter_index in seq_len(nrow(analysis_data_parameters))) {
-  parameters <- analysis_data_parameters[parameter_index, ]
-  estimator_raw <- load_estimator_data(parameters$estimator, parameters$outlier_variant)
-  write_analysis_setup(
-    estimator_raw, grids,
-    parameters$meta_average_multiplier, parameters$heterogeneity_multiplier,
-    parameters$setup_label, parameters$estimator, parameters$outlier_variant,
-    counterfactual_progress, 4 * (parameter_index - 1)
-  )
-}
-close_progress_bar(counterfactual_progress)
+counterfactual_cluster <- makeCluster(n_cores)
+registerDoParallel(counterfactual_cluster)
+estimator_data_cache <- new.env(parent = emptyenv())
+tryCatch(
+  {
+    for (parameter_index in seq_len(nrow(analysis_data_parameters))) {
+      parameters <- analysis_data_parameters[parameter_index, ]
+      cache_key <- paste(
+        parameters$estimator, parameters$outlier_variant, sep = "_"
+      )
+      if (!exists(cache_key, envir = estimator_data_cache, inherits = FALSE)) {
+        assign(
+          cache_key,
+          load_estimator_data(
+            parameters$estimator, parameters$outlier_variant
+          ),
+          envir = estimator_data_cache
+        )
+      }
+      estimator_raw <- get(
+        cache_key, envir = estimator_data_cache, inherits = FALSE
+      )
+      write_analysis_setup(
+        estimator_raw, grids,
+        parameters$meta_average_multiplier, parameters$heterogeneity_multiplier,
+        parameters$setup_label, parameters$estimator,
+        parameters$outlier_variant,
+        counterfactual_progress, 4 * (parameter_index - 1)
+      )
+    }
+  },
+  finally = {
+    stopCluster(counterfactual_cluster)
+    close_progress_bar(counterfactual_progress)
+  }
+)
