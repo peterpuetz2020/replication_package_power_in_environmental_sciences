@@ -37,10 +37,10 @@ ensure_output_dirs <- function() {
   invisible(lapply(
     list(
       here("results", "main"),
-      here("results", "main", "pet_peese_rstandard"),
-      here("results", "main", "pet_peese_all_data"),
-      here("results", "main", "multilevel_random"),
-      here("results", "main", "multilevel_random_all_data"),
+      here("data", "derived_data", "pet_peese_rstandard"),
+      here("data", "derived_data", "pet_peese_all_data"),
+      here("data", "derived_data", "multilevel_random"),
+      here("data", "derived_data", "multilevel_random_all_data"),
       here("data", "derived_data")
     ),
     dir.create,
@@ -52,10 +52,10 @@ ensure_output_dirs <- function() {
 load_estimator_data <- function(estimator, outlier_variant = "outliers_removed") {
   estimator_dir <- switch(
     paste(estimator, outlier_variant, sep = "_"),
-    pet_peese_outliers_removed = here("results", "main", "pet_peese_rstandard"),
-    pet_peese_all_data = here("results", "main", "pet_peese_all_data"),
-    multilevel_random_outliers_removed = here("results", "main", "multilevel_random"),
-    multilevel_random_all_data = here("results", "main", "multilevel_random_all_data"),
+    pet_peese_outliers_removed = here("data", "derived_data", "pet_peese_rstandard"),
+    pet_peese_all_data = here("data", "derived_data", "pet_peese_all_data"),
+    multilevel_random_outliers_removed = here("data", "derived_data", "multilevel_random"),
+    multilevel_random_all_data = here("data", "derived_data", "multilevel_random_all_data"),
     stop("Unknown estimator/outlier variant: ", estimator, "/", outlier_variant)
   )
 
@@ -175,10 +175,10 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
     here("data", "derived_data", paste0("analysis_settings_", result_suffix, ".rds"))
   )
 
-  z_plot_path <- here("results", "main", paste0("z_plot_", setup_label, "_", estimator, ".rds"))
-  z_plot_ci_path <- here("results", "main", paste0("z_plot_ci_", setup_label, "_", estimator, ".rds"))
-  p_tab_path <- here("results", "main", paste0("p_tab_", result_suffix, ".rds"))
-  p_tab_ci_path <- here("results", "main", paste0("p_tab_ci_", result_suffix, ".rds"))
+  z_plot_path <- here("data", "derived_data", paste0("z_plot_", setup_label, "_", estimator, ".rds"))
+  z_plot_ci_path <- here("data", "derived_data", paste0("z_plot_ci_", setup_label, "_", estimator, ".rds"))
+  p_tab_path <- here("data", "derived_data", paste0("p_tab_", result_suffix, ".rds"))
+  p_tab_ci_path <- here("data", "derived_data", paste0("p_tab_ci_", result_suffix, ".rds"))
 
   if (outlier_variant == "outliers_removed") {
     save_counterfactual(z_plot_path, function() run_parallel_cf(myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier), progress_bar, progress_offset + 1)
