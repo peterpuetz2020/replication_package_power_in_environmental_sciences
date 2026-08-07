@@ -418,6 +418,16 @@ meta_analysis_estimates <- vector("list", ceiling(length(meta_analyses) / n_core
 analysis_batches <- split(meta_analyses, ceiling(seq_along(meta_analyses) / n_cores))
 completed_analyses <- 0
 for (batch_index in seq_along(analysis_batches)) {
+  batch_start <- completed_analyses + 1L
+  batch_end <- completed_analyses + length(analysis_batches[[batch_index]])
+  if (isTRUE(show_progress)) {
+    message(
+      sprintf(
+        "Fitting meta-analyses %d-%d of %d",
+        batch_start, batch_end, length(meta_analyses)
+      )
+    )
+  }
   meta_analysis_estimates[[batch_index]] <- foreach(
     dat = analysis_batches[[batch_index]],
     .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),

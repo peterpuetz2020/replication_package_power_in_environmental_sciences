@@ -218,11 +218,51 @@ count_intervals <- function(values, grid) {
   }, numeric(1))
 }
 
+cf_ci_with_progress <- function(dat, grid, cluster, heterogeneity_multiplier, label) {
+  iteration_batches <- split(
+    seq_len(n_iterations),
+    ceiling(seq_len(n_iterations) / max(1, n_cores))
+  )
+  progress_bar <- new_progress_bar(
+    n_iterations,
+    paste0(label, " (bootstrap replications)")
+  )
+  on.exit(close_progress_bar(progress_bar), add = TRUE)
+
+  batch_results <- lapply(iteration_batches, function(iteration_ids) {
+    if (isTRUE(show_progress)) {
+      message(
+        sprintf(
+          "Running bootstrap replications %d-%d of %d",
+          min(iteration_ids), max(iteration_ids), n_iterations
+        )
+      )
+    }
+    result <- cf.ci.cluster(
+      dat = dat,
+      z.grid = grid,
+      iters = length(iteration_ids),
+      cluster = cluster,
+      heterogeneity_multiplier = heterogeneity_multiplier,
+      iteration_ids = iteration_ids
+    )
+    update_progress_bar(progress_bar, max(iteration_ids))
+    result
+  })
+
+  lapply(seq_len(3), function(result_index) {
+    do.call(rbind, lapply(batch_results, `[[`, result_index))
+  })
+}
+
 get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL, heterogeneity_multiplier_value = heterogeneity_multiplier) {
   if (file.exists(path)) {
     cached_result <- readRDS(path)
     if (!ci || (is.list(cached_result) && length(cached_result) > 0 &&
                 isTRUE(nrow(cached_result[[1]]) == n_iterations))) {
+      if (isTRUE(show_progress)) {
+        message("Using cached counterfactual: ", basename(path))
+      }
       return(cached_result)
     }
   }
@@ -230,8 +270,17 @@ get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL, hete
   registerDoParallel(cl)
   on.exit(stopCluster(cl), add = TRUE)
   result <- if (ci) {
-    cf.ci.cluster(dat = dat, z.grid = grid, iters = n_iterations, cluster = cluster, heterogeneity_multiplier = heterogeneity_multiplier_value)
+    cf_ci_with_progress(
+      dat = dat,
+      grid = grid,
+      cluster = cluster,
+      heterogeneity_multiplier = heterogeneity_multiplier_value,
+      label = paste0("Computing ", basename(path))
+    )
   } else {
+    if (isTRUE(show_progress)) {
+      message("Computing counterfactual: ", basename(path))
+    }
     cf(dat = dat, z.grid = grid, heterogeneity_multiplier = heterogeneity_multiplier_value)
   }
   saveRDS(result, path)
