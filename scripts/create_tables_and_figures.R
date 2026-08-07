@@ -230,14 +230,12 @@ cf_ci_with_progress <- function(dat, grid, cluster, heterogeneity_multiplier, la
   on.exit(close_progress_bar(progress_bar), add = TRUE)
 
   batch_results <- lapply(iteration_batches, function(iteration_ids) {
-    if (isTRUE(show_progress)) {
-      message(
-        sprintf(
-          "Running bootstrap replications %d-%d of %d",
-          min(iteration_ids), max(iteration_ids), n_iterations
-        )
+    message(
+      sprintf(
+        "Running bootstrap replications %d-%d of %d",
+        min(iteration_ids), max(iteration_ids), n_iterations
       )
-    }
+    )
     result <- cf.ci.cluster(
       dat = dat,
       z.grid = grid,
@@ -260,9 +258,7 @@ get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL, hete
     cached_result <- readRDS(path)
     if (!ci || (is.list(cached_result) && length(cached_result) > 0 &&
                 isTRUE(nrow(cached_result[[1]]) == n_iterations))) {
-      if (isTRUE(show_progress)) {
-        message("Using cached counterfactual: ", basename(path))
-      }
+      message("Using cached counterfactual: ", basename(path))
       return(cached_result)
     }
   }
@@ -278,9 +274,7 @@ get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL, hete
       label = paste0("Computing ", basename(path))
     )
   } else {
-    if (isTRUE(show_progress)) {
-      message("Computing counterfactual: ", basename(path))
-    }
+    message("Computing counterfactual: ", basename(path))
     cf(dat = dat, z.grid = grid, heterogeneity_multiplier = heterogeneity_multiplier_value)
   }
   saveRDS(result, path)
