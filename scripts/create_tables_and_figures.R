@@ -219,6 +219,9 @@ count_intervals <- function(values, grid) {
 }
 
 cf_ci_with_progress <- function(dat, grid, cluster, heterogeneity_multiplier, label) {
+  components <- counterfactual_components(
+    dat, grid, heterogeneity_multiplier
+  )
   iteration_batches <- split(
     seq_len(n_iterations),
     ceiling(seq_len(n_iterations) / max(1, n_cores))
@@ -242,7 +245,8 @@ cf_ci_with_progress <- function(dat, grid, cluster, heterogeneity_multiplier, la
       iters = length(iteration_ids),
       cluster = cluster,
       heterogeneity_multiplier = heterogeneity_multiplier,
-      iteration_ids = iteration_ids
+      iteration_ids = iteration_ids,
+      components = components
     )
     update_progress_bar(progress_bar, max(iteration_ids))
     result

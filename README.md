@@ -154,8 +154,9 @@ source("scripts/main.R")
 
 The paper uses `n_iterations <- 1000`. Smaller values are useful for quick checks only and should not be used for final replication.
 
-Long-running model fits and counterfactual calculations always display console
-progress bars.
+Long-running counterfactual calculations display console progress bars, and
+model fitting reports its total number of meta-analyses before dynamically
+scheduling them across workers.
 
 Useful `n_cores` choices depend on the computer:
 
@@ -163,6 +164,28 @@ Useful `n_cores` choices depend on the computer:
 - `n_cores <- 2` to `4`: typical 4- to 8-core laptops/desktops.
 - `n_cores <- 6` to `8`: stronger desktops or workstations.
 - Higher values: high-performance computing nodes, if enough memory is available.
+
+### Performance notes
+
+Counterfactual probabilities are vectorized and summed into one contribution
+row per meta-analysis before bootstrapping. Bootstrap replications therefore
+resample these rows with matrix operations instead of recalculating normal CDFs
+for every effect size and grid interval. Point estimates and confidence
+intervals reuse the same contribution matrices during setup-specific data
+creation, and one parallel cluster and one in-memory copy of each estimator
+dataset are reused across all requested setups.
+
+The meta-estimate workflow similarly reuses its all-data PET and random-effects
+screening fits for the corresponding reported estimates. Its parallel loop is
+dynamically scheduled so that workers finishing small meta-analyses can start
+new ones without waiting for the slowest member of a fixed batch.
+
+To check the optimized counterfactual functions against a direct-loop reference
+implementation, run:
+
+```sh
+Rscript tests/test_counterfactual_optimization.R
+```
 
 Leave at least one core free for the operating system and other applications.
 
