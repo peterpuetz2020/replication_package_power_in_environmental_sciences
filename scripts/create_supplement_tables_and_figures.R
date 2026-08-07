@@ -259,10 +259,14 @@ write_supplement_figure_2 <- function(meta_average_multiplier,
                                       setup_label, estimator, ...) {
   power_data <- load_power_data(estimator, setup_label, meta_average_multiplier)
   plot_data <- power_data %>%
+    ## Meta-analyses without any finite power estimates produce NaN summaries.
+    ## Exclude them before aggregation rather than letting each output device's
+    ## stat_bin() remove the same non-finite histogram row with a warning.
+    filter(is.finite(power)) %>%
     group_by(cID) %>%
     summarise(
-      median = median(power, na.rm = TRUE),
-      sape = sum(power >= 0.8, na.rm = TRUE) / sum(!is.na(power)),
+      median = median(power),
+      sape = mean(power >= 0.8),
       .groups = "drop"
     ) %>%
     mutate(
