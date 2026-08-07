@@ -89,4 +89,28 @@ components <- counterfactual_components(dat, grid, heterogeneity_multiplier)
 stopifnot(isTRUE(all.equal(
   cf(dat, grid, components = components), expected_point, tolerance = 1e-14
 )))
+
+dat_with_missing_estimate <- dat
+dat_with_missing_estimate[[1]]$GE[1] <- NA_real_
+filtered_dat <- lapply(
+  dat_with_missing_estimate,
+  filter_counterfactual_data,
+  heterogeneity_multiplier = heterogeneity_multiplier,
+  context = "test"
+)
+stopifnot(nrow(filtered_dat[[1]]) == nrow(dat[[1]]) - 1L)
+stopifnot(all(vapply(
+  filtered_dat,
+  function(meta_data) all(counterfactual_valid_rows(
+    meta_data, heterogeneity_multiplier
+  )),
+  logical(1)
+)))
+stopifnot(all(is.finite(cf(filtered_dat, grid, heterogeneity_multiplier))))
+
+invalid_error <- try(
+  cf(dat_with_missing_estimate, grid, heterogeneity_multiplier),
+  silent = TRUE
+)
+stopifnot(inherits(invalid_error, "try-error"))
 cat("Counterfactual optimization equivalence checks passed.\n")

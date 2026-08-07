@@ -3,7 +3,33 @@
 ## functions.R
 ## ------------
 
-counterfactual_cache_version <- 2L
+counterfactual_cache_version <- 3L
+
+counterfactual_valid_rows <- function(dat, heterogeneity_multiplier = 0.25) {
+  variance <- if (heterogeneity_multiplier == 0) {
+    dat$vi
+  } else {
+    dat$vi + heterogeneity_multiplier * dat$tau2
+  }
+  is.finite(dat$GE) & is.finite(dat$yi) & is.finite(dat$vi) &
+    dat$vi > 0 & is.finite(variance) & variance > 0
+}
+
+filter_counterfactual_data <- function(dat, heterogeneity_multiplier = 0.25,
+                                       context = "counterfactual analysis") {
+  valid <- counterfactual_valid_rows(dat, heterogeneity_multiplier)
+  if (any(!valid)) {
+    message(
+      "Excluding ", sum(!valid), " of ", length(valid),
+      " effects with non-finite counterfactual parameters from ", context, "."
+    )
+  }
+  filtered <- dat[valid, , drop = FALSE]
+  if (nrow(filtered) == 0L) {
+    stop("No effects with finite counterfactual parameters remain for ", context, ".")
+  }
+  filtered
+}
 
 counterfactual_cache_key <- function(dat, z.grid, heterogeneity_multiplier,
                                      ci = FALSE, cluster = NULL, iters = NULL) {
@@ -47,6 +73,12 @@ counterfactual_components <- function(dat, z.grid,
   }
 
   contribution <- lapply(dat, function(meta_data) {
+    if (!all(counterfactual_valid_rows(meta_data, heterogeneity_multiplier))) {
+      stop(
+        "Counterfactual data contain non-finite parameters. ",
+        "Call filter_counterfactual_data() before splitting the data."
+      )
+    }
     mean_z <- meta_data$GE / sqrt(meta_data$vi)
     sd_z <- sqrt(
       meta_data$vi + heterogeneity_multiplier * meta_data$tau2

@@ -123,7 +123,12 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
   variant_suffix <- if (outlier_variant == "all_data") "_all_data" else ""
   result_suffix <- paste(setup_label, estimator, outlier_variant, sep = "_")
   estimator_power <- add_power_variables(estimator_raw, meta_average_multiplier)
-  counterfactual_data <- estimator_raw %>% mutate(GE = meta_average_multiplier * GE)
+  counterfactual_data <- estimator_raw %>%
+    mutate(GE = meta_average_multiplier * GE) %>%
+    filter_counterfactual_data(
+      heterogeneity_multiplier,
+      context = paste(setup_label, estimator, outlier_variant)
+    )
   myDat_counterfactual <- split_meta_analyses(counterfactual_data)
   component_cache <- new.env(parent = emptyenv())
   get_components <- function(grid_name, grid) {
@@ -180,7 +185,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
     ), progress_bar, progress_offset + 1)
     save_counterfactual(z_plot_ci_path, function() cf.ci.cluster(
       myDat_counterfactual, grids$z_grid_plot, n_iterations,
-      unique(estimator_raw$cID), heterogeneity_multiplier,
+      unique(counterfactual_data$cID), heterogeneity_multiplier,
       components = get_components("z", grids$z_grid_plot)
     ), progress_bar, progress_offset + 2, n_iterations)
   } else {
@@ -193,7 +198,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
   ), progress_bar, progress_offset + 3)
   save_counterfactual(p_tab_ci_path, function() cf.ci.cluster(
     myDat_counterfactual, grids$p_grid_tab, n_iterations,
-    unique(estimator_raw$cID), heterogeneity_multiplier,
+    unique(counterfactual_data$cID), heterogeneity_multiplier,
     components = get_components("p", grids$p_grid_tab)
   ), progress_bar, progress_offset + 4, n_iterations)
 }
