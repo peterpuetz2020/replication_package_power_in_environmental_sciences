@@ -14,6 +14,7 @@ library(gridExtra)
 library(ggeasy)
 library(scales)
 library(here)
+library(officer)
 
 source(here("scripts", "analysis_setup.R"))
 
@@ -291,8 +292,10 @@ ensure_output_dirs()
 ## -------------------------------
 ## Table 1
 ## -------------------------------
-write_table_1 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, estimator, ...) {
-pps_rstandard <- load_power_data(estimator, setup_label, meta_average_multiplier)
+write_table_1 <- function() {
+  pps_rstandard <- load_power_data(
+    "multilevel_random", "meta_0p5_heterogeneity_0", 0.5
+  )
 myDat <- split_meta_analyses(pps_rstandard, add_sape = TRUE)
 mss <- vapply(myDat, function(x) length(x$sei), numeric(1))
 
@@ -304,24 +307,69 @@ idx <- tibble(
   prere = vapply(myDat, function(x) x$prere[1], character(1))
 )
 
-fill_desc <- function(i) c(length(i), sum(mss[i]), round(mean(mss[i])), round(median(mss[i])), min(mss[i]), round(quantile(mss[i], 0.25)), round(median(mss[i])), round(quantile(mss[i], 0.75)), max(mss[i]))
-d.tab <- rbind(
-  fill_desc(seq_along(myDat)),
-  fill_desc(idx$i[idx$sdesn %in% c("observational", "mixed")]),
-  fill_desc(idx$i[idx$sdesn == "experimental"]),
-  fill_desc(idx$i[idx$sape > 0]),
-  fill_desc(idx$i[idx$sape == 0]),
-  fill_desc(idx$i[idx$guide == "yes"]),
-  fill_desc(idx$i[idx$guide == "no"]),
-  fill_desc(idx$i[idx$prere == "yes"]),
-  fill_desc(idx$i[idx$prere == "no"])
+fill_desc <- function(i) c(
+  length(i), sum(mss[i]), round(mean(mss[i])), min(mss[i]),
+  round(quantile(mss[i], 0.25)), round(median(mss[i])),
+  round(quantile(mss[i], 0.75)), max(mss[i])
 )
-rownames(d.tab) <- c("All meta-analyses", "Observational", "Experimental", "SAPE > 0", "SAPE = 0", "Yes", "No", "Yes", "No")
-colnames(d.tab) <- c("M", "N", "Mean", "Median", "Min", "Q25", "Q50", "Q75", "Max")
-write.csv(d.tab, here("results", "main", paste0("Table_1_", setup_label, "_", estimator, ".csv")))
+
+table_rows <- list(
+  c("All meta-analyses", fill_desc(seq_along(myDat))),
+  c("Research design", rep("", 8)),
+  c("  Observational", fill_desc(idx$i[idx$sdesn %in% c("observational", "mixed")])),
+  c("  Experimental", fill_desc(idx$i[idx$sdesn == "experimental"])),
+  c("Statistical power", rep("", 8)),
+  c("  SAPE > 0", fill_desc(idx$i[idx$sape > 0])),
+  c("  SAPE = 0", fill_desc(idx$i[idx$sape == 0])),
+  c("Followed guidelines", rep("", 8)),
+  c("  Yes", fill_desc(idx$i[idx$guide == "yes"])),
+  c("  No", fill_desc(idx$i[idx$guide == "no"])),
+  c("Protocol registered", rep("", 8)),
+  c("  Yes", fill_desc(idx$i[idx$prere == "yes"])),
+  c("  No", fill_desc(idx$i[idx$prere == "no"]))
+)
+table_data <- as.data.frame(do.call(rbind, table_rows), stringsAsFactors = FALSE)
+names(table_data) <- c("Group", "Meta-analyses", "Primary estimates",
+                       "Mean", "Min", "Q25", "Q50", "Q75", "Max")
+table_data[-1] <- lapply(table_data[-1], function(x) suppressWarnings(as.numeric(x)))
+section_rows <- c(2, 5, 8, 11)
+
+workbook <- createWorkbook()
+addWorksheet(workbook, "Table 1", gridLines = FALSE)
+writeData(workbook, "Table 1", "No. of", startCol = 2, startRow = 1)
+writeData(workbook, "Table 1", "No. of", startCol = 3, startRow = 1)
+writeData(workbook, "Table 1", "Primary estimates per meta-analysis", startCol = 4, startRow = 1)
+writeData(workbook, "Table 1", names(table_data)[1:3], startRow = 2, colNames = FALSE)
+writeData(workbook, "Table 1", names(table_data)[4:9], startCol = 4, startRow = 2, colNames = FALSE)
+writeData(workbook, "Table 1", table_data, startRow = 3, colNames = FALSE)
+mergeCells(workbook, "Table 1", cols = 4:9, rows = 1)
+header_style <- createStyle(fontSize = 11, textDecoration = "bold", halign = "center",
+                            valign = "center", border = "bottom", borderStyle = "medium")
+section_style <- createStyle(textDecoration = "bold", fgFill = "#EAF0F6",
+                             border = "bottom", borderColour = "#B7C3D0")
+body_style <- createStyle(fontSize = 10, valign = "center")
+addStyle(workbook, "Table 1", header_style, rows = 1:2, cols = 1:9, gridExpand = TRUE)
+addStyle(workbook, "Table 1", body_style, rows = 3:(nrow(table_data) + 2), cols = 1:9, gridExpand = TRUE)
+addStyle(workbook, "Table 1", section_style, rows = section_rows + 2, cols = 1:9, gridExpand = TRUE)
+setColWidths(workbook, "Table 1", cols = 1, widths = 25)
+setColWidths(workbook, "Table 1", cols = 2:3, widths = 17)
+setColWidths(workbook, "Table 1", cols = 4:9, widths = 10)
+freezePane(workbook, "Table 1", firstActiveRow = 3)
+saveWorkbook(workbook, here("results", "main", "Table_1.xlsx"), overwrite = TRUE)
+
+docx_table <- table_data
+docx_table[section_rows, -1] <- ""
+document <- officer::read_docx()
+document <- officer::body_add_par(document, "Table 1. Characteristics of the meta-analyses",
+                                  style = "heading 1")
+## Do not request a template-specific Word style here. Minimal or customized
+## reference documents do not necessarily define the built-in "Table Grid"
+## style, and officer rejects a style that is absent from the document.
+document <- officer::body_add_table(document, docx_table, style = NULL)
+print(document, target = here("results", "main", "Table_1.docx"))
 }
 
-tidyr::crossing(heterogeneity_independent_setups, estimator = meta_analysis_estimators) %>% pwalk(write_table_1)
+write_table_1()
 
 ## -------------------------------
 ## Figure 1
