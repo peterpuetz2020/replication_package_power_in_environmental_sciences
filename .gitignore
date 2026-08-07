@@ -3,4 +3,8 @@
 .RData
 .Ruserdata
 data/derived_data/
+
+# Manuscript figures are reproducible build artifacts. Keep generated PDFs
+# locally, but do not commit or move them through Git.
+results/**/*.pdf
 Archiv/

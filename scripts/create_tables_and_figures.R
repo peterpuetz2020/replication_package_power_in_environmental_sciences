@@ -47,6 +47,7 @@ ensure_output_dirs <- function() {
   invisible(lapply(
     list(
       here("results", "main"),
+      here("results", "supplement"),
       here("results", "intermediate_results", "pet_peese_rstandard"),
       here("results", "intermediate_results", "multilevel_random"),
       here("data", "derived_data"),
@@ -520,7 +521,11 @@ all_combination_results <- map2_dfr(
     ) %>% dplyr::select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1", "outlier_variant1")))
   }
 )
-write.csv(all_combination_results, here("results", "main", "ESR_results_all_combinations.csv"), row.names = FALSE)
+write.csv(
+  all_combination_results,
+  here("results", "supplement", "Figure_S3_numbers.csv"),
+  row.names = FALSE
+)
 
 table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
@@ -534,12 +539,21 @@ table_2_columns <- map2(
       confidence_interval == "0", estimate, paste(estimate, confidence_interval)
     ))
 )
-table_2 <- reduce(table_2_columns, full_join, by = "measure")
-write.csv(
-  table_2,
-  here("results", "main", "Table_2_multilevel_random_meta_0p5_outliers_removed.csv"),
-  row.names = FALSE
+table_2 <- reduce(table_2_columns, full_join, by = "measure") %>%
+  filter(!measure %in% c("ESR_{0.1}^{all}", "ESR_{0.1}^{sig}"))
+names(table_2) <- c(
+  "p-value interval",
+  "(1)\nHalf the meta-average\nDifference [95% CI]",
+  "(2)\nHalf the meta-average and 25% genuine heterogeneity\nDifference [95% CI]",
+  "(3)\nHalf the meta-average and 50% genuine heterogeneity\nDifference [95% CI]",
+  "(4)\nHalf the meta-average and 75% genuine heterogeneity\nDifference [95% CI]"
 )
+table_2_document <- officer::read_docx()
+table_2_document <- officer::body_add_table(
+  table_2_document, table_2, style = NULL, header = TRUE,
+  alignment = c("left", rep("center", 4)), align_table = "center"
+)
+print(table_2_document, target = here("results", "main", "Table_2.docx"))
 
 esr_plot_data <- all_esr_results %>%
   filter(measure == "ESR_{0.05}^{sig}") %>%
@@ -558,7 +572,7 @@ esr_plot <- ggplot(esr_plot_data, aes(heterogeneity_multiplier, estimate, color 
   labs(x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig), color = "Estimator") +
   theme_bw()
 save_plot(
-  here("results", "main", "Figure_ESR_0p05_sign_all_combinations"),
+  here("results", "supplement", "Figure_S3_excess_p"),
   width = 10, height = 4.5, draw = function() print(esr_plot)
 )
 
@@ -573,12 +587,21 @@ med_med_subf <- med_med %>% group_by(subfd) %>% summarise(mmedian = round(median
 power.tab3 <- matrix(nrow = 8, ncol = 8)
 power.tab3[1, ] <- c(nrow(med_med), nrow(pps_rstandard), round(summary(med_med$median), 2)[3], round(summary(pps_rstandard$power), 2)[3], round(summary(pps_rstandard$power), 2)[4], round(summary(pps_rstandard$power), 2)[2], round(summary(pps_rstandard$power), 2)[5], 0.18)
 for (i in seq_len(nrow(subf_desc))) power.tab3[i + 1, ] <- c(subf_desc$M[i], subf_desc$N[i], med_med_subf$mmedian[i], subf_desc$median[i], subf_desc$mean[i], subf_desc$Q25[i], subf_desc$Q75[i], subf_desc$sape[i])
-colnames(power.tab3) <- c("M", "N", "mmedian", "median", "mean", "Q25", "Q75", "SAPE")
+colnames(power.tab3) <- c("No. of meta-\nanalyses", "No. of primary\nestimates", "Median of\nmedians", "Median", "Mean", "Q25", "Q75", "SAPE")
 rownames(power.tab3) <- c("All meta-analyses", "Ecology", "Environmental Chemistry", "Environmental Engineering", "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law", "Nature and Landscape Conservation", "Water Science and Technology")
-write.csv(power.tab3, here("results", "main", paste0("Table_3_", setup_label, "_", estimator, ".csv")))
+power_table <- as.data.frame(power.tab3) %>% rownames_to_column("Subfield")
+document <- officer::read_docx()
+document <- officer::body_add_table(
+  document, power_table, style = NULL, header = TRUE,
+  alignment = c("left", rep("center", 8)), align_table = "center"
+)
+print(document, target = here("results", "main", "Table_3.docx"))
 }
 
-tidyr::crossing(heterogeneity_independent_setups, estimator = meta_analysis_estimators) %>% pwalk(write_table_3)
+analysis_setups %>%
+  filter(setup_label == "meta_0p5_heterogeneity_0") %>%
+  mutate(estimator = "multilevel_random") %>%
+  pwalk(write_table_3)
 
 ## -------------------------------
 ## Figure 2
@@ -586,7 +609,7 @@ tidyr::crossing(heterogeneity_independent_setups, estimator = meta_analysis_esti
 write_figure_2 <- function(meta_average_multiplier, heterogeneity_multiplier, setup_label, estimator, ...) {
 pps_rstandard <- load_power_data(estimator, setup_label, meta_average_multiplier)
 pps_rstandard_median <- pps_rstandard %>% group_by(cID) %>% summarise(metaID = metaID[1], median = median(power, na.rm = TRUE), sape = sum(power >= 0.8, na.rm = TRUE) / sum(!is.na(power)), nips = length(unique(sID)), esty = unique(etype), guid = unique(guide), prer = unique(prere), subf = unique(subfd), sdes = unique(sdesn), .groups = "drop") %>% mutate(yn80 = ifelse(median >= 0.8, "yes", "no"), median100 = round(100 * median, 2), sape100 = round(100 * sape, 2))
-write.xlsx(pps_rstandard_median, here("results", "main", paste0("Figure_2_data_", setup_label, "_", estimator, ".xlsx")), overwrite = TRUE)
+write.xlsx(pps_rstandard_median, here("data", "derived_data", paste0("Figure_2_data_", setup_label, "_", estimator, ".xlsx")), overwrite = TRUE)
 med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
 sape <- pps_rstandard_median %>% ggplot(aes(x = sape100)) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1, fill = "skyblue2") + xlab("Share of adequately powered primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(b)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
 figure_2 <- arrangeGrob(med_pwr, sape, ncol = 2)
