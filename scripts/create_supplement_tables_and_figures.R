@@ -116,13 +116,14 @@ cf_ci_with_progress <- function(dat, grid, cluster, heterogeneity_multiplier, la
 
 get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL,
                                heterogeneity_multiplier) {
-  if (file.exists(path)) {
-    cached_result <- readRDS(path)
-    if (!ci || (is.list(cached_result) && length(cached_result) > 0 &&
-                isTRUE(nrow(cached_result[[1]]) == n_iterations))) {
-      message("Using cached counterfactual: ", basename(path))
-      return(cached_result)
-    }
+  cache_key <- counterfactual_cache_key(
+    dat, grid, heterogeneity_multiplier, ci, cluster,
+    if (ci) n_iterations else NULL
+  )
+  cached_result <- read_counterfactual_cache(path, cache_key)
+  if (!is.null(cached_result)) {
+    message("Using cached counterfactual: ", basename(path))
+    return(cached_result)
   }
 
   cl <- makeCluster(n_cores)
@@ -138,7 +139,7 @@ get_counterfactual <- function(path, dat, grid, ci = FALSE, cluster = NULL,
     message("Computing counterfactual: ", basename(path))
     cf(dat = dat, z.grid = grid, heterogeneity_multiplier = heterogeneity_multiplier)
   }
-  saveRDS(result, path)
+  write_counterfactual_cache(result, path, cache_key)
   result
 }
 
@@ -253,6 +254,20 @@ if (nrow(incomplete_esr_rows) > 0) {
     " incomplete ESR_{0.05}^{sig} row(s) from Figure S3. ",
     "Regenerate ESR_results_all_combinations.csv with create_tables_and_figures.R ",
     "to restore missing point estimates."
+  )
+}
+
+inconsistent_esr_rows <- esr_plot_data_raw %>%
+  filter(
+    if_all(c(estimate, ci_lower, ci_upper), ~ !is.na(.x)),
+    estimate < ci_lower | estimate > ci_upper
+  )
+if (nrow(inconsistent_esr_rows) > 0) {
+  stop(
+    "ESR_results_all_combinations.csv contains ", nrow(inconsistent_esr_rows),
+    " point estimate(s) outside their confidence intervals. The counterfactual ",
+    "cache that produced this file is stale; rerun create_tables_and_figures.R ",
+    "to rebuild the cache and ESR results before creating supplement figures."
   )
 }
 
