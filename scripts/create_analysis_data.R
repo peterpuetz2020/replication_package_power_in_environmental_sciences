@@ -18,8 +18,16 @@ source(here("scripts", "analysis_setup.R"))
 ## n_iterations <- 1000.
 recreate_counterfactuals <- if (exists("recreate_counterfactuals")) recreate_counterfactuals else FALSE
 
-save_counterfactual <- function(path, calculate, progress_bar = NULL, progress_value = NULL) {
-  if (recreate_counterfactuals || !file.exists(path)) {
+save_counterfactual <- function(path, calculate, progress_bar = NULL,
+                                progress_value = NULL, expected_iterations = NULL) {
+  cached_result_is_stale <- FALSE
+  if (file.exists(path) && !is.null(expected_iterations)) {
+    cached_result <- readRDS(path)
+    cached_result_is_stale <- !is.list(cached_result) ||
+      length(cached_result) == 0 ||
+      !isTRUE(nrow(cached_result[[1]]) == expected_iterations)
+  }
+  if (recreate_counterfactuals || !file.exists(path) || cached_result_is_stale) {
     saveRDS(calculate(), path)
   }
   if (!is.null(progress_value)) update_progress_bar(progress_bar, progress_value)
@@ -174,13 +182,13 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
 
   if (outlier_variant == "outliers_removed") {
     save_counterfactual(z_plot_path, function() run_parallel_cf(myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier), progress_bar, progress_offset + 1)
-    save_counterfactual(z_plot_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$z_grid_plot, unique(estimator_raw$cID), heterogeneity_multiplier), progress_bar, progress_offset + 2)
+    save_counterfactual(z_plot_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$z_grid_plot, unique(estimator_raw$cID), heterogeneity_multiplier), progress_bar, progress_offset + 2, n_iterations)
   } else {
     update_progress_bar(progress_bar, progress_offset + 1)
     update_progress_bar(progress_bar, progress_offset + 2)
   }
   save_counterfactual(p_tab_path, function() run_parallel_cf(myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier), progress_bar, progress_offset + 3)
-  save_counterfactual(p_tab_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$p_grid_tab, unique(estimator_raw$cID), heterogeneity_multiplier), progress_bar, progress_offset + 4)
+  save_counterfactual(p_tab_ci_path, function() run_parallel_cf_ci(myDat_counterfactual, grids$p_grid_tab, unique(estimator_raw$cID), heterogeneity_multiplier), progress_bar, progress_offset + 4, n_iterations)
 }
 
 ensure_output_dirs()
