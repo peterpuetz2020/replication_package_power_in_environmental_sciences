@@ -11,12 +11,9 @@ library(orchaRd)
 library(scales); library(here)
 
 ## Console progress bars use base R so they also work in a restored renv and in
-## non-interactive batch jobs. Callers can set show_progress <- FALSE before
-## sourcing a script when its output is being redirected to a log.
-if (!exists("show_progress")) show_progress <- TRUE
+## non-interactive batch jobs.
 
 new_progress_bar <- function(total, label) {
-  if (!isTRUE(show_progress)) return(NULL)
   message(label)
   progress_bar <- utils::txtProgressBar(
     min = 0, max = max(1, total), initial = 0, style = 3,
