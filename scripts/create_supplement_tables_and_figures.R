@@ -319,44 +319,226 @@ tidyr::crossing(
 ## Figure S3 and its underlying numbers are created by
 ## create_tables_and_figures.R alongside the other main-analysis outputs.
 
-## Figure S4: negative-binomial model diagnostics.
-required_nb_diagnostic_objects <- c("final_nb", "nbMod1", "nbMod2")
-if (!all(vapply(required_nb_diagnostic_objects, exists, logical(1), inherits = TRUE))) {
-  stop(
-    "Run scripts/run_exploratory_regressions.R before creating ",
-    "negative-binomial diagnostics."
-  )
+## Tables S1-S10 and Figures S4-S9 follow the order of the supplementary
+## material. Tables are deliberately emitted as editable Word documents and do
+## not contain captions or notes; captions belong in the manuscript.
+library(officer)
+
+write_word_table <- function(x, number, alignment = NULL) {
+  if (is.null(alignment)) alignment <- c("left", rep("center", ncol(x) - 1))
+  doc <- officer::read_docx()
+  doc <- officer::body_add_table(doc, x, style = NULL, header = TRUE,
+    alignment = alignment, align_table = "center")
+  print(doc, target = file.path(supplement_dir, paste0("Table_S", number, ".docx")))
 }
 
-save_nb_diagnostics <- function(model, model_number) {
-  diagnostic_data <- final_nb %>%
-    dplyr::mutate(residual = stats::residuals(model), fitted = stats::fitted(model))
-  stem <- file.path(
-    supplement_dir,
-    paste0("Figure_S4_NB_Model_", model_number, "_diagnostics")
+subfield_levels <- c(
+  "Ecology", "Environmental Chemistry", "Environmental Engineering",
+  "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law",
+  "Nature and Landscape Conservation", "Water Science and Technology"
+)
+
+make_power_table <- function(dat) {
+  dat <- dat %>% mutate(
+    sei = sqrt(vi), GE = 0.5 * GE,
+    power = 1 - pnorm(qnorm(.975) - abs(GE) / sei) +
+      pnorm(qnorm(.025) - abs(GE) / sei)
   )
-  grDevices::pdf(paste0(stem, ".pdf"), width = 12, height = 12)
-  old_par <- graphics::par(mfrow = c(3, 3))
-  on.exit({
-    graphics::par(old_par)
-    grDevices::dev.off()
-  }, add = TRUE)
-  graphics::plot(diagnostic_data$fitted, diagnostic_data$residual,
-    xlab = "Fitted values", ylab = "Residuals", main = "Residuals vs. fitted")
-  graphics::abline(h = 0, col = "red", lty = 2)
-  stats::qqnorm(diagnostic_data$residual, main = "Normal Q-Q plot")
-  stats::qqline(diagnostic_data$residual, col = "red")
-  for (variable in c("median", "lognps", "logtotall", "logjif", "pyear")) {
-    graphics::plot(diagnostic_data[[variable]], diagnostic_data$residual,
-      xlab = variable, ylab = "Residuals", main = paste("Residuals vs.", variable))
-    graphics::abline(h = 0, col = "red", lty = 2)
-  }
-  for (variable in c("design_merged", "guid")) {
-    graphics::boxplot(diagnostic_data$residual ~ diagnostic_data[[variable]],
-      xlab = variable, ylab = "Residuals", main = paste("Residuals vs.", variable))
-    graphics::abline(h = 0, col = "red", lty = 2)
-  }
+  by_meta <- dat %>% group_by(cID) %>% summarise(
+    Subfield = first(subfd), meta_median = median(power, na.rm = TRUE),
+    .groups = "drop")
+  detail <- dat %>% group_by(subfd) %>% summarise(
+    `No. of meta-analyses` = n_distinct(cID),
+    `No. of primary estimates` = n(), Median = median(power, na.rm = TRUE),
+    Mean = mean(power, na.rm = TRUE), Q25 = quantile(power, .25, na.rm = TRUE),
+    Q75 = quantile(power, .75, na.rm = TRUE), SAPE = mean(power >= .8, na.rm = TRUE),
+    .groups = "drop") %>% rename(Subfield = subfd)
+  bind_rows(
+    tibble(Subfield = "All meta-analyses",
+      `No. of meta-analyses` = n_distinct(dat$cID),
+      `No. of primary estimates` = nrow(dat), Median = median(dat$power, na.rm = TRUE),
+      Mean = mean(dat$power, na.rm = TRUE), Q25 = quantile(dat$power, .25, na.rm = TRUE),
+      Q75 = quantile(dat$power, .75, na.rm = TRUE), SAPE = mean(dat$power >= .8, na.rm = TRUE)),
+    detail %>% mutate(Subfield = factor(Subfield, subfield_levels)) %>% arrange(Subfield) %>%
+      mutate(Subfield = as.character(Subfield))
+  ) %>% left_join(
+    bind_rows(
+      tibble(Subfield = "All meta-analyses", `Median of medians` = median(by_meta$meta_median, na.rm = TRUE)),
+      by_meta %>% group_by(Subfield) %>% summarise(`Median of medians` = median(meta_median, na.rm = TRUE), .groups = "drop")
+    ), by = "Subfield"
+  ) %>% select(Subfield, `No. of meta-analyses`, `No. of primary estimates`,
+    `Median of medians`, Median, Mean, Q25, Q75, SAPE) %>%
+    mutate(across(`Median of medians`:SAPE, ~ sprintf("%.2f", .x)))
 }
 
-save_nb_diagnostics(nbMod1, 1)
-save_nb_diagnostics(nbMod2, 2)
+base_half <- load_multilevel_data("meta_0p5_heterogeneity_0")
+## Table S1: remove primary estimates that are not significant at five percent.
+write_word_table(make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96)), 1)
+## Table S2: remove complete meta-analyses whose pooled effect is not significant.
+significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
+  filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
+write_word_table(make_power_table(base_half %>% filter(cID %in% significant_meta)), 2)
+
+## Table S3: adequately powered meta-analyses and small-study effects by subfield.
+table_s3_meta <- base_half %>% mutate(
+  power = 1 - pnorm(qnorm(.975) - abs(.5 * GE) / sqrt(vi)) +
+    pnorm(qnorm(.025) - abs(.5 * GE) / sqrt(vi))) %>%
+  group_by(cID) %>% summarise(Subfield = first(subfd),
+    adequately_powered = median(power, na.rm = TRUE) >= .8,
+    small_study_effect = first(sse_yn) == "yes", .groups = "drop")
+table_s3 <- table_s3_meta %>% group_by(Subfield) %>% summarise(
+  `Median power >= 80% (%)` = 100 * mean(adequately_powered),
+  `Small-study effects (%)` = 100 * mean(small_study_effect, na.rm = TRUE),
+  .groups = "drop") %>% bind_rows(tibble(Subfield = "All meta-analyses",
+    `Median power >= 80% (%)` = 100 * mean(table_s3_meta$adequately_powered),
+    `Small-study effects (%)` = 100 * mean(table_s3_meta$small_study_effect, na.rm = TRUE))) %>%
+  mutate(across(where(is.numeric), ~ sprintf("%.1f", .x)))
+write_word_table(table_s3, 3)
+
+## Figure S4: heterogeneity distributions and the corresponding summaries.
+heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
+  mutate(subfd = factor(subfd, subfield_levels))
+heterogeneity_plot <- ggplot(heterogeneity_data, aes(isq, fill = subfd)) +
+  geom_density(alpha = .65, colour = "white", linewidth = .25) +
+  facet_wrap(~ subfd, ncol = 2, scales = "free_y") +
+  scale_x_continuous(limits = c(0, 100), labels = scales::label_percent(scale = 1)) +
+  guides(fill = "none") + theme_bw() +
+  labs(x = expression(I^2), y = "Density")
+save_supplement_plot(file.path(supplement_dir, "Figure_S4_heterogeneity_by_subfield"),
+  10, 8, function() print(heterogeneity_plot))
+
+## Tables S4-S6: selective-reporting estimates already calculated by the legacy
+## bootstrap section. Group them into readable, landscape-friendly Word tables.
+read_esr_table <- function(number, label) {
+  path <- list.files(here("results", "robustness"),
+    pattern = paste0("^Robustness_Table_", number, "_ESR_.*\\.csv$"), full.names = TRUE)
+  if (length(path) != 1) stop("Expected one legacy ESR table for ", label)
+  read.csv(path, check.names = FALSE) %>% rename(`p-value interval` = 1) %>%
+    setNames(c("p-value interval", paste(label, names(.)[-1], sep = "\n")))
+}
+esr_specs <- tribble(
+  ~number, ~legacy, ~label,
+  2, 2, "Ecology", 2, 3, "Environmental Chemistry", 2, 4, "Environmental Engineering",
+  3, 8, "Health, Toxicology and Mutagenesis", 3, 6, "Management, Monitoring, Policy and Law",
+  3, 5, "Nature and Landscape Conservation", 4, 7, "Water Science and Technology"
+)
+for (table_number in 4:6) {
+  spec <- esr_specs %>% filter(number == table_number - 2)
+  pieces <- map2(spec$legacy, spec$label, read_esr_table)
+  combined <- reduce(pieces, full_join, by = "p-value interval")
+  write_word_table(combined, table_number)
+}
+
+## Figure S5: factual and counterfactual |z| distributions by subfield. Reuse the
+## legacy bootstrap objects but redraw them with the current manuscript theme.
+legacy_codes <- c(eco = "Ecology", enc = "Environmental Chemistry",
+  ene = "Environmental Engineering", htm = "Health, Toxicology and Mutagenesis",
+  mpl = "Management, Monitoring, Policy and Law", nlc = "Nature and Landscape Conservation",
+  wst = "Water Science and Technology")
+z_grid <- seq(0, 10.25, .1025)
+subfield_plot_data <- imap_dfr(legacy_codes, function(label, code) {
+  point_env <- new.env(); ci_env <- new.env()
+  load(here("results", "robustness", paste0("pet_peese_rstandard_z_plot.", code, ".rds")), envir = point_env)
+  load(here("results", "robustness", paste0("pet_peese_rstandard_z_plot_ci.", code, ".rds")), envir = ci_env)
+  point <- point_env[[ls(point_env)[1]]]; ci <- ci_env[[ls(ci_env)[1]]]
+  observed <- base_half %>% filter(subfd == label) %>% transmute(z = abs(yi / sqrt(vi))) %>% pull(z)
+  tibble(Subfield = label, z = head(z_grid, -1) + diff(z_grid)[1] / 2,
+    factual = count_intervals(observed, z_grid) / length(observed),
+    counterfactual = as.vector(point) / length(observed),
+    lower = apply(ci[[1]], 2, quantile, .025, na.rm = TRUE),
+    upper = apply(ci[[1]], 2, quantile, .975, na.rm = TRUE))
+})
+figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "orange", alpha = .15) +
+  geom_line(aes(y = counterfactual), colour = "orange") +
+  geom_line(aes(y = factual), colour = "blue", linetype = 2) +
+  geom_vline(xintercept = c(1.64, 1.96, 2.58), colour = c("green3", "red", "magenta"), linetype = 2) +
+  facet_wrap(~ Subfield, ncol = 2, scales = "free_y") + coord_cartesian(xlim = c(0, 8)) +
+  theme_bw() + labs(x = "|z|-value", y = "Frequency")
+save_supplement_plot(file.path(supplement_dir, "Figure_S5_z_distributions_by_subfield"),
+  11, 10, function() print(figure_s5))
+
+## Regression helpers for Tables S7-S9.
+significance_stars <- function(p_value) {
+  ifelse(p_value < .01, "***", ifelse(p_value < .05, "**",
+    ifelse(p_value < .10, "*", "")))
+}
+build_regression_data <- function(meta_multiplier, heterogeneity_multiplier) {
+  raw <- load_multilevel_data(paste0("meta_", gsub("\\.", "p", meta_multiplier),
+    "_heterogeneity_", gsub("\\.", "p", heterogeneity_multiplier)))
+  crit <- qnorm(.975)
+  esr_alt <- raw %>% mutate(mu = meta_multiplier * GE / sqrt(vi),
+    sigma = sqrt(1 + heterogeneity_multiplier * tau2 / vi), z = abs(yi / sqrt(vi)),
+    expected = pnorm(-crit, mu, sigma) + pnorm(crit, mu, sigma, lower.tail = FALSE)) %>%
+    group_by(cID) %>% summarise(tot.all = n(), tot.sig = sum(z >= crit),
+      esr.sig.count = tot.sig - sum(expected), esr.sig = if_else(tot.sig > 0, esr.sig.count / tot.sig, 0),
+      .groups = "drop")
+  power_alt <- raw %>% mutate(power = 1 - pnorm(crit - abs(meta_multiplier * GE) / sqrt(vi)) +
+      pnorm(-crit - abs(meta_multiplier * GE) / sqrt(vi))) %>% group_by(cID) %>%
+    summarise(metaID = first(metaID), median = median(power, na.rm = TRUE), nips = n_distinct(sID),
+      esty = first(etype), guid = first(guide), prer = first(prere), subf = first(subfd),
+      sdes = first(sdesn), .groups = "drop")
+  covariates <- readRDS(here("data", "derived_data", "regression_data", "regression_covariates.rds"))
+  inner_join(esr_alt, power_alt, by = "cID") %>% left_join(covariates, by = "cID") %>%
+    mutate(med_perc = 100 * median, lognps = log(nips), logtotsig = log(tot.sig + .5),
+      logtotall = log(tot.all), logjif = log(jif_5yr_wos),
+      design_merged = factor(if_else(sdes == "experimental", "yes", "no")),
+      metric = factor(esty), subf = relevel(factor(subf), ref = "Ecology")) %>%
+    drop_na(esr.sig.count, med_perc, design_merged, guid, prer, lognps, logjif, pyear, metric, subf)
+}
+fit_nb_pair <- function(dat) {
+  f <- esr.sig.count ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric + offset(logtotsig)
+  models <- list(MASS::glm.nb(f, dat), MASS::glm.nb(update(f, . ~ . + subf), dat))
+  robust <- map(models, ~ lmtest::coeftest(.x, vcov. = sandwich::vcovCL(.x, cluster = dat$metaID)))
+  list(models = models, robust = robust)
+}
+format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
+  labels <- c("Intercept" = "(Intercept)", "Median power" = "med_perc",
+    "Experimental research design? (yes)" = "design_mergedyes", "Followed reporting guidelines? (yes)" = "guidyes",
+    "Protocol registered? (yes)" = "preryes", "Log number of independent studies" = "lognps",
+    "Log journal impact factor" = "logjif", "Publication year" = "pyear",
+    setNames(paste0("subf", subfield_levels[-1]), subfield_levels[-1]))
+  result <- tibble(Variable = names(labels))
+  for (i in 1:2) result[[paste0("Model ", i, " Estimate (SE)")]] <- map_chr(labels, function(term) {
+    x <- fit$robust[[i]]; if (!term %in% rownames(x)) return("")
+    sprintf("%.3f%s (%.3f)", x[term, 1], significance_stars(x[term, 4]), x[term, 2])
+  })
+  statistic <- if (include_adjusted_r2) "Adjusted R-squared" else "AIC"
+  bind_rows(result, tibble(Variable = c("Effect size type", statistic, "No. of meta-analyses"),
+    `Model 1 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[1]])$adj.r.squared else AIC(fit$models[[1]])), nobs(fit$models[[1]])),
+    `Model 2 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[2]])$adj.r.squared else AIC(fit$models[[2]])), nobs(fit$models[[2]]))))
+}
+write_word_table(format_model_table(fit_nb_pair(build_regression_data(1, 0))), 7)
+write_word_table(format_model_table(fit_nb_pair(build_regression_data(.5, .25))), 8)
+
+ols_data <- build_regression_data(.5, 0) %>% mutate(esr_winsor = pmin(pmax(esr.sig, quantile(esr.sig, .05)), quantile(esr.sig, .95)))
+ols_formula <- esr_winsor ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric
+ols_models <- list(lm(ols_formula, ols_data), lm(update(ols_formula, . ~ . + subf), ols_data))
+ols_fit <- list(models = ols_models, robust = map(ols_models,
+  ~ lmtest::coeftest(.x, vcov. = sandwich::vcovCL(.x, cluster = ols_data$metaID))))
+write_word_table(format_model_table(ols_fit, TRUE), 9)
+
+## Figures S6-S9: separate continuous and categorical diagnostics for both main
+## negative-binomial specifications, matching the requested four-figure layout.
+save_diagnostic_group <- function(model, model_number, kind, figure_number) {
+  dat <- final_nb %>% mutate(residual = residuals(model), fitted_value = fitted(model))
+  vars <- if (kind == "continuous") c("fitted_value", "med_perc", "lognps", "logtotall", "logjif", "pyear") else c("design_merged", "guid", "prer", "subf")
+  plots <- map(vars, function(v) {
+    if (is.numeric(dat[[v]])) ggplot(dat, aes(.data[[v]], residual)) + geom_point(colour = "skyblue3", shape = 1) + geom_hline(yintercept = 0, colour = "red") + theme_bw() + labs(x = v)
+    else ggplot(dat, aes(.data[[v]], residual)) + geom_boxplot() + geom_hline(yintercept = 0, colour = "red") + theme_bw() + labs(x = v)
+  })
+  grob <- arrangeGrob(grobs = plots, ncol = 2)
+  save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number,
+    "_NB_Model_", model_number, "_", kind, "_diagnostics")), 11, ifelse(kind == "continuous", 10, 7), function() grid.draw(grob))
+}
+save_diagnostic_group(nbMod1, 1, "continuous", 6)
+save_diagnostic_group(nbMod1, 1, "categorical", 7)
+save_diagnostic_group(nbMod2, 2, "continuous", 8)
+save_diagnostic_group(nbMod2, 2, "categorical", 9)
+
+## Table S10: number of meta-analyses using each effect-size type, by subfield.
+table_s10 <- base_half %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
+  complete(etype, subfd = subfield_levels, fill = list(n = 0)) %>%
+  pivot_wider(names_from = subfd, values_from = n) %>% rename(`Effect size` = etype) %>%
+  arrange(`Effect size`) %>% mutate(No. = row_number(), .before = 1)
+write_word_table(table_s10, 10)
