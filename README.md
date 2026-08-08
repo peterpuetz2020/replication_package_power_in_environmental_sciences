@@ -65,6 +65,12 @@ absolute standardized residual above 3 in one screening round and then performs
 a single final refit. If that final random-effects fit warns that the
 ratio of the largest to smallest sampling variance is extremely large, the
 model-fitting script prints the affected `cID`.
+Outlier removal is used only for tables and figures whose calculations depend
+on an estimated meta-average. Descriptive Table 1 instead uses the all-data
+random-effects sample, so its meta-analysis and primary-estimate counts are not
+changed by either residual screen. When `scripts/compute_meta_estimates.R` is
+sourced, it reports the absolute number and percentage of primary estimates
+removed separately by the random-effects and PET-PEESE screens.
 The supplementary script writes Figure S1 (meta-average multiplier 0.25),
 Figure S2 (meta-average multiplier 1), the across-combination ESR plot in
 the non-main-text Figure 2 power-distribution variants to
