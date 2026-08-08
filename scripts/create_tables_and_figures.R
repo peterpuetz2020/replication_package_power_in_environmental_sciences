@@ -521,12 +521,6 @@ all_combination_results <- map2_dfr(
     ) %>% dplyr::select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1", "outlier_variant1")))
   }
 )
-write.csv(
-  all_combination_results,
-  here("results", "supplement", "Figure_S3_numbers.csv"),
-  row.names = FALSE
-)
-
 table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
   filter(estimator == "multilevel_random", meta_average_multiplier == 0.5) %>%
@@ -554,27 +548,6 @@ table_2_document <- officer::body_add_table(
   alignment = c("left", rep("center", 4)), align_table = "center"
 )
 print(table_2_document, target = here("results", "main", "Table_2.docx"))
-
-esr_plot_data <- all_esr_results %>%
-  filter(measure == "ESR_{0.05}^{sig}") %>%
-  mutate(
-    estimate = as.numeric(estimate),
-    ci_lower = as.numeric(stringr::str_match(confidence_interval, "\\[([^,]+),")[, 2]),
-    ci_upper = as.numeric(stringr::str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
-    estimator = dplyr::recode(estimator, pet_peese = "PET-PEESE", multilevel_random = "Random effects")
-  )
-esr_plot <- ggplot(esr_plot_data, aes(heterogeneity_multiplier, estimate, color = estimator)) +
-  geom_hline(yintercept = 0, color = "grey70") +
-  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.03,
-                position = position_dodge(width = 0.06)) +
-  geom_point(position = position_dodge(width = 0.06)) +
-  facet_grid(. ~ meta_average_multiplier, labeller = label_both) +
-  labs(x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig), color = "Estimator") +
-  theme_bw()
-save_plot(
-  here("results", "supplement", "Figure_S3_excess_p"),
-  width = 10, height = 4.5, draw = function() print(esr_plot)
-)
 
 ## -------------------------------
 ## Table 3
