@@ -256,7 +256,7 @@ tryCatch(
 ## Derive the multilevel random-effects regression inputs consumed by Table 4.
 ## Keep these outputs with the other generated analysis data rather than in the
 ## manuscript-output directories.
-regression_data_dir <- here("data", "derived_data", "regression")
+regression_data_dir <- here("data", "derived_data", "regression_data")
 dir.create(regression_data_dir, recursive = TRUE, showWarnings = FALSE)
 
 regression_setup_label <- "meta_0p5_heterogeneity_0"
@@ -269,7 +269,7 @@ random_effects_path <- here(
   )
 )
 random_effects_data <- readRDS(random_effects_path) %>%
-  mutate(GE = 0.5 * GE, sei = sqrt(vi))
+  add_power_variables(0.5)
 
 critical_value <- qnorm(0.975)
 esr_data <- random_effects_data %>%
@@ -298,26 +298,55 @@ saveRDS(
   file.path(regression_data_dir, "esr05_multilevel_random.rds")
 )
 
-## Publication year and five-year journal impact factor are article-level
-## covariates, not estimator outputs. Extract only those fields from the supplied
-## regression metadata workbook; median power is calculated from the random-
-## effects RDS above and is never taken from this workbook.
-regression_metadata_candidates <- c(
-  here("results", "main", "median_power_pps_rstandard_half meta-average_704.xlsx"),
-  here("data", "median_power_pps_rstandard_half meta-average_704.xlsx")
-)
-regression_metadata_path <- regression_metadata_candidates[
-  file.exists(regression_metadata_candidates)
-][1]
-if (is.na(regression_metadata_path)) {
+## Create the per-meta-analysis power workbook used by the exploratory
+## regressions. Publication year comes from the primary input data; the
+## separately supplied five-year journal impact factors are joined by cID.
+regression_power_data <- random_effects_data %>%
+  group_by(cID) %>%
+  summarise(
+    metaID = first(metaID),
+    median = median(power, na.rm = TRUE),
+    sape = mean(power >= 0.8, na.rm = TRUE),
+    nips = n_distinct(sID),
+    esty = first(etype),
+    guid = first(guide),
+    prer = first(prere),
+    subf = first(subfd),
+    sdes = first(sdesn),
+    .groups = "drop"
+  ) %>%
+  mutate(cID = as.character(cID))
+
+publication_years <- readxl::read_excel(here("data", "MasterData.xlsx")) %>%
+  transmute(cID = as.character(cID), pyear) %>%
+  distinct(cID, .keep_all = TRUE)
+source(here("scripts", "journal_impact_factor.R"))
+journal_impact_factors <- readxl::read_excel(
+  here("data", "journal_impact_factors.xlsx")
+) %>%
+  mutate(cID = as.character(cID))
+
+regression_power_data <- regression_power_data %>%
+  left_join(publication_years, by = "cID") %>%
+  left_join(journal_impact_factors, by = "cID")
+if (anyNA(regression_power_data$pyear) ||
+    anyNA(regression_power_data$jif_5yr_wos)) {
   stop(
-    "The regression metadata workbook is missing. Expected one of: ",
-    paste(regression_metadata_candidates, collapse = ", ")
+    "Publication year or journal impact factor is missing for one or more ",
+    "meta-analyses."
   )
 }
-regression_covariates <- readxl::read_excel(regression_metadata_path) %>%
-  transmute(cID = as.character(cID), pyear, jif_5yr_wos) %>%
-  distinct(cID, .keep_all = TRUE)
+
+power_summary_path <- file.path(
+  regression_data_dir,
+  "power_summary_multilevel_random_half_meta_average.xlsx"
+)
+openxlsx::write.xlsx(
+  regression_power_data, power_summary_path, overwrite = TRUE
+)
+
+regression_covariates <- regression_power_data %>%
+  select(cID, pyear, jif_5yr_wos)
 saveRDS(
   regression_covariates,
   file.path(regression_data_dir, "regression_covariates.rds")
