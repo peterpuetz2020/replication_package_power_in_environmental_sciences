@@ -8,14 +8,14 @@
 source(here::here("scripts", "analysis_setup.R"))
 
 esr_path <- here::here(
-  "data", "derived_data", "regression", "esr05_multilevel_random.rds"
+  "data", "derived_data", "regression_data", "esr05_multilevel_random.rds"
 )
 power_path <- here::here(
   "data", "derived_data",
   "pps_rstandard_power_meta_0p5_heterogeneity_0_multilevel_random.rds"
 )
 covariate_path <- here::here(
-  "data", "derived_data", "regression", "regression_covariates.rds"
+  "data", "derived_data", "regression_data", "regression_covariates.rds"
 )
 if (!file.exists(esr_path) || !file.exists(power_path) || !file.exists(covariate_path)) {
   stop(
