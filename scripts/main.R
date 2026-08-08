@@ -31,7 +31,3 @@ source(here::here("scripts", "create_supplement_tables_and_figures.R"))
 ## Optional: recreate the original counterfactual, subfield, and robustness data
 ## and render the complete legacy collection of tables and figures.
 source(here::here("scripts", "create_full_tables_figures_and_robustness.R"))
-
-## Optional: after running the complete legacy workflow above, recreate the ESR
-## workbook used by the regression analysis.
-# source(here::here("scripts", "create_esr_data.R"))
