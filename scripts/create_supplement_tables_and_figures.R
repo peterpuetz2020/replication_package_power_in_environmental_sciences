@@ -366,7 +366,7 @@ make_power_table <- function(dat) {
       tibble(Subfield = "All meta-analyses", `Median of medians` = median(by_meta$meta_median, na.rm = TRUE)),
       by_meta %>% group_by(Subfield) %>% summarise(`Median of medians` = median(meta_median, na.rm = TRUE), .groups = "drop")
     ), by = "Subfield"
-  ) %>% select(Subfield, `No. of meta-analyses`, `No. of primary estimates`,
+  ) %>% dplyr::select(Subfield, `No. of meta-analyses`, `No. of primary estimates`,
     `Median of medians`, Median, Mean, Q25, Q75, SAPE) %>%
     mutate(across(`Median of medians`:SAPE, ~ sprintf("%.2f", .x)))
 }
