@@ -18,6 +18,10 @@ source(here::here("scripts", "compute_meta_estimates.R"))
 ## rendering. Existing counterfactual files are reused unless explicitly rebuilt.
 source(here::here("scripts", "create_analysis_data.R"))
 
+## Fit the negative-binomial models needed by Table 4 and save their diagnostic
+## plots. The fitted objects are consumed by create_tables_and_figures.R.
+source(here::here("scripts", "run_exploratory_regressions.R"))
+
 ## Recreate the ordered manuscript tables and figures from available data.
 source(here::here("scripts", "create_tables_and_figures.R"))
 
@@ -31,7 +35,3 @@ source(here::here("scripts", "create_full_tables_figures_and_robustness.R"))
 ## Optional: after running the complete legacy workflow above, recreate the ESR
 ## workbook used by the regression analysis.
 # source(here::here("scripts", "create_esr_data.R"))
-
-## Recreate exploratory regression models and diagnostic figures. This script
-## loads the supplied ESR and power workbooks when regenerated copies are absent.
-source(here::here("scripts", "run_exploratory_regressions.R"))
