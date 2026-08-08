@@ -252,3 +252,73 @@ tryCatch(
     close_progress_bar(counterfactual_progress)
   }
 )
+
+## Derive the multilevel random-effects regression inputs consumed by Table 4.
+## Keep these outputs with the other generated analysis data rather than in the
+## manuscript-output directories.
+regression_data_dir <- here("data", "derived_data", "regression")
+dir.create(regression_data_dir, recursive = TRUE, showWarnings = FALSE)
+
+regression_setup_label <- "meta_0p5_heterogeneity_0"
+regression_estimator <- "multilevel_random"
+random_effects_path <- here(
+  "data", "derived_data",
+  paste0(
+    "pps_rstandard_raw_", regression_setup_label, "_",
+    regression_estimator, ".rds"
+  )
+)
+random_effects_data <- readRDS(random_effects_path) %>%
+  mutate(GE = 0.5 * GE, sei = sqrt(vi))
+
+critical_value <- qnorm(0.975)
+esr_data <- random_effects_data %>%
+  mutate(
+    observed_z = abs(yi / sei),
+    expected_significant_probability =
+      pnorm(-critical_value, mean = GE / sei) +
+      pnorm(critical_value, mean = GE / sei, lower.tail = FALSE)
+  ) %>%
+  group_by(cID) %>%
+  summarise(
+    tot.all = n(),
+    tot.sig = sum(observed_z >= critical_value),
+    expected.sig = sum(expected_significant_probability),
+    esr.sig.count = tot.sig - expected.sig,
+    esr.all.count = esr.sig.count,
+    esr.sig = if_else(tot.sig > 0, esr.sig.count / tot.sig, 0),
+    esr.all = esr.all.count / tot.all,
+    dif = esr.sig.count,
+    .groups = "drop"
+  ) %>%
+  select(cID, esr.all, esr.sig, esr.all.count, esr.sig.count,
+    dif, tot.all, tot.sig)
+saveRDS(
+  esr_data,
+  file.path(regression_data_dir, "esr05_multilevel_random.rds")
+)
+
+## Publication year and five-year journal impact factor are article-level
+## covariates, not estimator outputs. Extract only those fields from the supplied
+## regression metadata workbook; median power is calculated from the random-
+## effects RDS above and is never taken from this workbook.
+regression_metadata_candidates <- c(
+  here("results", "main", "median_power_pps_rstandard_half meta-average_704.xlsx"),
+  here("data", "median_power_pps_rstandard_half meta-average_704.xlsx")
+)
+regression_metadata_path <- regression_metadata_candidates[
+  file.exists(regression_metadata_candidates)
+][1]
+if (is.na(regression_metadata_path)) {
+  stop(
+    "The regression metadata workbook is missing. Expected one of: ",
+    paste(regression_metadata_candidates, collapse = ", ")
+  )
+}
+regression_covariates <- readxl::read_excel(regression_metadata_path) %>%
+  transmute(cID = as.character(cID), pyear, jif_5yr_wos) %>%
+  distinct(cID, .keep_all = TRUE)
+saveRDS(
+  regression_covariates,
+  file.path(regression_data_dir, "regression_covariates.rds")
+)
