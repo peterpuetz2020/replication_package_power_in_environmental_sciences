@@ -498,8 +498,7 @@ figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
       threshold_colour = c("green3", "red", "magenta")
     ),
     aes(xintercept = xintercept, colour = threshold_colour),
-    linetype = 2,
-    inherit.aes = FALSE
+    linetype = 2
   ) +
   scale_colour_identity() +
   facet_wrap(~ Subfield, ncol = 2, scales = "free_y") + coord_cartesian(xlim = c(0, 8)) +
@@ -519,15 +518,38 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
     "Protocol registered? (yes)" = "preryes", "Log number of independent studies" = "lognps",
     "Log journal impact factor" = "logjif", "Publication year" = "pyear",
     setNames(paste0("subf", subfield_levels[-1]), subfield_levels[-1]))
+  if (length(fit$models) != 2 || length(fit$robust) != 2) {
+    stop("Expected exactly two fitted models and two robust coefficient tables.")
+  }
+  format_coefficient <- function(coefficient_table, term) {
+    coefficient_table <- as.matrix(coefficient_table)
+    if (is.null(rownames(coefficient_table)) ||
+        !term %in% rownames(coefficient_table)) {
+      return("")
+    }
+    if (ncol(coefficient_table) < 4) {
+      stop("Robust coefficient tables must contain estimate, SE, statistic, and p-value columns.")
+    }
+    estimate <- unname(coefficient_table[term, 1])
+    standard_error <- unname(coefficient_table[term, 2])
+    p_value <- unname(coefficient_table[term, 4])
+    sprintf(
+      "%.3f%s (%.3f)", estimate, significance_stars(p_value), standard_error
+    )
+  }
   result <- tibble(Variable = names(labels))
-  for (i in 1:2) result[[paste0("Model ", i, " Estimate (SE)")]] <- map_chr(labels, function(term) {
-    x <- fit$robust[[i]]; if (!term %in% rownames(x)) return("")
-    sprintf("%.3f%s (%.3f)", x[term, 1], significance_stars(x[term, 4]), x[term, 2])
-  })
+  for (i in seq_len(2)) {
+    result[[paste0("Model ", i, " Estimate (SE)")]] <- vapply(
+      unname(labels),
+      function(term) format_coefficient(fit$robust[[i]], term),
+      character(1),
+      USE.NAMES = FALSE
+    )
+  }
   statistic <- if (include_adjusted_r2) "Adjusted R-squared" else "AIC"
   bind_rows(result, tibble(Variable = c("Effect size type", statistic, "No. of meta-analyses"),
-    `Model 1 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[1]])$adj.r.squared else AIC(fit$models[[1]])), nobs(fit$models[[1]])),
-    `Model 2 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[2]])$adj.r.squared else AIC(fit$models[[2]])), nobs(fit$models[[2]]))))
+                           `Model 1 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[1]])$adj.r.squared else stats::AIC(fit$models[[1]])), stats::nobs(fit$models[[1]])),
+                           `Model 2 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[2]])$adj.r.squared else stats::AIC(fit$models[[2]])), stats::nobs(fit$models[[2]]))))
 }
 write_word_table(format_model_table(nb_sensitivity_full), 7)
 write_word_table(format_model_table(nb_sensitivity_heterogeneity), 8)
