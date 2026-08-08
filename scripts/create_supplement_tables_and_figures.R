@@ -319,7 +319,27 @@ tidyr::crossing(
 ## estimates are calculated with Table 2 in create_tables_and_figures.R, while
 ## all supplementary output is deliberately written here.
 if (!exists("all_combination_results") || !exists("all_esr_results")) {
-  stop("Figure S3 inputs are unavailable. Run create_tables_and_figures.R first.")
+  figure_s3_inputs_path <- here(
+    "data", "derived_data", "Figure_S3_inputs.rds"
+  )
+  if (!file.exists(figure_s3_inputs_path)) {
+    stop(
+      "Figure S3 inputs are unavailable. Run create_tables_and_figures.R first ",
+      "to create ", figure_s3_inputs_path, "."
+    )
+  }
+  figure_s3_inputs <- readRDS(figure_s3_inputs_path)
+  required_figure_s3_inputs <- c(
+    "all_combination_results", "all_esr_results"
+  )
+  if (!all(required_figure_s3_inputs %in% names(figure_s3_inputs))) {
+    stop(
+      "Figure S3 input file is incomplete. Rerun create_tables_and_figures.R ",
+      "to recreate ", figure_s3_inputs_path, "."
+    )
+  }
+  all_combination_results <- figure_s3_inputs$all_combination_results
+  all_esr_results <- figure_s3_inputs$all_esr_results
 }
 write.csv(
   all_combination_results,

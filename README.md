@@ -77,8 +77,11 @@ the non-main-text Figure 2 power-distribution variants to
 `results/supplement/`, in PDF, EPS, SVG, and 300 dpi PNG format. SVG is
 the preferred format for insertion into recent versions of Microsoft Word and
 LibreOffice Writer because it remains sharp when resized; PNG is the compatible
-fallback for applications that do not support SVG. Figure S3 and its source
-numbers are created directly by the main table-and-figure script.
+fallback for applications that do not support SVG. The main table-and-figure
+script saves the intermediate Figure S3 inputs to
+`data/derived_data/Figure_S3_inputs.rds`. The supplementary script loads that
+file automatically, so it can create Figure S3 and its source numbers in a new
+R session.
 Before the first run, create the random-effects estimator datasets:
 
 ```r
