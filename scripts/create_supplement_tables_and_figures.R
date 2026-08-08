@@ -458,39 +458,11 @@ figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
 save_supplement_plot(file.path(supplement_dir, "Figure_S5_z_distributions_by_subfield"),
   11, 10, function() print(figure_s5))
 
-## Regression helpers for Tables S7-S9.
+## Regression table formatting for Tables S7-S9. The negative-binomial fits
+## consumed by Tables S7-S8 are created in run_exploratory_regressions.R.
 significance_stars <- function(p_value) {
   ifelse(p_value < .01, "***", ifelse(p_value < .05, "**",
     ifelse(p_value < .10, "*", "")))
-}
-build_regression_data <- function(meta_multiplier, heterogeneity_multiplier) {
-  raw <- load_multilevel_data(paste0("meta_", gsub("\\.", "p", meta_multiplier),
-    "_heterogeneity_", gsub("\\.", "p", heterogeneity_multiplier)))
-  crit <- qnorm(.975)
-  esr_alt <- raw %>% mutate(mu = meta_multiplier * GE / sqrt(vi),
-    sigma = sqrt(1 + heterogeneity_multiplier * tau2 / vi), z = abs(yi / sqrt(vi)),
-    expected = pnorm(-crit, mu, sigma) + pnorm(crit, mu, sigma, lower.tail = FALSE)) %>%
-    group_by(cID) %>% summarise(tot.all = n(), tot.sig = sum(z >= crit),
-      esr.sig.count = tot.sig - sum(expected), esr.sig = if_else(tot.sig > 0, esr.sig.count / tot.sig, 0),
-      .groups = "drop")
-  power_alt <- raw %>% mutate(power = 1 - pnorm(crit - abs(meta_multiplier * GE) / sqrt(vi)) +
-      pnorm(-crit - abs(meta_multiplier * GE) / sqrt(vi))) %>% group_by(cID) %>%
-    summarise(metaID = first(metaID), median = median(power, na.rm = TRUE), nips = n_distinct(sID),
-      esty = first(etype), guid = first(guide), prer = first(prere), subf = first(subfd),
-      sdes = first(sdesn), .groups = "drop")
-  covariates <- readRDS(here("data", "derived_data", "regression_data", "regression_covariates.rds"))
-  inner_join(esr_alt, power_alt, by = "cID") %>% left_join(covariates, by = "cID") %>%
-    mutate(med_perc = 100 * median, lognps = log(nips), logtotsig = log(tot.sig + .5),
-      logtotall = log(tot.all), logjif = log(jif_5yr_wos),
-      design_merged = factor(if_else(sdes == "experimental", "yes", "no")),
-      metric = factor(esty), subf = relevel(factor(subf), ref = "Ecology")) %>%
-    drop_na(esr.sig.count, med_perc, design_merged, guid, prer, lognps, logjif, pyear, metric, subf)
-}
-fit_nb_pair <- function(dat) {
-  f <- esr.sig.count ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric + offset(logtotsig)
-  models <- list(MASS::glm.nb(f, dat), MASS::glm.nb(update(f, . ~ . + subf), dat))
-  robust <- map(models, ~ lmtest::coeftest(.x, vcov. = sandwich::vcovCL(.x, cluster = dat$metaID)))
-  list(models = models, robust = robust)
 }
 format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   labels <- c("Intercept" = "(Intercept)", "Median power" = "med_perc",
@@ -508,8 +480,8 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
     `Model 1 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[1]])$adj.r.squared else AIC(fit$models[[1]])), nobs(fit$models[[1]])),
     `Model 2 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[2]])$adj.r.squared else AIC(fit$models[[2]])), nobs(fit$models[[2]]))))
 }
-write_word_table(format_model_table(fit_nb_pair(build_regression_data(1, 0))), 7)
-write_word_table(format_model_table(fit_nb_pair(build_regression_data(.5, .25))), 8)
+write_word_table(format_model_table(nb_sensitivity_full), 7)
+write_word_table(format_model_table(nb_sensitivity_heterogeneity), 8)
 
 ols_data <- build_regression_data(.5, 0) %>% mutate(esr_winsor = pmin(pmax(esr.sig, quantile(esr.sig, .05)), quantile(esr.sig, .95)))
 ols_formula <- esr_winsor ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric
