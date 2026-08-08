@@ -624,7 +624,7 @@ save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   })
   grob <- arrangeGrob(grobs = plots, ncol = 2)
   save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number,
-    "_NB_Model_", model_number, "_", kind, "_diagnostics")), 11, ifelse(kind == "continuous", 10, 7), function() grid.draw(grob))
+    "_NB_Model_", model_number, "_", kind, "_diagnostics")), 11, ifelse(kind == "continuous", 10, 7), function() grid::grid.draw(grob))
 }
 save_diagnostic_group(nbMod1, 1, "continuous", 6)
 save_diagnostic_group(nbMod1, 1, "categorical", 7)
