@@ -516,7 +516,6 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   ## Force the fitted-model bundle before doing any validation. In particular,
   ## this makes the function safe to step through with debug()/debugonce()
   ## without repeatedly restarting evaluation of the lazy `fit` promise.
-  force(fit)
   models <- fit[["models"]]
   robust_tables <- fit[["robust"]]
   labels <- c("Intercept" = "(Intercept)", "Median power" = "med_perc",
