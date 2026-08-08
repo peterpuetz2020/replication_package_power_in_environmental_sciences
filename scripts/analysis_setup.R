@@ -66,8 +66,7 @@ source(here("scripts", "functions.R"))
 
 output_dirs <- list(
   here("results", "main"),
-  here("results", "intermediate_results", "pet_peese_rstandard"),
-  here("results", "intermediate_results", "multilevel_random"),
-  here("results", "robustness")
+  here("results", "supplement"),
+  here("data", "derived_data")
 )
 invisible(lapply(output_dirs, dir.create, recursive = TRUE, showWarnings = FALSE))

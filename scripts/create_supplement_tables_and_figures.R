@@ -16,6 +16,8 @@ source(here("scripts", "analysis_setup.R"))
 
 supplement_dir <- here("results", "supplement")
 dir.create(supplement_dir, recursive = TRUE, showWarnings = FALSE)
+derived_data_dir <- here("data", "derived_data")
+dir.create(derived_data_dir, recursive = TRUE, showWarnings = FALSE)
 
 save_supplement_plot <- function(filename_stem, width, height, draw) {
   pdf(paste0(filename_stem, ".pdf"), width = width, height = height)
@@ -61,7 +63,7 @@ load_multilevel_data <- function(setup_label) {
   }
 
   input_files <- list.files(
-    here("results", "main", "multilevel_random"),
+    here("data", "derived_data", "multilevel_random"),
     pattern = "\\.rds$",
     full.names = TRUE
   )
@@ -261,7 +263,7 @@ write_counterfactual_figure <- function(meta_multiplier, figure_number) {
   })
   combined <- arrangeGrob(grobs = panels, ncol = 1)
   save_supplement_plot(
-    file.path(supplement_dir, paste0("Figure_S", figure_number, "_multilevel_random")),
+    file.path(supplement_dir, paste0("Figure_S", figure_number)),
     width = 10, height = 10,
     draw = function() grid::grid.draw(combined)
   )
@@ -329,12 +331,12 @@ write_supplement_figure_2 <- function(meta_average_multiplier,
 
   stem <- paste0("Figure_2_", setup_label, "_", estimator)
   openxlsx::write.xlsx(plot_data, file.path(
-    supplement_dir, paste0("Figure_2_data_", setup_label, "_", estimator, ".xlsx")
+    derived_data_dir, paste0("Figure_2_data_", setup_label, "_", estimator, ".xlsx")
   ),
                        overwrite = TRUE)
   combined <- arrangeGrob(median_plot, sape_plot, ncol = 2)
   save_supplement_plot(
-    file.path(supplement_dir, stem), width = 10, height = 4,
+    file.path(derived_data_dir, stem), width = 10, height = 4,
     draw = function() grid::grid.draw(combined)
   )
 }
@@ -374,7 +376,7 @@ if (!exists("all_combination_results") || !exists("all_esr_results")) {
 }
 write.csv(
   all_combination_results,
-  file.path(supplement_dir, "Figure_S3_numbers.csv"),
+  file.path(derived_data_dir, "Figure_S3_numbers.csv"),
   row.names = FALSE
 )
 esr_plot_data <- all_esr_results %>%
@@ -388,7 +390,8 @@ esr_plot_data <- all_esr_results %>%
       pet_peese = "PET-PEESE",
       multilevel_random = "Random effects"
     )
-  )
+  ) %>%
+  rename(`Meta average multiplier` = meta_average_multiplier)
 esr_plot <- ggplot(
   esr_plot_data,
   aes(heterogeneity_multiplier, estimate, color = estimator)
@@ -399,14 +402,14 @@ esr_plot <- ggplot(
     position = position_dodge(width = 0.06)
   ) +
   geom_point(position = position_dodge(width = 0.06)) +
-  facet_grid(. ~ meta_average_multiplier, labeller = label_both) +
+  facet_grid(. ~ `Meta average multiplier`, labeller = label_both) +
   labs(
     x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig),
     color = "Estimator"
   ) +
   theme_bw()
 save_supplement_plot(
-  file.path(supplement_dir, "Figure_S3_excess_p"),
+  file.path(supplement_dir, "Figure_S3"),
   width = 10, height = 4.5, draw = function() print(esr_plot)
 )
 
@@ -473,7 +476,7 @@ write_word_table(make_power_table(base_half %>% filter(cID %in% significant_meta
 ## Table S3: adequately powered meta-analyses and small-study effects by subfield.
 small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
 table_s3_meta <- base_half %>%
-  select(-any_of(c("small_study_effect_pval", "sse_yn"))) %>%
+  dplyr::select(-any_of(c("small_study_effect_pval", "sse_yn"))) %>%
   left_join(small_study_effects, by = "cID") %>% mutate(
   power = 1 - pnorm(qnorm(.975) - abs(.5 * GE) / sqrt(vi)) +
     pnorm(qnorm(.025) - abs(.5 * GE) / sqrt(vi))) %>%
@@ -503,7 +506,7 @@ heterogeneity_summary <- heterogeneity_data %>%
   arrange(subfd)
 openxlsx::write.xlsx(
   heterogeneity_summary %>% rename(Subfield = subfd),
-  file.path(supplement_dir, "Figure_S4_heterogeneity_by_subfield.xlsx"),
+  file.path(derived_data_dir, "Figure_S4_heterogeneity_by_subfield.xlsx"),
   overwrite = TRUE
 )
 
@@ -523,15 +526,31 @@ summary_grob <- heterogeneity_summary %>%
       colhead = list(fg_params = list(fontface = "plain"))
     )
   )
-heterogeneity_density <- ggplot(heterogeneity_data, aes(isq)) +
-  geom_density(fill = "#66c2df", colour = "#b5b5b5", linewidth = .55,
-               adjust = .8) +
-  facet_grid(subfd ~ ., scales = "free_y", switch = "y") +
-  scale_x_continuous(limits = c(0, 100), expand = expansion(mult = c(0, .02))) +
-  theme_void() +
-  theme(panel.spacing.y = grid::unit(3.5, "mm"), strip.text.y = element_blank())
+
+## Build one density grob per table row and give both columns the table's row
+## heights. A faceted plot lays out panels independently of table rows, which
+## causes the densities and their subfield summaries to drift out of alignment.
+density_grobs <- lapply(subfield_levels, function(subfield) {
+  ggplot(filter(heterogeneity_data, subfd == subfield), aes(isq)) +
+    geom_density(
+      fill = "#66c2df", colour = "#b5b5b5", linewidth = .55, adjust = .8
+    ) +
+    scale_x_continuous(
+      limits = c(0, 100), expand = expansion(mult = c(0, .02))
+    ) +
+    theme_void() +
+    theme(plot.margin = margin(1, 0, 1, 0, unit = "mm"))
+})
+density_column <- gridExtra::arrangeGrob(
+  grobs = c(
+    list(grid::textGrob("Distribution", gp = grid::gpar(fontsize = 10))),
+    density_grobs
+  ),
+  ncol = 1,
+  heights = summary_grob$heights
+)
 heterogeneity_plot <- gridExtra::arrangeGrob(
-  summary_grob, heterogeneity_density, ncol = 2, widths = c(4.7, 1.15),
+  summary_grob, density_column, ncol = 2, widths = c(4.7, 1.15),
   top = grid::textGrob("", gp = grid::gpar(fontsize = 3)),
   bottom = grid::textGrob(
     expression(paste("Distribution of heterogeneity (", I^2,
@@ -539,13 +558,13 @@ heterogeneity_plot <- gridExtra::arrangeGrob(
     gp = grid::gpar(fontsize = 10, fontface = "bold")
   )
 )
-save_supplement_plot(file.path(supplement_dir, "Figure_S4_heterogeneity_by_subfield"),
+save_supplement_plot(file.path(supplement_dir, "Figure_S4"),
   11, 6.2, function() grid::grid.draw(heterogeneity_plot))
 
 ## Tables S4-S6: selective-reporting estimates already calculated by the legacy
 ## bootstrap section. Group them into readable, landscape-friendly Word tables.
 read_esr_table <- function(number, label) {
-  path <- list.files(here("results", "robustness"),
+  path <- list.files(derived_data_dir,
     pattern = paste0("^Robustness_Table_", number, "_ESR_.*\\.csv$"), full.names = TRUE)
   if (length(path) != 1) stop("Expected one legacy ESR table for ", label)
   read.csv(path, check.names = FALSE) %>% rename(`p-value interval` = 1) %>%
@@ -573,8 +592,8 @@ legacy_codes <- c(eco = "Ecology", enc = "Environmental Chemistry",
 z_grid <- seq(0, 10.25, .1025)
 subfield_plot_data <- imap_dfr(legacy_codes, function(label, code) {
   point_env <- new.env(); ci_env <- new.env()
-  load(here("results", "robustness", paste0("pet_peese_rstandard_z_plot.", code, ".rds")), envir = point_env)
-  load(here("results", "robustness", paste0("pet_peese_rstandard_z_plot_ci.", code, ".rds")), envir = ci_env)
+  load(file.path(derived_data_dir, paste0("pet_peese_rstandard_z_plot.", code, ".rds")), envir = point_env)
+  load(file.path(derived_data_dir, paste0("pet_peese_rstandard_z_plot_ci.", code, ".rds")), envir = ci_env)
   point <- point_env[[ls(point_env)[1]]]; ci <- ci_env[[ls(ci_env)[1]]]
   observed <- base_half %>% filter(subfd == label) %>% transmute(z = abs(yi / sqrt(vi))) %>% pull(z)
   tibble(Subfield = label, z = head(z_grid, -1) + diff(z_grid)[1] / 2,
@@ -598,7 +617,7 @@ figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
   scale_colour_identity() +
   facet_wrap(~ Subfield, ncol = 2, scales = "free_y") + coord_cartesian(xlim = c(0, 8)) +
   theme_bw() + labs(x = "|z|-value", y = "Frequency")
-save_supplement_plot(file.path(supplement_dir, "Figure_S5_z_distributions_by_subfield"),
+save_supplement_plot(file.path(supplement_dir, "Figure_S5"),
   11, 10, function() print(figure_s5))
 
 ## Regression table formatting for Tables S7-S9. The negative-binomial fits
@@ -698,8 +717,8 @@ save_diagnostic_group <- function(model, model_number, kind, figure_number) {
     else ggplot(dat, aes(.data[[v]], residual)) + geom_boxplot() + geom_hline(yintercept = 0, colour = "red") + theme_bw() + labs(x = v)
   })
   grob <- arrangeGrob(grobs = plots, ncol = 2)
-  save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number,
-    "_NB_Model_", model_number, "_", kind, "_diagnostics")), 11, ifelse(kind == "continuous", 10, 7), function() grid::grid.draw(grob))
+  save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
+    11, ifelse(kind == "continuous", 10, 7), function() grid::grid.draw(grob))
 }
 save_diagnostic_group(nbMod1, 1, "continuous", 6)
 save_diagnostic_group(nbMod1, 1, "categorical", 7)

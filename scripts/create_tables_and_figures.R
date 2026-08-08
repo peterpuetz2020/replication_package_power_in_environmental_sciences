@@ -48,10 +48,7 @@ ensure_output_dirs <- function() {
     list(
       here("results", "main"),
       here("results", "supplement"),
-      here("results", "intermediate_results", "pet_peese_rstandard"),
-      here("results", "intermediate_results", "multilevel_random"),
-      here("data", "derived_data"),
-      here("results", "robustness")
+      here("data", "derived_data")
     ),
     dir.create,
     recursive = TRUE,
@@ -114,11 +111,11 @@ load_estimator_data <- function(estimator, setup_label_value = setup_label,
   estimator_dir <- switch(
     estimator,
     pet_peese = here(
-      "results", "intermediate_results",
+      "data", "derived_data",
       if (outlier_variant == "all_data") "pet_peese_all_data" else "pet_peese_rstandard"
     ),
     multilevel_random = here(
-      "results", "intermediate_results",
+      "data", "derived_data",
       if (outlier_variant == "all_data") "multilevel_random_all_data" else "multilevel_random"
     ),
     stop("Unknown estimator: ", estimator)
@@ -442,7 +439,7 @@ figure_1_panels <- purrr::pmap(
 )
 figure_1 <- arrangeGrob(grobs = figure_1_panels, ncol = 1)
 save_plot(
-  here("results", "main", "Figure_1_multilevel_random"),
+  here("results", "main", "Figure_1"),
   width = 10,
   height = 10,
   draw = function() grid::grid.draw(figure_1)
@@ -715,7 +712,7 @@ write.xlsx(
     `Figure 2 summary` = figure_2_summary,
     `High-power subfields` = high_power_subfields
   ),
-  here("results", "main", "Figure_2_summary.xlsx"),
+  here("data", "derived_data", "Figure_2_summary.xlsx"),
   overwrite = TRUE
 )
 med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
