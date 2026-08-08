@@ -513,12 +513,18 @@ significance_stars <- function(p_value) {
     ifelse(p_value < .10, "*", "")))
 }
 format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
+  ## Force the fitted-model bundle before doing any validation. In particular,
+  ## this makes the function safe to step through with debug()/debugonce()
+  ## without repeatedly restarting evaluation of the lazy `fit` promise.
+  force(fit)
+  models <- fit[["models"]]
+  robust_tables <- fit[["robust"]]
   labels <- c("Intercept" = "(Intercept)", "Median power" = "med_perc",
     "Experimental research design? (yes)" = "design_mergedyes", "Followed reporting guidelines? (yes)" = "guidyes",
     "Protocol registered? (yes)" = "preryes", "Log number of independent studies" = "lognps",
     "Log journal impact factor" = "logjif", "Publication year" = "pyear",
     setNames(paste0("subf", subfield_levels[-1]), subfield_levels[-1]))
-  if (length(fit$models) != 2 || length(fit$robust) != 2) {
+  if (length(models) != 2 || length(robust_tables) != 2) {
     stop("Expected exactly two fitted models and two robust coefficient tables.")
   }
   format_coefficient <- function(coefficient_table, term) {
@@ -541,15 +547,15 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   for (i in seq_len(2)) {
     result[[paste0("Model ", i, " Estimate (SE)")]] <- vapply(
       unname(labels),
-      function(term) format_coefficient(fit$robust[[i]], term),
+      function(term) format_coefficient(robust_tables[[i]], term),
       character(1),
       USE.NAMES = FALSE
     )
   }
   statistic <- if (include_adjusted_r2) "Adjusted R-squared" else "AIC"
   bind_rows(result, tibble(Variable = c("Effect size type", statistic, "No. of meta-analyses"),
-                           `Model 1 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[1]])$adj.r.squared else stats::AIC(fit$models[[1]])), stats::nobs(fit$models[[1]])),
-                           `Model 2 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(fit$models[[2]])$adj.r.squared else stats::AIC(fit$models[[2]])), stats::nobs(fit$models[[2]]))))
+                           `Model 1 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(models[[1]])$adj.r.squared else stats::AIC(models[[1]])), stats::nobs(models[[1]])),
+                           `Model 2 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(models[[2]])$adj.r.squared else stats::AIC(models[[2]])), stats::nobs(models[[2]]))))
 }
 write_word_table(format_model_table(nb_sensitivity_full), 7)
 write_word_table(format_model_table(nb_sensitivity_heterogeneity), 8)
