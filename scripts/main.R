@@ -18,8 +18,8 @@ source(here::here("scripts", "compute_meta_estimates.R"))
 ## rendering. Existing counterfactual files are reused unless explicitly rebuilt.
 source(here::here("scripts", "create_analysis_data.R"))
 
-## Fit the negative-binomial models needed by Table 4 and save their diagnostic
-## plots. The fitted objects are consumed by create_tables_and_figures.R.
+## Fit the negative-binomial models needed by Table 4. The fitted objects are
+## consumed by the main and supplementary output scripts below.
 source(here::here("scripts", "run_exploratory_regressions.R"))
 
 ## Recreate the ordered manuscript tables and figures from available data.

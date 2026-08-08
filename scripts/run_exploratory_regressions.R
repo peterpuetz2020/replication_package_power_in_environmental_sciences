@@ -1,9 +1,9 @@
 ## ---------------------------------------------------------
 ## run_exploratory_regressions.R
 ## ---------------------------------------------------------
-## Fit the two negative-binomial models reported in Table 4 and save their
-## diagnostics. Table rendering is intentionally kept in
-## create_tables_and_figures.R, alongside the other manuscript tables.
+## Fit the two negative-binomial models reported in Table 4. Table rendering
+## and supplementary diagnostic output are intentionally kept in their
+## respective output scripts.
 
 source(here::here("scripts", "analysis_setup.R"))
 
@@ -87,37 +87,3 @@ nbMod1.robu <- lmtest::coeftest(
 nbMod2.robu <- lmtest::coeftest(
   nbMod2, vcov. = sandwich::vcovCL(nbMod2, cluster = final_nb$metaID)
 )
-
-save_nb_diagnostics <- function(model, model_number) {
-  diagnostic_data <- final_nb %>%
-    dplyr::mutate(residual = stats::residuals(model), fitted = stats::fitted(model))
-  stem <- here::here(
-    "results", "supplement",
-    paste0("Figure_S4_NB_Model_", model_number, "_diagnostics")
-  )
-  grDevices::pdf(paste0(stem, ".pdf"), width = 12, height = 12)
-  old_par <- graphics::par(mfrow = c(3, 3))
-  on.exit({
-    graphics::par(old_par)
-    grDevices::dev.off()
-  }, add = TRUE)
-  graphics::plot(diagnostic_data$fitted, diagnostic_data$residual,
-    xlab = "Fitted values", ylab = "Residuals", main = "Residuals vs. fitted")
-  graphics::abline(h = 0, col = "red", lty = 2)
-  stats::qqnorm(diagnostic_data$residual, main = "Normal Q-Q plot")
-  stats::qqline(diagnostic_data$residual, col = "red")
-  for (variable in c("median", "lognps", "logtotall", "logjif", "pyear")) {
-    graphics::plot(diagnostic_data[[variable]], diagnostic_data$residual,
-      xlab = variable, ylab = "Residuals", main = paste("Residuals vs.", variable))
-    graphics::abline(h = 0, col = "red", lty = 2)
-  }
-  for (variable in c("design_merged", "guid")) {
-    graphics::boxplot(diagnostic_data$residual ~ diagnostic_data[[variable]],
-      xlab = variable, ylab = "Residuals", main = paste("Residuals vs.", variable))
-    graphics::abline(h = 0, col = "red", lty = 2)
-  }
-}
-
-dir.create(here::here("results", "supplement"), recursive = TRUE, showWarnings = FALSE)
-save_nb_diagnostics(nbMod1, 1)
-save_nb_diagnostics(nbMod2, 2)

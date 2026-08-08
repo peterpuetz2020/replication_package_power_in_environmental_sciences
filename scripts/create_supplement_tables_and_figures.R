@@ -2,7 +2,9 @@
 ## create_supplement_tables_and_figures.R
 ## ---------------------------------------------------------
 ## Recreate the supplementary figures from the analysis outputs. Figure S3 and
-## its source data are produced by create_tables_and_figures.R.
+## its source data are produced by create_tables_and_figures.R. The fitted
+## negative-binomial models used for Figure S4 are produced by
+## run_exploratory_regressions.R.
 
 library(tidyverse)
 library(foreach)
@@ -316,3 +318,45 @@ tidyr::crossing(
 
 ## Figure S3 and its underlying numbers are created by
 ## create_tables_and_figures.R alongside the other main-analysis outputs.
+
+## Figure S4: negative-binomial model diagnostics.
+required_nb_diagnostic_objects <- c("final_nb", "nbMod1", "nbMod2")
+if (!all(vapply(required_nb_diagnostic_objects, exists, logical(1), inherits = TRUE))) {
+  stop(
+    "Run scripts/run_exploratory_regressions.R before creating ",
+    "negative-binomial diagnostics."
+  )
+}
+
+save_nb_diagnostics <- function(model, model_number) {
+  diagnostic_data <- final_nb %>%
+    dplyr::mutate(residual = stats::residuals(model), fitted = stats::fitted(model))
+  stem <- file.path(
+    supplement_dir,
+    paste0("Figure_S4_NB_Model_", model_number, "_diagnostics")
+  )
+  grDevices::pdf(paste0(stem, ".pdf"), width = 12, height = 12)
+  old_par <- graphics::par(mfrow = c(3, 3))
+  on.exit({
+    graphics::par(old_par)
+    grDevices::dev.off()
+  }, add = TRUE)
+  graphics::plot(diagnostic_data$fitted, diagnostic_data$residual,
+    xlab = "Fitted values", ylab = "Residuals", main = "Residuals vs. fitted")
+  graphics::abline(h = 0, col = "red", lty = 2)
+  stats::qqnorm(diagnostic_data$residual, main = "Normal Q-Q plot")
+  stats::qqline(diagnostic_data$residual, col = "red")
+  for (variable in c("median", "lognps", "logtotall", "logjif", "pyear")) {
+    graphics::plot(diagnostic_data[[variable]], diagnostic_data$residual,
+      xlab = variable, ylab = "Residuals", main = paste("Residuals vs.", variable))
+    graphics::abline(h = 0, col = "red", lty = 2)
+  }
+  for (variable in c("design_merged", "guid")) {
+    graphics::boxplot(diagnostic_data$residual ~ diagnostic_data[[variable]],
+      xlab = variable, ylab = "Residuals", main = paste("Residuals vs.", variable))
+    graphics::abline(h = 0, col = "red", lty = 2)
+  }
+}
+
+save_nb_diagnostics(nbMod1, 1)
+save_nb_diagnostics(nbMod2, 2)
