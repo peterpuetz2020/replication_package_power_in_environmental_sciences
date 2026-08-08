@@ -7,86 +7,20 @@
 
 source(here::here("scripts", "analysis_setup.R"))
 
-esr_path <- here::here(
-  "data", "derived_data", "regression_data", "esr05_multilevel_random.rds"
-)
-power_path <- here::here(
-  "data", "derived_data",
-  "pps_rstandard_power_meta_0p5_heterogeneity_0_multilevel_random.rds"
-)
 covariate_path <- here::here(
   "data", "derived_data", "regression_data", "regression_covariates.rds"
 )
-if (!file.exists(esr_path) || !file.exists(power_path) || !file.exists(covariate_path)) {
+if (!file.exists(covariate_path)) {
   stop(
     "Missing random-effects regression inputs. Run scripts/create_analysis_data.R ",
     "before this script."
   )
 }
 
-esr <- readRDS(esr_path)
 regression_covariates <- readRDS(covariate_path) %>%
   dplyr::mutate(cID = as.character(cID))
-power <- readRDS(power_path) %>%
-  dplyr::group_by(cID) %>%
-  dplyr::summarise(
-    metaID = dplyr::first(metaID),
-    median = median(power, na.rm = TRUE),
-    nips = dplyr::n_distinct(sID),
-    esty = dplyr::first(etype),
-    guid = dplyr::first(guide),
-    prer = dplyr::first(prere),
-    subf = dplyr::first(subfd),
-    sdes = dplyr::first(sdesn),
-    .groups = "drop"
-  ) %>%
-  dplyr::mutate(cID = as.character(cID)) %>%
-  dplyr::left_join(regression_covariates, by = "cID")
-
-final_nb <- dplyr::inner_join(
-  dplyr::mutate(esr, cID = as.character(cID)), power, by = "cID"
-) %>%
-  dplyr::filter(esr.sig.count >= 0) %>%
-  dplyr::mutate(
-    med_perc = 100 * median,
-    lognps = log(nips),
-    logtotsig = log(tot.sig + 0.5),
-    logtotall = log(tot.all),
-    logjif = log(jif_5yr_wos),
-    design_merged = ifelse(sdes == "experimental", "yes", "no"),
-    metric = factor(dplyr::case_when(
-      esty %in% c("lnRR", "log-mean ratio", "ratio") ~ "ratio",
-      esty == "cohen's d" ~ "cohens_d",
-      esty == "hedge's g" ~ "hedges_g",
-      esty == "correlation" ~ "correlation",
-      esty == "fisher's z" ~ "fishers_z",
-      esty == "logOR" ~ "logOR",
-      esty == "logRR" ~ "logRR",
-      esty == "logHR" ~ "logHR",
-      esty == "excess risk" ~ "excess_risk",
-      esty == "regression coefficient" ~ "regression_coefficient",
-      esty == "percentage change" ~ "percentage_change",
-      esty %in% c("mean", "mean difference") ~ "mean",
-      TRUE ~ NA_character_
-    )),
-    design_merged = factor(design_merged, levels = c("no", "yes")),
-    subf = stats::relevel(factor(subf), ref = "Ecology")
-  ) %>%
-  tidyr::drop_na(esr.sig.count, med_perc, design_merged, guid, prer, lognps,
-    logjif, pyear, metric, logtotsig, subf, metaID)
-
 common_formula <- esr.sig.count ~ med_perc + design_merged + guid + prer +
   lognps + logjif + pyear + metric + offset(logtotsig)
-nbMod1 <- MASS::glm.nb(common_formula, data = final_nb)
-nbMod2 <- MASS::glm.nb(update(common_formula, . ~ . + subf), data = final_nb)
-
-## Cluster-robust inference is reported in Table 4.
-nbMod1.robu <- lmtest::coeftest(
-  nbMod1, vcov. = sandwich::vcovCL(nbMod1, cluster = final_nb$metaID)
-)
-nbMod2.robu <- lmtest::coeftest(
-  nbMod2, vcov. = sandwich::vcovCL(nbMod2, cluster = final_nb$metaID)
-)
 
 ## Sensitivity specifications for Tables S7-S8. Excess-significance counts can
 ## be negative because they are observed minus expected counts. Negative values
@@ -193,9 +127,33 @@ fit_nb_pair <- function(dat) {
   list(models = models, robust = robust)
 }
 
-nb_sensitivity_full <- fit_nb_pair(
-  build_regression_data(1, 0, nonnegative_response = TRUE)
-)
-nb_sensitivity_heterogeneity <- fit_nb_pair(
-  build_regression_data(.5, .25, nonnegative_response = TRUE)
-)
+fit_nb_heterogeneity_pair <- function(meta_multiplier) {
+  fits <- purrr::map(c(0, .5), function(heterogeneity_multiplier) {
+    fit_nb_pair(build_regression_data(
+      meta_multiplier, heterogeneity_multiplier, nonnegative_response = TRUE
+    ))
+  })
+  list(
+    models = purrr::flatten(purrr::map(fits, "models")),
+    robust = purrr::flatten(purrr::map(fits, "robust")),
+    heterogeneity_multiplier = rep(c(0, .5), each = 2),
+    model_number = rep(1:2, 2)
+  )
+}
+
+## Every table uses one meta-average multiplier consistently for both its ESR
+## response and median-power predictor, and contrasts 0% with 50% heterogeneity.
+nb_main <- fit_nb_heterogeneity_pair(.5)
+nb_sensitivity_full <- fit_nb_heterogeneity_pair(1)
+nb_sensitivity_quarter <- fit_nb_heterogeneity_pair(.25)
+
+## Retain the established names for the main models' diagnostic figures.
+nbMod1 <- nb_main$models[[1]]
+nbMod2 <- nb_main$models[[2]]
+nbMod3 <- nb_main$models[[3]]
+nbMod4 <- nb_main$models[[4]]
+nbMod1.robu <- nb_main$robust[[1]]
+nbMod2.robu <- nb_main$robust[[2]]
+nbMod3.robu <- nb_main$robust[[3]]
+nbMod4.robu <- nb_main$robust[[4]]
+final_nb <- build_regression_data(.5, 0, nonnegative_response = TRUE)
