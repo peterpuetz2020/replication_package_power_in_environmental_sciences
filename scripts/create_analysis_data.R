@@ -291,7 +291,7 @@ esr_data <- random_effects_data %>%
     dif = esr.sig.count,
     .groups = "drop"
   ) %>%
-  select(cID, esr.all, esr.sig, esr.all.count, esr.sig.count,
+  dplyr::select(cID, esr.all, esr.sig, esr.all.count, esr.sig.count,
     dif, tot.all, tot.sig)
 saveRDS(
   esr_data,
@@ -317,18 +317,12 @@ regression_power_data <- random_effects_data %>%
   ) %>%
   mutate(cID = as.character(cID))
 
-publication_years <- readxl::read_excel(here("data", "MasterData.xlsx")) %>%
-  transmute(cID = as.character(cID), pyear) %>%
-  distinct(cID, .keep_all = TRUE)
-source(here("scripts", "journal_impact_factor.R"))
 journal_impact_factors <- readxl::read_excel(
-  here("data", "journal_impact_factors.xlsx")
-) %>%
-  mutate(cID = as.character(cID))
-
+  here("data", "journal_impact_factors.xlsx"))
+ 
 regression_power_data <- regression_power_data %>%
-  left_join(publication_years, by = "cID") %>%
-  left_join(journal_impact_factors, by = "cID")
+    left_join(journal_impact_factors, by = c("metaID", "cID"))  
+
 if (anyNA(regression_power_data$pyear) ||
     anyNA(regression_power_data$jif_5yr_wos)) {
   stop(
@@ -346,7 +340,7 @@ openxlsx::write.xlsx(
 )
 
 regression_covariates <- regression_power_data %>%
-  select(cID, pyear, jif_5yr_wos)
+  dplyr::select(cID, pyear, jif_5yr_wos)
 saveRDS(
   regression_covariates,
   file.path(regression_data_dir, "regression_covariates.rds")
