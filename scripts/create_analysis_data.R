@@ -69,8 +69,11 @@ load_estimator_data <- function(estimator, outlier_variant = "outliers_removed")
     map_dfr(readRDS) %>%
     mutate(
       sei = sqrt(vi),
-      sse_yn = ifelse(!is.na(small_study_effect_pval) &
-                        small_study_effect_pval <= 0.05, "yes", "no")
+      sse_yn = case_when(
+        is.na(small_study_effect_pval) ~ NA_character_,
+        small_study_effect_pval <= 0.05 ~ "yes",
+        TRUE ~ "no"
+      )
     )
 }
 

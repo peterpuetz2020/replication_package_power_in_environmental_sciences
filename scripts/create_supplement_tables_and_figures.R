@@ -71,6 +71,37 @@ load_multilevel_data <- function(setup_label) {
   purrr::map_dfr(input_files, readRDS)
 }
 
+## Small-study effects are tested by the slope in the PET-PEESE model. The
+## intercept-only multilevel model has no corresponding slope, and therefore
+## correctly stores NA for this field. Load the PET-PEESE results explicitly
+## rather than silently turning those NAs into negative tests.
+load_small_study_effects <- function(setup_label) {
+  derived_path <- here(
+    "data", "derived_data",
+    paste0("pps_rstandard_raw_", setup_label, "_pet_peese.rds")
+  )
+  pet_data <- if (file.exists(derived_path)) {
+    readRDS(derived_path)
+  } else {
+    input_files <- list.files(
+      here("data", "derived_data", "pet_peese_rstandard"),
+      pattern = "\\.rds$", full.names = TRUE
+    )
+    if (length(input_files) == 0) {
+      stop("No PET-PEESE inputs found for the small-study-effect tests. ",
+           "Run scripts/compute_meta_estimates.R first.")
+    }
+    purrr::map_dfr(input_files, readRDS)
+  }
+
+  pet_data %>%
+    group_by(cID) %>%
+    summarise(
+      small_study_effect_pval = first(small_study_effect_pval),
+      .groups = "drop"
+    )
+}
+
 count_intervals <- function(values, grid) {
   vapply(seq_len(length(grid) - 1), function(i) {
     sum(values >= grid[i] & values <= grid[i + 1])
@@ -440,12 +471,16 @@ significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
 write_word_table(make_power_table(base_half %>% filter(cID %in% significant_meta)), 2)
 
 ## Table S3: adequately powered meta-analyses and small-study effects by subfield.
-table_s3_meta <- base_half %>% mutate(
+small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
+table_s3_meta <- base_half %>%
+  select(-any_of(c("small_study_effect_pval", "sse_yn"))) %>%
+  left_join(small_study_effects, by = "cID") %>% mutate(
   power = 1 - pnorm(qnorm(.975) - abs(.5 * GE) / sqrt(vi)) +
     pnorm(qnorm(.025) - abs(.5 * GE) / sqrt(vi))) %>%
   group_by(cID) %>% summarise(Subfield = first(subfd),
     adequately_powered = median(power, na.rm = TRUE) >= .8,
-    small_study_effect = first(sse_yn) == "yes", .groups = "drop")
+    small_study_effect = first(small_study_effect_pval) <= .05,
+    .groups = "drop")
 table_s3 <- table_s3_meta %>% group_by(Subfield) %>% summarise(
   `Median power >= 80% (%)` = 100 * mean(adequately_powered),
   `Small-study effects (%)` = 100 * mean(small_study_effect, na.rm = TRUE),
@@ -458,14 +493,54 @@ write_word_table(table_s3, 3)
 ## Figure S4: heterogeneity distributions and the corresponding summaries.
 heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
   mutate(subfd = factor(subfd, subfield_levels))
-heterogeneity_plot <- ggplot(heterogeneity_data, aes(isq, fill = subfd)) +
-  geom_density(alpha = .65, colour = "white", linewidth = .25) +
-  facet_wrap(~ subfd, ncol = 2, scales = "free_y") +
-  scale_x_continuous(limits = c(0, 100), labels = scales::label_percent(scale = 1)) +
-  guides(fill = "none") + theme_bw() +
-  labs(x = expression(I^2), y = "Density")
+heterogeneity_summary <- heterogeneity_data %>%
+  group_by(subfd) %>%
+  summarise(
+    M = n(), Median = median(isq, na.rm = TRUE), Mean = mean(isq, na.rm = TRUE),
+    Q25 = quantile(isq, .25, na.rm = TRUE),
+    Q75 = quantile(isq, .75, na.rm = TRUE), .groups = "drop"
+  ) %>%
+  arrange(subfd)
+openxlsx::write.xlsx(
+  heterogeneity_summary %>% rename(Subfield = subfd),
+  file.path(supplement_dir, "Figure_S4_heterogeneity_by_subfield.xlsx"),
+  overwrite = TRUE
+)
+
+summary_grob <- heterogeneity_summary %>%
+  transmute(
+    Subfield = as.character(subfd), M,
+    Median = round(Median, 2), Mean = round(Mean, 2),
+    Q25 = round(Q25, 2), Q75 = round(Q75, 2)
+  ) %>%
+  gridExtra::tableGrob(
+    rows = NULL,
+    theme = gridExtra::ttheme_minimal(
+      base_size = 10,
+      padding = grid::unit(c(5, 4), "mm"),
+      core = list(fg_params = list(hjust = c(0, 1, 1, 1, 1, 1),
+                                   x = c(.02, .98, .98, .98, .98, .98))),
+      colhead = list(fg_params = list(fontface = "plain"))
+    )
+  )
+heterogeneity_density <- ggplot(heterogeneity_data, aes(isq)) +
+  geom_density(fill = "#66c2df", colour = "#b5b5b5", linewidth = .55,
+               adjust = .8) +
+  facet_grid(subfd ~ ., scales = "free_y", switch = "y") +
+  scale_x_continuous(limits = c(0, 100), expand = expansion(mult = c(0, .02))) +
+  theme_void() +
+  theme(panel.spacing.y = grid::unit(3.5, "mm"), strip.text.y = element_blank())
+heterogeneity_plot <- gridExtra::arrangeGrob(
+  summary_grob, heterogeneity_density, ncol = 2, widths = c(4.7, 1.15),
+  top = grid::textGrob("", gp = grid::gpar(fontsize = 3)),
+  bottom = grid::textGrob(
+    expression(paste("Distribution of heterogeneity (", I^2,
+                     " in percentage) in the meta-analyses by subfield.")),
+    gp = grid::gpar(fontsize = 10, fontface = "bold")
+  )
+)
 save_supplement_plot(file.path(supplement_dir, "Figure_S4_heterogeneity_by_subfield"),
-  10, 8, function() print(heterogeneity_plot))
+  11, 6.2, function() grid::grid.draw(heterogeneity_plot))
 
 ## Tables S4-S6: selective-reporting estimates already calculated by the legacy
 ## bootstrap section. Group them into readable, landscape-friendly Word tables.
