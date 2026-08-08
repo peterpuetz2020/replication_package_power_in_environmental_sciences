@@ -1,9 +1,8 @@
 ## ---------------------------------------------------------
 ## create_supplement_tables_and_figures.R
 ## ---------------------------------------------------------
-## Recreate the supplementary figures from the analysis outputs. Figure S3 and
-## its source data are produced by create_tables_and_figures.R. The fitted
-## negative-binomial models used for Figure S4 are produced by
+## Recreate all supplementary tables and figures from the analysis outputs. The
+## fitted negative-binomial models used for Figure S4 are produced by
 ## run_exploratory_regressions.R.
 
 library(tidyverse)
@@ -316,8 +315,49 @@ tidyr::crossing(
   filter(!(meta_average_multiplier == 0.5 & estimator == "multilevel_random")) %>%
   pwalk(write_supplement_figure_2)
 
-## Figure S3 and its underlying numbers are created by
-## create_tables_and_figures.R alongside the other main-analysis outputs.
+## Figure S3: excess-significance estimates across all analysis setups. The
+## estimates are calculated with Table 2 in create_tables_and_figures.R, while
+## all supplementary output is deliberately written here.
+if (!exists("all_combination_results") || !exists("all_esr_results")) {
+  stop("Figure S3 inputs are unavailable. Run create_tables_and_figures.R first.")
+}
+write.csv(
+  all_combination_results,
+  file.path(supplement_dir, "Figure_S3_numbers.csv"),
+  row.names = FALSE
+)
+esr_plot_data <- all_esr_results %>%
+  filter(measure == "ESR_{0.05}^{sig}") %>%
+  mutate(
+    estimate = as.numeric(estimate),
+    ci_lower = as.numeric(stringr::str_match(confidence_interval, "\\[([^,]+),")[, 2]),
+    ci_upper = as.numeric(stringr::str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
+    estimator = dplyr::recode(
+      estimator,
+      pet_peese = "PET-PEESE",
+      multilevel_random = "Random effects"
+    )
+  )
+esr_plot <- ggplot(
+  esr_plot_data,
+  aes(heterogeneity_multiplier, estimate, color = estimator)
+) +
+  geom_hline(yintercept = 0, color = "grey70") +
+  geom_errorbar(
+    aes(ymin = ci_lower, ymax = ci_upper), width = 0.03,
+    position = position_dodge(width = 0.06)
+  ) +
+  geom_point(position = position_dodge(width = 0.06)) +
+  facet_grid(. ~ meta_average_multiplier, labeller = label_both) +
+  labs(
+    x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig),
+    color = "Estimator"
+  ) +
+  theme_bw()
+save_supplement_plot(
+  file.path(supplement_dir, "Figure_S3_excess_p"),
+  width = 10, height = 4.5, draw = function() print(esr_plot)
+)
 
 ## Tables S1-S10 and Figures S4-S9 follow the order of the supplementary
 ## material. Tables are deliberately emitted as editable Word documents and do
@@ -452,7 +492,16 @@ figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
   geom_ribbon(aes(ymin = lower, ymax = upper), fill = "orange", alpha = .15) +
   geom_line(aes(y = counterfactual), colour = "orange") +
   geom_line(aes(y = factual), colour = "blue", linetype = 2) +
-  geom_vline(xintercept = c(1.64, 1.96, 2.58), colour = c("green3", "red", "magenta"), linetype = 2) +
+  geom_vline(
+    data = tibble(
+      xintercept = c(1.64, 1.96, 2.58),
+      threshold_colour = c("green3", "red", "magenta")
+    ),
+    aes(xintercept = xintercept, colour = threshold_colour),
+    linetype = 2,
+    inherit.aes = FALSE
+  ) +
+  scale_colour_identity() +
   facet_wrap(~ Subfield, ncol = 2, scales = "free_y") + coord_cartesian(xlim = c(0, 8)) +
   theme_bw() + labs(x = "|z|-value", y = "Frequency")
 save_supplement_plot(file.path(supplement_dir, "Figure_S5_z_distributions_by_subfield"),
