@@ -523,8 +523,8 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
     "Protocol registered? (yes)" = "preryes", "Log number of independent studies" = "lognps",
     "Log journal impact factor" = "logjif", "Publication year" = "pyear",
     setNames(paste0("subf", subfield_levels[-1]), subfield_levels[-1]))
-  if (length(models) != 2 || length(robust_tables) != 2) {
-    stop("Expected exactly two fitted models and two robust coefficient tables.")
+  if (length(models) != 4 || length(robust_tables) != 4) {
+    stop("Expected four fitted models and four robust coefficient tables.")
   }
   format_coefficient <- function(coefficient_table, term) {
     coefficient_table <- as.matrix(coefficient_table)
@@ -543,8 +543,12 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
     )
   }
   result <- tibble(Variable = names(labels))
-  for (i in seq_len(2)) {
-    result[[paste0("Model ", i, " Estimate (SE)")]] <- vapply(
+  column_names <- paste0(
+    rep(c("0%", "50%"), each = 2), " heterogeneity: Model ",
+    rep(1:2, 2), " Estimate (SE)"
+  )
+  for (i in seq_len(4)) {
+    result[[column_names[[i]]]] <- vapply(
       unname(labels),
       function(term) format_coefficient(robust_tables[[i]], term),
       character(1),
@@ -552,18 +556,41 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
     )
   }
   statistic <- if (include_adjusted_r2) "Adjusted R-squared" else "AIC"
-  bind_rows(result, tibble(Variable = c("Effect size type", statistic, "No. of meta-analyses"),
-                           `Model 1 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(models[[1]])$adj.r.squared else stats::AIC(models[[1]])), stats::nobs(models[[1]])),
-                           `Model 2 Estimate (SE)` = c("Yes", sprintf("%.3f", if (include_adjusted_r2) summary(models[[2]])$adj.r.squared else stats::AIC(models[[2]])), stats::nobs(models[[2]]))))
+  summary_rows <- tibble(Variable = c(
+    "Effect size type", statistic, "No. of meta-analyses"
+  ))
+  for (i in seq_len(4)) {
+    fit_statistic <- if (include_adjusted_r2) {
+      summary(models[[i]])$adj.r.squared
+    } else {
+      stats::AIC(models[[i]])
+    }
+    summary_rows[[column_names[[i]]]] <- c(
+      "Yes", sprintf("%.3f", fit_statistic), stats::nobs(models[[i]])
+    )
+  }
+  bind_rows(result, summary_rows)
 }
 write_word_table(format_model_table(nb_sensitivity_full), 7)
-write_word_table(format_model_table(nb_sensitivity_heterogeneity), 8)
+write_word_table(format_model_table(nb_sensitivity_quarter), 8)
 
-ols_data <- build_regression_data(.5, 0) %>% mutate(esr_winsor = pmin(pmax(esr.sig, quantile(esr.sig, .05)), quantile(esr.sig, .95)))
 ols_formula <- esr_winsor ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric
-ols_models <- list(lm(ols_formula, ols_data), lm(update(ols_formula, . ~ . + subf), ols_data))
-ols_fit <- list(models = ols_models, robust = map(ols_models,
-  ~ lmtest::coeftest(.x, vcov. = sandwich::vcovCL(.x, cluster = ols_data$metaID))))
+ols_fits <- map(c(0, .5), function(heterogeneity_multiplier) {
+  ols_data <- build_regression_data(.5, heterogeneity_multiplier) %>%
+    mutate(esr_winsor = pmin(
+      pmax(esr.sig, quantile(esr.sig, .05)), quantile(esr.sig, .95)
+    ))
+  models <- list(
+    lm(ols_formula, ols_data),
+    lm(update(ols_formula, . ~ . + subf), ols_data)
+  )
+  list(models = models, robust = map(models,
+    ~ lmtest::coeftest(.x, vcov. = sandwich::vcovCL(.x, cluster = ols_data$metaID))))
+})
+ols_fit <- list(
+  models = flatten(map(ols_fits, "models")),
+  robust = flatten(map(ols_fits, "robust"))
+)
 write_word_table(format_model_table(ols_fit, TRUE), 9)
 
 ## Figures S6-S9: separate continuous and categorical diagnostics for both main

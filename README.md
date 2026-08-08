@@ -160,6 +160,14 @@ source("scripts/main.R")
 
 The paper uses `n_iterations <- 1000`. Smaller values are useful for quick checks only and should not be used for final replication.
 
+### Regression multiplier specifications
+
+Each regression table uses the same meta-average multiplier to construct both
+the excess-significance outcome and the median-power predictor. Table 4 and
+Table S9 use a meta-average multiplier of 0.5, Table S7 uses 1, and Table S8
+uses 0.25. Each of Tables 4 and S7-S9 reports Model 1 and Model 2 first with a
+zero heterogeneity multiplier and then with a 0.5 heterogeneity multiplier.
+
 Long-running counterfactual calculations display console progress bars, and
 model fitting reports its total number of meta-analyses before dynamically
 scheduling them across workers.

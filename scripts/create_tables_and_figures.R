@@ -588,7 +588,10 @@ analysis_setups %>%
 ## run_exploratory_regressions.R creates these model and robust-inference
 ## objects. Keeping presentation here makes the numbering and output conventions
 ## consistent with the other manuscript tables.
-required_nb_objects <- c("nbMod1", "nbMod2", "nbMod1.robu", "nbMod2.robu")
+required_nb_objects <- c(
+  "nbMod1", "nbMod2", "nbMod3", "nbMod4",
+  "nbMod1.robu", "nbMod2.robu", "nbMod3.robu", "nbMod4.robu"
+)
 if (!all(vapply(required_nb_objects, exists, logical(1), inherits = TRUE))) {
   stop("Run scripts/run_exploratory_regressions.R before creating Table 4.")
 }
@@ -624,16 +627,22 @@ table_4_terms <- tibble::tribble(
   "Water Science and Technology", NA_character_, "subfWater Science and Technology"
 ) %>%
   dplyr::mutate(
-    `Model 1 Estimate (SE)` = vapply(term_model_1, format_nb_term, character(1),
+    `0% heterogeneity: Model 1 Estimate (SE)` = vapply(term_model_1, format_nb_term, character(1),
       robust_result = nbMod1.robu),
-    `Model 2 Estimate (SE)` = vapply(term_model_2, format_nb_term, character(1),
-      robust_result = nbMod2.robu)
+    `0% heterogeneity: Model 2 Estimate (SE)` = vapply(term_model_2, format_nb_term, character(1),
+      robust_result = nbMod2.robu),
+    `50% heterogeneity: Model 1 Estimate (SE)` = vapply(term_model_1, format_nb_term, character(1),
+      robust_result = nbMod3.robu),
+    `50% heterogeneity: Model 2 Estimate (SE)` = vapply(term_model_2, format_nb_term, character(1),
+      robust_result = nbMod4.robu)
   ) %>%
   dplyr::select(-term_model_1, -term_model_2) %>%
   dplyr::bind_rows(tibble::tibble(
     Variable = c("Effect size type", "AIC", "No. of meta-analyses"),
-    `Model 1 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod1)), nobs(nbMod1)),
-    `Model 2 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod2)), nobs(nbMod2))
+    `0% heterogeneity: Model 1 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod1)), nobs(nbMod1)),
+    `0% heterogeneity: Model 2 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod2)), nobs(nbMod2)),
+    `50% heterogeneity: Model 1 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod3)), nobs(nbMod3)),
+    `50% heterogeneity: Model 2 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod4)), nobs(nbMod4))
   ))
 
 table_4_document <- officer::read_docx()
@@ -644,11 +653,11 @@ table_4_document <- officer::body_add_par(
 )
 table_4_document <- officer::body_add_table(
   table_4_document, table_4_terms, style = NULL, header = TRUE,
-  alignment = c("left", "center", "center"), align_table = "center"
+  alignment = c("left", rep("center", 4)), align_table = "center"
 )
 table_4_document <- officer::body_add_par(
   table_4_document,
-  "Note. Cluster-robust standard errors in parentheses. * p < .10; ** p < .05; *** p < .01. Ecology is the reference subfield.",
+  "Note. The meta-average multiplier is 0.5. Cluster-robust standard errors in parentheses. * p < .10; ** p < .05; *** p < .01. Ecology is the reference subfield.",
   style = NULL
 )
 print(table_4_document, target = here("results", "main", "Table_4.docx"))
