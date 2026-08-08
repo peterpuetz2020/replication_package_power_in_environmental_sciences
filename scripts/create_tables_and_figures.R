@@ -294,9 +294,15 @@ ensure_output_dirs()
 ## Table 1
 ## -------------------------------
 write_table_1 <- function() {
-  pps_rstandard <- load_power_data(
-    "multilevel_random", "meta_0p5_heterogeneity_0", 0.5
-  )
+  ## Table 1 describes the sample rather than an outlier-screened estimate of
+  ## a meta-average. Use the all-data random-effects estimates to calculate its
+  ## power classification so that every meta-analysis and primary
+  ## estimate is represented. Outlier-screened data are reserved for outputs
+  ## whose estimands depend on the meta-average.
+  pps_rstandard <- load_estimator_data(
+    "multilevel_random", "meta_0p5_heterogeneity_0", "all_data"
+  ) %>%
+    add_power_variables(0.5)
 myDat <- split_meta_analyses(pps_rstandard, add_sape = TRUE)
 mss <- vapply(myDat, function(x) length(x$sei), numeric(1))
 

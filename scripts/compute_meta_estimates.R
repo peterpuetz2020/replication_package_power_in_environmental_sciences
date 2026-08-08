@@ -327,19 +327,6 @@ fit_one_meta_analysis <- function(dat) {
   )
   random_effect_studies <- primary_study_count(random_effect_outlier_removed$data)
 
-  if (pet_studies < minimum_primary_studies &&
-      random_effect_studies < minimum_primary_studies) {
-    return(drop_meta_analysis(
-      dat,
-      paste0(
-        "Both PET-PEESE and random-effects outlier removal left fewer than ",
-        minimum_primary_studies, " primary studies"
-      ),
-      pet_studies = pet_studies,
-      random_effect_studies = random_effect_studies
-    ))
-  }
-
   results <- list(
     all_data = list(
       pet_peese = fit_pet_peese(dat, outlier_model, outlier_model_test),
@@ -436,3 +423,19 @@ write_csv(
   meta_analysis_estimates,
   file.path(derived_data_dir, "meta_analysis_estimates.csv")
 )
+
+report_outlier_removal <- function(estimator, removed_column) {
+  removed <- sum(meta_analysis_estimates[[removed_column]], na.rm = TRUE)
+  all_estimates <- sum(meta_analysis_estimates$k_all_data, na.rm = TRUE)
+  percentage <- if (all_estimates == 0) 0 else 100 * removed / all_estimates
+
+  message(sprintf(
+    "%s outlier removal: %d of %d primary estimates removed (%.2f%%).",
+    estimator, removed, all_estimates, percentage
+  ))
+}
+
+## Sourcing this fitting script should make the impact of each estimator's
+## distinct residual screen visible without requiring inspection of the CSV.
+report_outlier_removal("Random effects", "n_random_effect_outliers_removed")
+report_outlier_removal("PET-PEESE", "n_outliers_removed")
