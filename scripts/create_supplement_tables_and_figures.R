@@ -510,21 +510,71 @@ openxlsx::write.xlsx(
   overwrite = TRUE
 )
 
-summary_grob <- heterogeneity_summary %>%
-  transmute(
-    Subfield = as.character(subfd), M,
-    Median = round(Median, 2), Mean = round(Mean, 2),
-    Q25 = round(Q25, 2), Q75 = round(Q75, 2)
-  ) %>%
-  gridExtra::tableGrob(
-    rows = NULL,
-    theme = gridExtra::ttheme_minimal(
-      base_size = 10,
-      padding = grid::unit(c(5, 4), "mm"),
-      core = list(fg_params = list(hjust = c(0, 1, 1, 1, 1, 1),
-                                   x = c(.02, .98, .98, .98, .98, .98))),
-      colhead = list(fg_params = list(fontface = "plain"))
+figure_s4_rows <- heterogeneity_summary %>%
+  mutate(row = rev(seq_len(n())))
+
+## Draw the table and ridgelines in one coordinate system. Keeping every visual
+## element in the same panel makes the row centres identical by construction;
+## separate table and plot grobs can acquire different header and cell heights.
+density_scale <- c(80, 99)
+figure_s4_densities <- heterogeneity_data %>%
+  filter(!is.na(isq)) %>%
+  group_by(subfd) %>%
+  group_modify(~ {
+    curve <- density(.x$isq, from = 0, to = 100, adjust = .8, n = 256)
+    tibble(
+      x = scales::rescale(curve$x, to = density_scale, from = c(0, 100)),
+      height = curve$y / max(curve$y)
     )
+  }) %>%
+  ungroup() %>%
+  left_join(dplyr::select(figure_s4_rows, subfd, row), by = "subfd") %>%
+  mutate(y = row + .34 * height)
+
+column_positions <- c(Subfield = 1, M = 46, Median = 55, Mean = 63,
+                      Q25 = 70, Q75 = 77, Heterogeneity = 89.5)
+heterogeneity_plot <- ggplot() +
+  geom_hline(
+    yintercept = c(.5, seq(1.5, nrow(figure_s4_rows) + .5),
+                   nrow(figure_s4_rows) + 1.35),
+    colour = "#d0d0d0", linewidth = .45
+  ) +
+  geom_ribbon(
+    data = figure_s4_densities,
+    aes(x = x, ymin = row, ymax = y, group = subfd),
+    fill = "#66c2df", colour = "#b5b5b5", linewidth = .55
+  ) +
+  geom_text(
+    data = figure_s4_rows,
+    aes(x = column_positions[["Subfield"]], y = row, label = subfd),
+    hjust = 0, size = 3.6
+  ) +
+  geom_text(
+    data = figure_s4_rows,
+    aes(x = column_positions[["M"]], y = row, label = M),
+    hjust = 1, size = 3.6
+  ) +
+  geom_text(data = figure_s4_rows,
+            aes(x = column_positions[["Median"]], y = row, label = sprintf("%.2f", Median)),
+            hjust = 1, size = 3.6) +
+  geom_text(data = figure_s4_rows,
+            aes(x = column_positions[["Mean"]], y = row, label = sprintf("%.2f", Mean)),
+            hjust = 1, size = 3.6) +
+  geom_text(data = figure_s4_rows,
+            aes(x = column_positions[["Q25"]], y = row, label = sprintf("%.2f", Q25)),
+            hjust = 1, size = 3.6) +
+  geom_text(data = figure_s4_rows,
+            aes(x = column_positions[["Q75"]], y = row, label = sprintf("%.2f", Q75)),
+            hjust = 1, size = 3.6) +
+  annotate("text", x = column_positions, y = nrow(figure_s4_rows) + 1,
+           label = names(column_positions),
+           hjust = c(0, rep(.5, length(column_positions) - 1)), size = 3.6) +
+  coord_cartesian(xlim = c(0, 100), ylim = c(.45, nrow(figure_s4_rows) + 1.35),
+                  expand = FALSE, clip = "off") +
+  theme_void(base_size = 11) +
+  theme(
+    plot.margin = margin(6, 12, 6, 12, unit = "mm"),
+    plot.caption = element_text(hjust = .5, margin = margin(t = 12))
   )
 
 ## Build one density grob per table row and give both columns the table's row
@@ -559,16 +609,79 @@ heterogeneity_plot <- gridExtra::arrangeGrob(
   )
 )
 save_supplement_plot(file.path(supplement_dir, "Figure_S4"),
-  11, 6.2, function() grid::grid.draw(heterogeneity_plot))
+              9, 5.25, function() print(heterogeneity_plot))
 
-## Tables S4-S6: selective-reporting estimates already calculated by the legacy
-## bootstrap section. Group them into readable, landscape-friendly Word tables.
-read_esr_table <- function(number, label) {
-  path <- list.files(derived_data_dir,
-    pattern = paste0("^Robustness_Table_", number, "_ESR_.*\\.csv$"), full.names = TRUE)
-  if (length(path) != 1) stop("Expected one legacy ESR table for ", label)
-  read.csv(path, check.names = FALSE) %>% rename(`p-value interval` = 1) %>%
-    setNames(c("p-value interval", paste(label, names(.)[-1], sep = "\n")))
+## Tables S4-S6 and Figure S5: calculate each subfield input in R and save the
+## generated CSV/RDS files alongside the other derived analysis data.
+subfield_grids <- list(
+  p = c(-Inf, qnorm(c(.001, .01, .05, .1, .2, .3, .4, .5, .6, .7, .8, .9) / 2),
+    0, qnorm(c(.9, .8, .7, .6, .5, .4, .3, .2, .1, .05, .01, .001) / 2,
+      lower.tail = FALSE), Inf),
+  p_absolute = c(0,
+    qnorm(c(.9, .8, .7, .6, .5, .4, .3, .2, .1, .05, .01, .001) / 2,
+      lower.tail = FALSE), Inf),
+  z = seq(-10.25, 10.25, .1025),
+  z_absolute = seq(0, 10.25, .1025)
+)
+legacy_codes <- c(eco = "Ecology", enc = "Environmental Chemistry",
+  ene = "Environmental Engineering", htm = "Health, Toxicology and Mutagenesis",
+  mpl = "Management, Monitoring, Policy and Law", nlc = "Nature and Landscape Conservation",
+  wst = "Water Science and Technology")
+
+prepare_subfield_data <- function(label) {
+  base_half %>% filter(subfd == label) %>% mutate(GE = .5 * GE) %>%
+    filter_counterfactual_data(0, context = paste("supplement subfield", label))
+}
+
+calculate_subfield_counterfactual <- function(label, code, grid, type, ci = FALSE) {
+  dat <- prepare_subfield_data(label)
+  get_counterfactual(
+    file.path(derived_data_dir, paste0("pet_peese_rstandard_", type,
+      if (ci) "_ci" else "", ".", code, ".rds")),
+    split(dat, dat$cID), grid, ci = ci,
+    cluster = if (ci) unique(dat$cID) else NULL,
+    heterogeneity_multiplier = 0
+  )
+}
+
+calculate_esr_table <- function(legacy_number, label) {
+  code <- names(legacy_codes)[match(label, legacy_codes)]
+  dat <- prepare_subfield_data(label)
+  observed <- count_intervals(abs(dat$yi / sqrt(dat$vi)), subfield_grids$p_absolute)
+  point <- calculate_subfield_counterfactual(label, code, subfield_grids$p, "p_tab")
+  ci <- calculate_subfield_counterfactual(label, code, subfield_grids$p, "p_tab", TRUE)
+  n_tests <- sum(observed)
+  intervals <- apply(
+    matrix(observed / n_tests, nrow = nrow(ci[[1]]), ncol = length(observed),
+      byrow = TRUE) - ci[[1]], 2, quantile, probs = c(.025, .975), na.rm = TRUE)
+  output <- tibble(
+    `p-value interval` = c("0.9 < p",
+      paste0(seq(.8, .1, -.1), " < p < ", seq(.9, .2, -.1)),
+      "0.05 < p < 0.1", "0.01 < p < 0.05", "0.001 < p < 0.01", "p < 0.001"),
+    Difference = round((observed - point) / n_tests, 3),
+    `0.95 Confidence interval` = paste0("[", round(intervals[1, ], 3),
+      ", ", round(intervals[2, ], 3), "]"))
+  summary_specs <- list(c("ESR_{0.1}^{all}", 10, 13, 1),
+    c("ESR_{0.05}^{all}", 11, 13, 1), c("ESR_{0.1}^{sig}", 10, 13, 2),
+    c("ESR_{0.05}^{sig}", 11, 13, 3))
+  output <- bind_rows(output, map_dfr(summary_specs, function(spec) {
+    indices <- as.integer(spec[2]):as.integer(spec[3])
+    denominator <- if (grepl("all", spec[1], fixed = TRUE)) n_tests else sum(observed[indices])
+    bounds <- quantile(sum(observed[indices] / denominator) -
+      rowSums(ci[[as.integer(spec[4])]][, indices, drop = FALSE]),
+      c(.025, .975), na.rm = TRUE)
+    tibble(`p-value interval` = spec[1],
+      Difference = round(sum((observed - point)[indices] / denominator), 3),
+      `0.95 Confidence interval` = paste0("[", round(bounds[1], 3),
+        ", ", round(bounds[2], 3), "]"))
+  }), tibble(`p-value interval` = c("No. of meta-analysis", "No. of tests"),
+    Difference = c(n_distinct(dat$cID), n_tests), `0.95 Confidence interval` = "0")) %>%
+    setNames(c("p-value interval", paste(label,
+      c("Difference", "0.95 Confidence interval"), sep = "\n")))
+  write.csv(output, file.path(derived_data_dir, paste0("Robustness_Table_",
+    legacy_number, "_ESR_", gsub("[^[:alnum:]]+", "_", label), ".csv")),
+    row.names = FALSE)
+  output
 }
 esr_specs <- tribble(
   ~number, ~legacy, ~label,
@@ -578,26 +691,19 @@ esr_specs <- tribble(
 )
 for (table_number in 4:6) {
   spec <- esr_specs %>% filter(number == table_number - 2)
-  pieces <- map2(spec$legacy, spec$label, read_esr_table)
+  pieces <- map2(spec$legacy, spec$label, calculate_esr_table)
   combined <- reduce(pieces, full_join, by = "p-value interval")
   write_word_table(combined, table_number)
 }
 
-## Figure S5: factual and counterfactual |z| distributions by subfield. Reuse the
-## legacy bootstrap objects but redraw them with the current manuscript theme.
-legacy_codes <- c(eco = "Ecology", enc = "Environmental Chemistry",
-  ene = "Environmental Engineering", htm = "Health, Toxicology and Mutagenesis",
-  mpl = "Management, Monitoring, Policy and Law", nlc = "Nature and Landscape Conservation",
-  wst = "Water Science and Technology")
-z_grid <- seq(0, 10.25, .1025)
 subfield_plot_data <- imap_dfr(legacy_codes, function(label, code) {
-  point_env <- new.env(); ci_env <- new.env()
-  load(file.path(derived_data_dir, paste0("pet_peese_rstandard_z_plot.", code, ".rds")), envir = point_env)
-  load(file.path(derived_data_dir, paste0("pet_peese_rstandard_z_plot_ci.", code, ".rds")), envir = ci_env)
-  point <- point_env[[ls(point_env)[1]]]; ci <- ci_env[[ls(ci_env)[1]]]
-  observed <- base_half %>% filter(subfd == label) %>% transmute(z = abs(yi / sqrt(vi))) %>% pull(z)
-  tibble(Subfield = label, z = head(z_grid, -1) + diff(z_grid)[1] / 2,
-    factual = count_intervals(observed, z_grid) / length(observed),
+  dat <- prepare_subfield_data(label)
+  point <- calculate_subfield_counterfactual(label, code, subfield_grids$z, "z_plot")
+  ci <- calculate_subfield_counterfactual(label, code, subfield_grids$z, "z_plot", TRUE)
+  observed <- abs(dat$yi / sqrt(dat$vi))
+  tibble(Subfield = label,
+    z = head(subfield_grids$z_absolute, -1) + diff(subfield_grids$z_absolute)[1] / 2,
+    factual = count_intervals(observed, subfield_grids$z_absolute) / length(observed),
     counterfactual = as.vector(point) / length(observed),
     lower = apply(ci[[1]], 2, quantile, .025, na.rm = TRUE),
     upper = apply(ci[[1]], 2, quantile, .975, na.rm = TRUE))
