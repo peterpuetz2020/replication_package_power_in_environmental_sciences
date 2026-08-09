@@ -20,37 +20,39 @@ derived_data_dir <- here("data", "derived_data")
 dir.create(derived_data_dir, recursive = TRUE, showWarnings = FALSE)
 
 save_supplement_plot <- function(filename_stem, width, height, draw) {
-  pdf(paste0(filename_stem, ".pdf"), width = width, height = height)
-  draw()
-  dev.off()
+  save_with_device <- function(extension, open_device) {
+    output_path <- paste0(filename_stem, extension)
+    temporary_path <- tempfile(
+      pattern = paste0(basename(filename_stem), "_"),
+      tmpdir = dirname(filename_stem),
+      fileext = extension
+    )
+    on.exit(unlink(temporary_path), add = TRUE)
 
-  cairo_ps(
-    paste0(filename_stem, ".eps"),
-    width = width,
-    height = height,
-    onefile = FALSE
-  )
-  draw()
-  dev.off()
+    open_device(temporary_path)
+    device <- dev.cur()
+    on.exit({
+      if (device %in% dev.list()) dev.off(device)
+    }, add = TRUE)
+    draw()
+    dev.off(device)
 
-  svg(
-    paste0(filename_stem, ".svg"),
-    width = width,
-    height = height
-  )
-  draw()
-  dev.off()
+    if (!file.rename(temporary_path, output_path)) {
+      stop("Could not move completed plot to ", output_path)
+    }
+  }
 
-  png(
-    paste0(filename_stem, ".png"),
-    width = width,
-    height = height,
-    units = "in",
-    res = 300,
+  ## Write each format to a temporary file first. If drawing fails, this keeps
+  ## a truncated device output from masquerading as a valid PDF (or image).
+  save_with_device(".pdf", function(path) pdf(path, width = width, height = height))
+  save_with_device(".eps", function(path) cairo_ps(
+    path, width = width, height = height, onefile = FALSE
+  ))
+  save_with_device(".svg", function(path) svg(path, width = width, height = height))
+  save_with_device(".png", function(path) png(
+    path, width = width, height = height, units = "in", res = 300,
     type = "cairo"
-  )
-  draw()
-  dev.off()
+  ))
 }
 
 load_multilevel_data <- function(setup_label) {
@@ -577,37 +579,6 @@ heterogeneity_plot <- ggplot() +
     plot.caption = element_text(hjust = .5, margin = margin(t = 12))
   )
 
-## Build one density grob per table row and give both columns the table's row
-## heights. A faceted plot lays out panels independently of table rows, which
-## causes the densities and their subfield summaries to drift out of alignment.
-density_grobs <- lapply(subfield_levels, function(subfield) {
-  ggplot(filter(heterogeneity_data, subfd == subfield), aes(isq)) +
-    geom_density(
-      fill = "#66c2df", colour = "#b5b5b5", linewidth = .55, adjust = .8
-    ) +
-    scale_x_continuous(
-      limits = c(0, 100), expand = expansion(mult = c(0, .02))
-    ) +
-    theme_void() +
-    theme(plot.margin = margin(1, 0, 1, 0, unit = "mm"))
-})
-density_column <- gridExtra::arrangeGrob(
-  grobs = c(
-    list(grid::textGrob("Distribution", gp = grid::gpar(fontsize = 10))),
-    density_grobs
-  ),
-  ncol = 1,
-  heights = summary_grob$heights
-)
-heterogeneity_plot <- gridExtra::arrangeGrob(
-  summary_grob, density_column, ncol = 2, widths = c(4.7, 1.15),
-  top = grid::textGrob("", gp = grid::gpar(fontsize = 3)),
-  bottom = grid::textGrob(
-    expression(paste("Distribution of heterogeneity (", I^2,
-                     " in percentage) in the meta-analyses by subfield.")),
-    gp = grid::gpar(fontsize = 10, fontface = "bold")
-  )
-)
 save_supplement_plot(file.path(supplement_dir, "Figure_S4"),
               9, 5.25, function() print(heterogeneity_plot))
 
@@ -709,20 +680,27 @@ subfield_plot_data <- imap_dfr(legacy_codes, function(label, code) {
     upper = apply(ci[[1]], 2, quantile, .975, na.rm = TRUE))
 })
 figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
-  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "orange", alpha = .15) +
+  geom_line(aes(y = lower), colour = "orange", linetype = 3) +
   geom_line(aes(y = counterfactual), colour = "orange") +
+  geom_point(aes(y = counterfactual), colour = "orange", size = 1) +
+  geom_line(aes(y = upper), colour = "orange", linetype = 3) +
   geom_line(aes(y = factual), colour = "blue", linetype = 2) +
-  geom_vline(
-    data = tibble(
-      xintercept = c(1.64, 1.96, 2.58),
-      threshold_colour = c("green3", "red", "magenta")
-    ),
-    aes(xintercept = xintercept, colour = threshold_colour),
-    linetype = 2
-  ) +
-  scale_colour_identity() +
+  geom_point(aes(y = factual), colour = "blue", size = 1) +
+  geom_vline(xintercept = c(1.64, 1.96, 2.58), linetype = 2,
+    colour = c(3, 2, 6), linewidth = .5) +
   facet_wrap(~ Subfield, ncol = 2, scales = "free_y") + coord_cartesian(xlim = c(0, 8)) +
-  theme_bw() + labs(x = "|z|-value", y = "Frequency")
+  scale_x_continuous(
+    breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8),
+    guide = guide_axis(n.dodge = 2)
+  ) +
+  labs(x = "|z|-value", y = "Frequency") +
+  theme(
+    panel.background = element_rect(fill = "gray100"),
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(linewidth = .5, colour = "gray")
+  )
 save_supplement_plot(file.path(supplement_dir, "Figure_S5"),
   11, 10, function() print(figure_s5))
 
