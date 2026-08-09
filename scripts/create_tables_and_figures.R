@@ -320,30 +320,36 @@ ensure_output_dirs()
 ## Table 1
 ## -------------------------------
 write_table_1 <- function() {
-  ## Table 1 describes the sample rather than an outlier-screened estimate of
-  ## a meta-average. Use the all-data random-effects estimates to calculate its
-  ## power classification so that every meta-analysis and primary
-  ## estimate is represented. Outlier-screened data are reserved for outputs
-  ## whose estimands depend on the meta-average.
-  pps_rstandard <- load_estimator_data(
+  ## Most Table 1 classifications describe the full sample. Statistical power,
+  ## however, depends on the outlier-screened meta-average and must therefore
+  ## use the same outlier-removed data as Figure 2.
+  all_data <- load_estimator_data(
     "multilevel_random", "meta_0p5_heterogeneity_0", "all_data"
+  )
+  power_data <- load_estimator_data(
+    "multilevel_random", "meta_0p5_heterogeneity_0", "outliers_removed"
   ) %>%
     add_power_variables(0.5)
-myDat <- split_meta_analyses(pps_rstandard, add_sape = TRUE)
+myDat <- split_meta_analyses(all_data)
+power_myDat <- split_meta_analyses(power_data, add_sape = TRUE)
 mss <- vapply(myDat, function(x) length(x$sei), numeric(1))
+power_mss <- vapply(power_myDat, function(x) length(x$sei), numeric(1))
 
 idx <- tibble(
   i = seq_along(myDat),
   sdesn = vapply(myDat, function(x) x$sdesn[1], character(1)),
-  sape = vapply(myDat, function(x) x$sape[1], numeric(1)),
   guide = vapply(myDat, function(x) x$guide[1], character(1)),
   prere = vapply(myDat, function(x) x$prere[1], character(1))
 )
+power_idx <- tibble(
+  i = seq_along(power_myDat),
+  sape = vapply(power_myDat, function(x) x$sape[1], numeric(1))
+)
 
-fill_desc <- function(i) c(
-  length(i), sum(mss[i]), round(mean(mss[i])), min(mss[i]),
-  round(quantile(mss[i], 0.25)), round(median(mss[i])),
-  round(quantile(mss[i], 0.75)), max(mss[i])
+fill_desc <- function(i, sample_sizes = mss) c(
+  length(i), sum(sample_sizes[i]), round(mean(sample_sizes[i])), min(sample_sizes[i]),
+  round(quantile(sample_sizes[i], 0.25)), round(median(sample_sizes[i])),
+  round(quantile(sample_sizes[i], 0.75)), max(sample_sizes[i])
 )
 
 table_rows <- list(
@@ -352,8 +358,8 @@ table_rows <- list(
   c("  Observational", fill_desc(idx$i[idx$sdesn %in% c("observational", "mixed")])),
   c("  Experimental", fill_desc(idx$i[idx$sdesn == "experimental"])),
   c("Statistical power", rep("", 8)),
-  c("  SAPE > 0", fill_desc(idx$i[idx$sape > 0])),
-  c("  SAPE = 0", fill_desc(idx$i[idx$sape == 0])),
+  c("  SAPE > 0", fill_desc(power_idx$i[power_idx$sape > 0], power_mss)),
+  c("  SAPE = 0", fill_desc(power_idx$i[power_idx$sape == 0], power_mss)),
   c("Followed guidelines", rep("", 8)),
   c("  Yes", fill_desc(idx$i[idx$guide == "yes"])),
   c("  No", fill_desc(idx$i[idx$guide == "no"])),
