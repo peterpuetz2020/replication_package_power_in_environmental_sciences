@@ -580,29 +580,34 @@ saveRDS(
   figure_s3_inputs_path
 )
 
-## Retain a complete set of Figure S3-style ESR inputs for each subfield. These
-## use distinct cache names, so no full-sample counterfactual can be reused.
+## Calculate only the subfield counterfactuals needed for supplementary Table
+## S4: half the meta-average, the four heterogeneity specifications, and the
+## primary multilevel random-effects estimator. These use distinct cache names,
+## so no full-sample counterfactual can be reused.
 subfield_levels <- c(
   "Ecology", "Environmental Chemistry", "Environmental Engineering",
   "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law",
   "Nature and Landscape Conservation", "Water Science and Technology"
 )
-subfield_figure_parameters <- tidyr::crossing(
-  analysis_setups,
-  estimator = meta_analysis_estimators,
+subfield_table_parameters <- tidyr::crossing(
+  analysis_setups %>% filter(meta_average_multiplier == 0.5),
+  estimator = "multilevel_random",
   outlier_variant = "outliers_removed",
   subfield = subfield_levels
 )
-subfield_figure_results <- subfield_figure_parameters %>%
+subfield_table_results <- subfield_table_parameters %>%
   pmap(calculate_table_2)
 subfield_esr_results <- map2_dfr(
-  subfield_figure_results, seq_len(nrow(subfield_figure_parameters)),
+  subfield_table_results, seq_len(nrow(subfield_table_parameters)),
   function(result, i) result$summary %>%
-    mutate(subfield = subfield_figure_parameters$subfield[[i]], .before = 1)
+    filter(measure %in% c(
+      "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests"
+    )) %>%
+    mutate(subfield = subfield_table_parameters$subfield[[i]], .before = 1)
 )
 saveRDS(
   subfield_esr_results,
-  here("data", "derived_data", "Figure_S3_subfield_inputs.rds")
+  here("data", "derived_data", "Table_S4_subfield_inputs.rds")
 )
 table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
