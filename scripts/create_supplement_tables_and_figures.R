@@ -471,9 +471,9 @@ write_word_table <- function(x, number, alignment = NULL) {
   write_latex_table(x, file.path(supplement_dir, paste0("Table_S", number, ".tex")))
 }
 
-make_power_table <- function(dat) {
+make_power_table <- function(dat, meta_average_multiplier = 0.5) {
   dat <- dat %>% mutate(
-    sei = sqrt(vi), GE = 0.5 * GE,
+    sei = sqrt(vi), GE = meta_average_multiplier * GE,
     power = 1 - pnorm(qnorm(.975) - abs(GE) / sei) +
       pnorm(qnorm(.025) - abs(GE) / sei)
   )
@@ -535,17 +535,35 @@ table_s3 <- bind_rows(
   mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
 write_word_table(table_s3, 3)
 
-## Table S4: excess-significance results by subfield at half the meta-average
+## Tables S4-S5: Table S2 sensitivity analyses at one-quarter and the full
+## meta-average, respectively. The significance screen is based on the pooled
+## effect and therefore selects the same meta-analyses for every multiplier.
+power_table_sensitivities <- tribble(
+  ~meta_average_multiplier, ~table_number,
+  0.25,                     4,
+  1,                        5
+)
+pwalk(power_table_sensitivities, function(meta_average_multiplier, table_number) {
+  write_word_table(
+    make_power_table(
+      base_half %>% filter(cID %in% significant_meta),
+      meta_average_multiplier
+    ),
+    table_number
+  )
+})
+
+## Table S6: excess-significance results by subfield at half the meta-average
 ## and four degrees of genuine heterogeneity. Unlike Table 2, omit all p-value
 ## interval rows and retain only ESR_0.05^sig and the two sample-size rows.
 subfield_esr_path <- here(
-  "data", "derived_data", "Table_S4_subfield_inputs.rds"
+  "data", "derived_data", "Table_S6_subfield_inputs.rds"
 )
 if (!file.exists(subfield_esr_path)) {
-  stop("Subfield Table S4 inputs are unavailable. Run create_tables_and_figures.R first.")
+  stop("Subfield Table S6 inputs are unavailable. Run create_tables_and_figures.R first.")
 }
 subfield_esr_results <- readRDS(subfield_esr_path)
-table_s4_columns <- subfield_esr_results %>%
+table_s6_columns <- subfield_esr_results %>%
   filter(measure %in% c(
     "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests"
   )) %>%
@@ -565,14 +583,14 @@ table_s4_columns <- subfield_esr_results %>%
           factor(measure, levels = c(
             "ESR_{0.05}^{sig}", "No. of meta-analyses", "No. of tests"
           )))
-names(table_s4_columns) <- c(
+names(table_s6_columns) <- c(
   "Subfield", "Measure",
   "(1)\nHalf the meta-average\nDifference [95% CI]",
   "(2)\nHalf the meta-average and 25% genuine heterogeneity\nDifference [95% CI]",
   "(3)\nHalf the meta-average and 50% genuine heterogeneity\nDifference [95% CI]",
   "(4)\nHalf the meta-average and 75% genuine heterogeneity\nDifference [95% CI]"
 )
-write_word_table(table_s4_columns, 4)
+write_word_table(table_s6_columns, 6)
 
 ## Figure S4: heterogeneity distributions and the corresponding summaries.
 heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
@@ -762,8 +780,8 @@ walk2(c(0, .5), 5:6, function(heterogeneity_multiplier, figure_number) {
     11, 10, function() print(plot))
 })
 
-## Regression table formatting for Tables S5-S7. The negative-binomial fits
-## consumed by Tables S5-S6 are created in run_exploratory_regressions.R.
+## Regression table formatting for Tables S7-S9. The negative-binomial fits
+## consumed by Tables S7-S8 are created in run_exploratory_regressions.R.
 significance_stars <- function(p_value) {
   ifelse(p_value < .01, "***", ifelse(p_value < .05, "**",
     ifelse(p_value < .10, "*", "")))
@@ -827,8 +845,8 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   }
   bind_rows(result, summary_rows)
 }
-write_word_table(format_model_table(nb_sensitivity_full), 5)
-write_word_table(format_model_table(nb_sensitivity_quarter), 6)
+write_word_table(format_model_table(nb_sensitivity_full), 7)
+write_word_table(format_model_table(nb_sensitivity_quarter), 8)
 
 ols_formula <- esr_winsor ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric
 ols_fits <- map(c(0, .5), function(heterogeneity_multiplier) {
@@ -847,7 +865,7 @@ ols_fit <- list(
   models = flatten(map(ols_fits, "models")),
   robust = flatten(map(ols_fits, "robust"))
 )
-write_word_table(format_model_table(ols_fit, TRUE), 7)
+write_word_table(format_model_table(ols_fit, TRUE), 9)
 
 ## Figures S7-S10: separate continuous and categorical diagnostics for both main
 ## negative-binomial specifications, matching the requested four-figure layout.
@@ -867,11 +885,11 @@ save_diagnostic_group(nbMod1, 1, "categorical", 8)
 save_diagnostic_group(nbMod2, 2, "continuous", 9)
 save_diagnostic_group(nbMod2, 2, "categorical", 10)
 
-## Table S8 is descriptive and therefore uses all observations rather than an
+## Table S10 is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
-table_s7_all_data <- load_multilevel_all_data()
-table_s7 <- table_s7_all_data %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
+table_s10_all_data <- load_multilevel_all_data()
+table_s10 <- table_s10_all_data %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
   complete(etype, subfd = subfield_levels, fill = list(n = 0)) %>%
   pivot_wider(names_from = subfd, values_from = n) %>% rename(`Effect size` = etype) %>%
   arrange(`Effect size`) %>% mutate(No. = row_number(), .before = 1)
-write_word_table(table_s7, 8)
+write_word_table(table_s10, 10)

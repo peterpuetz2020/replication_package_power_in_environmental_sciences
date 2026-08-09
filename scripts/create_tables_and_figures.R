@@ -607,7 +607,7 @@ subfield_esr_results <- map2_dfr(
 )
 saveRDS(
   subfield_esr_results,
-  here("data", "derived_data", "Table_S4_subfield_inputs.rds")
+  here("data", "derived_data", "Table_S6_subfield_inputs.rds")
 )
 table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
