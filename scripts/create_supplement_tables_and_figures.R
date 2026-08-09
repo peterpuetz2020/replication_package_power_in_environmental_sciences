@@ -686,8 +686,15 @@ figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
   geom_line(aes(y = upper), colour = "orange", linetype = 3) +
   geom_line(aes(y = factual), colour = "blue", linetype = 2) +
   geom_point(aes(y = factual), colour = "blue", size = 1) +
-  geom_vline(xintercept = c(1.64, 1.96, 2.58), linetype = 2,
-    colour = c(3, 2, 6), linewidth = .5) +
+  geom_vline(
+    data = tibble(
+      xintercept = c(1.64, 1.96, 2.58),
+      threshold_colour = palette()[c(3, 2, 6)]
+    ),
+    aes(xintercept = xintercept, colour = threshold_colour),
+    inherit.aes = FALSE, linetype = 2, linewidth = .5
+  ) +
+  scale_colour_identity() +
   facet_wrap(~ Subfield, ncol = 2, scales = "free_y") + coord_cartesian(xlim = c(0, 8)) +
   scale_x_continuous(
     breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8),
