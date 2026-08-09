@@ -468,7 +468,7 @@ if (!file.exists(subfield_esr_path)) {
 subfield_esr_results <- readRDS(subfield_esr_path)
 walk2(subfield_levels, 4:10, function(subfield, figure_number) {
   plot_data <- subfield_esr_results %>%
-    filter(.data$subfield == subfield, measure == "ESR_{0.05}^{sig}") %>%
+    filter(.data$subfield == .env$subfield, measure == "ESR_{0.05}^{sig}") %>%
     mutate(
       estimate = as.numeric(estimate),
       ci_lower = as.numeric(str_match(confidence_interval, "\\[([^,]+),")[, 2]),
@@ -572,7 +572,8 @@ heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
 heterogeneity_summary <- heterogeneity_data %>%
   group_by(subfd) %>%
   summarise(
-    M = n(), Median = median(isq, na.rm = TRUE), Mean = mean(isq, na.rm = TRUE),
+    `No. of meta-analyses` = n(), Median = median(isq, na.rm = TRUE),
+    Mean = mean(isq, na.rm = TRUE),
     Q25 = quantile(isq, .25, na.rm = TRUE),
     Q75 = quantile(isq, .75, na.rm = TRUE), .groups = "drop"
   ) %>%
@@ -604,7 +605,8 @@ figure_s4_densities <- heterogeneity_data %>%
   left_join(dplyr::select(figure_s4_rows, subfd, row), by = "subfd") %>%
   mutate(y = row + .34 * height)
 
-column_positions <- c(Subfield = 1, M = 46, Median = 55, Mean = 63,
+column_positions <- c(Subfield = 1, `No. of meta-analyses` = 46,
+                      Median = 55, Mean = 63,
                       Q25 = 70, Q75 = 77, Heterogeneity = 89.5)
 heterogeneity_plot <- ggplot() +
   geom_hline(
@@ -624,7 +626,8 @@ heterogeneity_plot <- ggplot() +
   ) +
   geom_text(
     data = figure_s4_rows,
-    aes(x = column_positions[["M"]], y = row, label = M),
+    aes(x = column_positions[["No. of meta-analyses"]], y = row,
+        label = `No. of meta-analyses`),
     hjust = 1, size = 3.6
   ) +
   geom_text(data = figure_s4_rows,
