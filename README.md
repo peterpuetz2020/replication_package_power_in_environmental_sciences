@@ -56,22 +56,24 @@ source("scripts/create_tables_and_figures.R")
 source("scripts/create_supplement_tables_and_figures.R")
 ```
 
-This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Main-text Figure 1 uses a meta-average multiplier of 0.5 and heterogeneity multipliers 0 and 0.5; its 0.25 and 1 meta-average sensitivity counterparts are Figures S1 and S2. Table 2 is written for every combination of `meta_average_multiplier` and `heterogeneity_multiplier`, using both the outlier-removed and all-observation estimator data. The two main Table 2 files end in `_outliers_removed.csv` and `_all_data.csv`; variant-specific counterfactual filenames prevent results computed from one dataset from being reused for the other. Main-text Figure 2 uses only the random-effects, 0.5 meta-average, zero-heterogeneity setup and is saved simply as `Figure_2` in each graphics format. Its statement-level counts and percentages, including the subfield distribution among meta-analyses with median power above 80%, are written to `results/main/Figure_2_summary.xlsx`. The other Figure 2 estimator/meta-average variants are supplementary outputs and, because heterogeneity does not enter their power calculation, are generated only at zero heterogeneity. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
+This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Main-text Figure 1 uses a meta-average multiplier of 0.5 and heterogeneity multipliers 0 and 0.5; its 0.25 and 1 meta-average sensitivity counterparts are Figures S1 and S2. Table 2 is written for every combination of `meta_average_multiplier` and `heterogeneity_multiplier`, using the estimator-specific outlier-removed data. Main-text Figure 2 uses only the random-effects, 0.5 meta-average, zero-heterogeneity setup and is saved simply as `Figure_2` in each graphics format. Its statement-level counts and percentages, including the subfield distribution among meta-analyses with median power above 80%, are written to `results/main/Figure_2_summary.xlsx`. The other Figure 2 estimator/meta-average variants are supplementary outputs and, because heterogeneity does not enter their power calculation, are generated only at zero heterogeneity. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
 
-The workflow renders each setup for the primary multilevel random-effects
-estimator. The outlier-removed sample removes observations with an
+The workflow renders each setup for PET-PEESE and multilevel random effects. The
+outlier-removed samples are estimator-specific: PET-PEESE uses its PET residual
+screen, while the multilevel random-effects model removes observations with an
 absolute standardized residual above 3 in one screening round and then performs
 a single final refit. If that final random-effects fit warns that the
 ratio of the largest to smallest sampling variance is extremely large, the
 model-fitting script prints the affected `cID`.
-Outlier removal is used only for tables and figures whose calculations depend
-on an estimated meta-average. Descriptive Table 1 instead uses the all-data
-random-effects sample, so its meta-analysis and primary-estimate counts are not
-changed by the residual screen. When `scripts/compute_meta_estimates.R` is
+Estimator-specific outlier removal is used for analyses involving a random-effects
+or PET-PEESE estimate. The descriptive Table 1 and Table S7 instead use the
+all-data random-effects sample because neither table uses an estimated
+meta-average. When `scripts/compute_meta_estimates.R` is
 sourced, it reports the absolute number and percentage of primary estimates
-removed by the random-effects screen. A multilevel random-effects Egger
-regression with sampling standard error as moderator is fitted to the same data
-to test for small-study effects.
+removed separately by the random-effects and PET-PEESE screens. Small-study
+effects are tested only with a multilevel random-effects Egger regression on the
+random-effects outlier-removed sample; PET-PEESE remains available for the other
+estimator analyses but is not used for the Egger test or prevalence calculation.
 The supplementary script writes Figure S1 (meta-average multiplier 0.25),
 Figure S2 (meta-average multiplier 1), the across-combination ESR plot in
 the non-main-text Figure 2 power-distribution variants to
@@ -86,12 +88,14 @@ R session.
 Before the first run, create the random-effects estimator datasets:
 
 ```r
-source("scripts/compute_meta_estimates.R")
+source("scripts/compare_meta_analysis_estimators.R")
 source("scripts/create_tables_and_figures.R")
 ```
 
-The fitting script applies the random-effects residual screen and saves
-effect-level inputs under `data/derived_data/multilevel_random/`.
+The comparison script applies the PET residual screen consistently, then saves
+effect-level inputs under `results/main/multilevel_random/`. Output filenames
+end in `_pet_peese` or `_multilevel_random`, so results from each estimator
+remain separate.
 
 To compare the two random-effects heterogeneity components directly, run
 `scripts/compute_meta_estimates.R`. In addition to the estimator inputs, it
@@ -114,8 +118,9 @@ replace the multilevel random effects. The workflow applies the stricter
 eligibility rule below before requesting CR2 inference.
 
 Meta-analyses are eligible only when at least five distinct primary studies
-(`sID`) remain after random-effects outlier removal. If the retained sample has
-fewer than five studies, the entire
+(`sID`) remain after outlier removal. This threshold is checked separately for
+the PET residual screen and the multilevel random-effects residual screen; if
+either estimator's retained sample has fewer than five studies, the entire
 meta-analysis is omitted from both the all-data and outlier-removed outputs.
 The script removes any stale per-meta-analysis RDS files and records all such
 omissions in `data/derived_data/excluded_meta_analyses.csv`.
@@ -130,11 +135,11 @@ The data-preparation step is separated from table/figure rendering. To generate 
 source("scripts/create_analysis_data.R")
 ```
 
-This writes setup-specific derived datasets under `data/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. The script also creates any missing setup-specific counterfactual z-value and p-value RDS files needed by the tables and plots, while reusing files that already exist. Define `recreate_counterfactuals <- TRUE` before sourcing the script to overwrite and rebuild all matching counterfactual files. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it loads the random-effects RDS files under `data/derived_data/multilevel_random/`.
+This writes setup-specific derived datasets under `data/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. The script also creates any missing setup-specific counterfactual z-value and p-value RDS files needed by the tables and plots, while reusing files that already exist. Define `recreate_counterfactuals <- TRUE` before sourcing the script to overwrite and rebuild all matching counterfactual files. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
 
 ### Optional data-recreation step
 
-The model-fitting script, `scripts/compute_meta_estimates.R`, reads `data/MasterData.xlsx`. Running `scripts/classification.R` is only necessary if you want to recreate the classification files from the raw Scopus and Scimago inputs. `scripts/main.R` is an orchestrator: it fits the models, loads shared setup, renders outputs from the supplied derived data, and runs the exploratory regressions.
+The optional model-fitting script, `scripts/fit_pet_peese_models.R`, reads `data/MasterData.xlsx`. Running `scripts/classification.R` is only necessary if you want to recreate the classification files from the raw Scopus and Scimago inputs. `scripts/main.R` is now an orchestrator: it loads shared setup, renders outputs from the supplied derived data, and runs the exploratory regressions. Expensive scripts that replace supplied derived data are listed as commented, optional `source()` calls in `scripts/main.R`.
 
 ```r
 source("scripts/main.R")
@@ -190,8 +195,8 @@ intervals reuse the same contribution matrices during setup-specific data
 creation, and one parallel cluster and one in-memory copy of each estimator
 dataset are reused across all requested setups.
 
-The meta-estimate workflow reuses its all-data random-effects screening fit for
-the corresponding reported estimates. Its parallel loop is
+The meta-estimate workflow similarly reuses its all-data PET and random-effects
+screening fits for the corresponding reported estimates. Its parallel loop is
 dynamically scheduled so that workers finishing small meta-analyses can start
 new ones without waiting for the slowest member of a fixed batch.
 
@@ -220,7 +225,7 @@ The analysis scripts create their output folders automatically if they do not al
 - `scripts/classification.R`: optional script that recreates subfield classifications from raw inputs.
 - `scripts/functions.R`: helper functions used by the analysis.
 - `scripts/analysis_setup.R`: shared packages, runtime settings, helpers, and output-directory setup.
-- `scripts/compute_meta_estimates.R`: multilevel random-effects estimation, Egger small-study-effects tests, and per-meta-analysis RDS generation.
+- `scripts/fit_pet_peese_models.R`: optional PET-PEESE fitting and per-meta-analysis RDS generation.
 - `scripts/create_analysis_data.R`: setup-specific derived-data creation for table/figure rendering, including the ESR and regression-covariate inputs for Table 4.
 - `scripts/create_tables_and_figures.R`: creates manuscript tables and figures in numeric order, with independently rerunnable sections.
 - `scripts/create_supplement_tables_and_figures.R`: creates supplementary counterfactual sensitivity figures and the across-combination excess-significance plot.

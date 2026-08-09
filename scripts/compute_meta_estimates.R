@@ -1,5 +1,4 @@
-## Fit multilevel random-effects models and Egger regressions with and without
-## outliers.
+## Fit PET-PEESE and multilevel random-effects models with and without outliers.
 
 library(metafor)
 library(clubSandwich)
@@ -41,6 +40,8 @@ meta_analyses <- split(meta, meta$cID)
 
 derived_data_dir <- here("data", "derived_data")
 output_dirs <- c(
+  pet_peese_outlier_removed = here(derived_data_dir, "pet_peese_rstandard"),
+  pet_peese_all_data = here(derived_data_dir, "pet_peese_all_data"),
   random_effect_outlier_removed = here(derived_data_dir, "multilevel_random"),
   random_effect_all_data = here(derived_data_dir, "multilevel_random_all_data")
 )
@@ -113,7 +114,8 @@ primary_study_count <- function(dat) {
   dplyr::n_distinct(dat$sID, na.rm = TRUE)
 }
 
-drop_meta_analysis <- function(dat, reason, random_effect_studies = NA_integer_) {
+drop_meta_analysis <- function(dat, reason, pet_studies = NA_integer_,
+                               random_effect_studies = NA_integer_) {
   c_id <- as.character(dat$cID[[1]])
 
   ## A rerun must not leave output files from an earlier, less restrictive run.
@@ -124,6 +126,7 @@ drop_meta_analysis <- function(dat, reason, random_effect_studies = NA_integer_)
   tibble(
     cID = c_id,
     exclusion_reason = reason,
+    n_primary_studies_pet_outlier_removed = as.integer(pet_studies),
     n_primary_studies_random_effect_outlier_removed =
       as.integer(random_effect_studies)
   )
@@ -148,6 +151,87 @@ fit_sparse_effects <- function(dat) {
     estimate = estimate, standard_error = standard_error,
     p_value = p_value, tau2 = 0, within_study_tau2 = 0, isq = 0,
     fallback = TRUE
+  )
+}
+
+empty_meta_estimate <- function(method = NA_character_) {
+  list(
+    method = method, estimate = NA_real_, standard_error = NA_real_,
+    p_value = NA_real_,
+    tau2 = NA_real_, within_study_tau2 = NA_real_, isq = NA_real_,
+    fallback = TRUE
+  )
+}
+
+fit_pet_peese <- function(dat, pet = NULL, pet_test = NULL) {
+  if (nrow(dat) <= 1) {
+    result <- fit_sparse_effects(dat)
+    result$method <- "PET-PEESE not estimable"
+    return(result)
+  }
+
+  if (is.null(pet)) {
+    pet <- suppressWarnings(rma.mv(
+      yi, vi, mods = ~ 1 + sei,
+      random = random_effect_structure(dat),
+      method = "REML", test = "t", data = dat,
+      control = list(rel.tol = 1e-8)
+    ))
+  }
+  if (is.null(pet_test)) pet_test <- coefficient_test(pet, dat)
+  pet_intercept_p_value <- extract_coefficient_statistic(
+    pet_test, "intrcpt", "p_Satt"
+  )
+
+  ## CR2/Satterthwaite inference can return NA when a meta-analysis has too few
+  ## independent clusters. In that case the PET-to-PEESE switch cannot be
+  ## justified, so retain the already fitted PET model instead of evaluating an
+  ## NA in `if` (which aborts the entire parallel foreach job).
+  use_pet <- !is.finite(pet_intercept_p_value) ||
+    pet_intercept_p_value > 0.10
+
+  if (use_pet) {
+    selected_model <- pet
+    selected_test <- pet_test
+    method <- "PET"
+    outcome_scale <- 1
+  } else {
+    ## Put the complete PEESE model on a numerically more stable scale, rather
+    ## than scaling vi alone (which would change the inverse-variance weights
+    ## and the fitted variance components). If y* = c*y, then its sampling
+    ## variance is c^2*vi. Fitting y* ~ c^2*vi is the same PEESE model in new
+    ## units; the intercept/SE and variance components are transformed back
+    ## below. The slope test and I-squared are invariant to this change of units.
+    outcome_scale <- 10
+    peese_data <- dat %>% mutate(
+      yi = outcome_scale * yi,
+      vi = outcome_scale^2 * vi
+    )
+    selected_model <- suppressWarnings(rma.mv(
+      yi, vi, mods = ~ 1 + vi,
+      random = random_effect_structure(peese_data),
+      method = "REML", test = "t", data = peese_data,
+      control = list(rel.tol = 1e-8)
+    ))
+    selected_test <- coefficient_test(selected_model, peese_data)
+    method <- "PEESE"
+  }
+
+  list(
+    method = method,
+    estimate = extract_coefficient_statistic(
+      selected_test, "intrcpt", "beta"
+    ) / outcome_scale,
+    standard_error = extract_coefficient_statistic(
+      selected_test, "intrcpt", "SE"
+    ) / outcome_scale,
+    p_value = extract_coefficient_statistic(selected_test, "intrcpt", "p_Satt"),
+    tau2 = extract_variance_components(selected_model)$between_study /
+      outcome_scale^2,
+    within_study_tau2 =
+      extract_variance_components(selected_model)$within_study_effect_size /
+      outcome_scale^2,
+    isq = extract_total_isq(selected_model)
   )
 }
 
@@ -234,30 +318,49 @@ fit_one_meta_analysis <- function(dat) {
     ))
   }
 
+  ## Identify PET-PEESE outliers from the initial PET fit, as in the original
+  ## workflow, but decide estimator eligibility separately after removal.
+  outlier_model <- suppressWarnings(rma.mv(
+    yi, vi, mods = ~ 1 + sei,
+    random = random_effect_structure(dat),
+    method = "REML", test = "t", data = dat,
+    control = list(rel.tol = 1e-8)
+  ))
+  outlier_model_test <- coefficient_test(outlier_model, dat)
+  standardized_residuals <- as.data.frame(rstandard.rma.mv(outlier_model))$z
+  pet_outlier_removed_data <- dat[abs(standardized_residuals) < 3, , drop = FALSE]
+  pet_studies <- primary_study_count(pet_outlier_removed_data)
+
   random_effect_all_data <- fit_random_effects(dat)
   random_effect_outlier_removed <- fit_random_effects_with_outlier_removal(
     dat, screening_fit = random_effect_all_data
   )
   random_effect_studies <- primary_study_count(random_effect_outlier_removed$data)
-
-  if (random_effect_studies < minimum_primary_studies) {
-    return(drop_meta_analysis(
-      dat,
-      paste0("Fewer than ", minimum_primary_studies,
-             " primary studies after random-effects outlier removal"),
-      random_effect_studies = random_effect_studies
-    ))
+  egger <- if (random_effect_studies >= minimum_primary_studies) {
+    fit_egger(random_effect_outlier_removed$data)
+  } else {
+    list(slope = NA_real_, standard_error = NA_real_, p_value = NA_real_)
   }
 
   results <- list(
     all_data = list(
+      pet_peese = fit_pet_peese(dat, outlier_model, outlier_model_test),
+      pet_peese_data = dat,
       random_effect = random_effect_all_data,
-      egger = fit_egger(dat),
       random_effect_data = dat
     ),
     outlier_removed = list(
-      random_effect = random_effect_outlier_removed$result,
-      egger = fit_egger(random_effect_outlier_removed$data),
+      pet_peese = if (pet_studies >= minimum_primary_studies) {
+        fit_pet_peese(pet_outlier_removed_data)
+      } else {
+        empty_meta_estimate("PET-PEESE not estimable after outlier removal")
+      },
+      pet_peese_data = pet_outlier_removed_data,
+      random_effect = if (random_effect_studies >= minimum_primary_studies) {
+        random_effect_outlier_removed$result
+      } else {
+        empty_meta_estimate("Random effects not estimable after outlier removal")
+      },
       random_effect_data = random_effect_outlier_removed$data
     )
   )
@@ -270,8 +373,17 @@ fit_one_meta_analysis <- function(dat) {
     result <- results[[variant]]
     saveRDS(
       make_effect_data(
+        result$pet_peese_data, result$pet_peese
+      ),
+      file.path(
+        output_dirs[[paste0("pet_peese_", variant)]],
+        paste0("meta_", dat$cID[[1]], ".rds")
+      )
+    )
+    saveRDS(
+      make_effect_data(
         result$random_effect_data, result$random_effect,
-        result$egger$p_value
+        if (variant == "outlier_removed") egger$p_value else NA_real_
       ),
       file.path(
         output_dirs[[paste0("random_effect_", variant)]],
@@ -283,17 +395,21 @@ fit_one_meta_analysis <- function(dat) {
   tibble(
     cID = as.character(dat$cID[[1]]),
     exclusion_reason = NA_character_,
+    n_primary_studies_pet_outlier_removed = pet_studies,
     n_primary_studies_random_effect_outlier_removed = random_effect_studies,
     k_all_data = nrow(dat),
+    k_outlier_removed = nrow(pet_outlier_removed_data),
+    n_outliers_removed = nrow(dat) - nrow(pet_outlier_removed_data),
     k_random_effect_outlier_removed = nrow(random_effect_outlier_removed$data),
     n_random_effect_outliers_removed =
       nrow(dat) - nrow(random_effect_outlier_removed$data),
-    egger_slope_all_data = results$all_data$egger$slope,
-    egger_slope_se_all_data = results$all_data$egger$standard_error,
-    egger_p_value_all_data = results$all_data$egger$p_value,
-    egger_slope_outlier_removed = results$outlier_removed$egger$slope,
-    egger_slope_se_outlier_removed = results$outlier_removed$egger$standard_error,
-    egger_p_value_outlier_removed = results$outlier_removed$egger$p_value,
+    egger_slope_outlier_removed = egger$slope,
+    egger_slope_se_outlier_removed = egger$standard_error,
+    egger_p_value_outlier_removed = egger$p_value,
+    pet_peese_method_all_data = results$all_data$pet_peese$method,
+    pet_peese_method_outlier_removed = results$outlier_removed$pet_peese$method,
+    pet_peese_estimate_all_data = results$all_data$pet_peese$estimate,
+    pet_peese_estimate_outlier_removed = results$outlier_removed$pet_peese$estimate,
     random_effect_estimate_all_data = results$all_data$random_effect$estimate,
     random_effect_estimate_outlier_removed = results$outlier_removed$random_effect$estimate,
     random_effect_between_study_variance_all_data =
@@ -339,6 +455,7 @@ report_outlier_removal <- function(estimator, removed_column) {
   ))
 }
 
-## Make the impact of the residual screen visible without requiring inspection
-## of the CSV.
+## Sourcing this fitting script should make the impact of each estimator's
+## distinct residual screen visible without requiring inspection of the CSV.
 report_outlier_removal("Random effects", "n_random_effect_outliers_removed")
+report_outlier_removal("PET-PEESE", "n_outliers_removed")

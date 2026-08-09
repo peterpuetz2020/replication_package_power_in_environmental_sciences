@@ -97,13 +97,25 @@ load_multilevel_data <- function(setup_label) {
     full.names = TRUE
   )
   if (length(input_files) == 0) {
-    stop("No multilevel random-effects inputs found. Run compare_meta_analysis_estimators.R first.")
+    stop("No multilevel random-effects inputs found. Run scripts/compute_meta_estimates.R first.")
+  }
+  purrr::map_dfr(input_files, readRDS)
+}
+
+load_multilevel_all_data <- function() {
+  input_files <- list.files(
+    here("data", "derived_data", "multilevel_random_all_data"),
+    pattern = "\\.rds$", full.names = TRUE
+  )
+  if (length(input_files) == 0) {
+    stop("No all-data random-effects inputs found. Run scripts/compute_meta_estimates.R first.")
   }
   purrr::map_dfr(input_files, readRDS)
 }
 
 ## Small-study effects are tested by the standard-error slope in the multilevel
-## random-effects Egger regression fitted alongside the primary estimator.
+## random-effects Egger regression. Use the random-effects outlier-removed data,
+## matching the primary estimator and its analysis sample.
 load_small_study_effects <- function(setup_label) {
   derived_path <- here(
     "data", "derived_data",
@@ -414,6 +426,7 @@ esr_plot_data <- all_esr_results %>%
     ci_upper = as.numeric(stringr::str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
     estimator = dplyr::recode(
       estimator,
+      pet_peese = "PET-PEESE",
       multilevel_random = "Random effects"
     )
   ) %>%
@@ -460,7 +473,8 @@ walk2(subfield_levels, 4:10, function(subfield, figure_number) {
       estimate = as.numeric(estimate),
       ci_lower = as.numeric(str_match(confidence_interval, "\\[([^,]+),")[, 2]),
       ci_upper = as.numeric(str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
-      estimator = recode(estimator, multilevel_random = "Random effects")
+      estimator = recode(estimator, pet_peese = "PET-PEESE",
+                         multilevel_random = "Random effects")
     ) %>%
     rename(`Meta average multiplier` = meta_average_multiplier)
   plot <- ggplot(plot_data, aes(heterogeneity_multiplier, estimate, color = estimator)) +
@@ -676,7 +690,7 @@ calculate_subfield_counterfactual <- function(label, code, grid, type,
   dat <- prepare_subfield_data(label, heterogeneity_multiplier)
   heterogeneity_suffix <- paste0("_heterogeneity_", heterogeneity_multiplier)
   get_counterfactual(
-    file.path(derived_data_dir, paste0("multilevel_random_", type,
+    file.path(derived_data_dir, paste0("pet_peese_rstandard_", type,
       if (ci) "_ci" else "", ".", code, heterogeneity_suffix, ".rds")),
     split(dat, dat$cID), grid, ci = ci,
     cluster = if (ci) unique(dat$cID) else NULL,
@@ -842,8 +856,10 @@ save_diagnostic_group(nbMod1, 1, "categorical", 15)
 save_diagnostic_group(nbMod2, 2, "continuous", 16)
 save_diagnostic_group(nbMod2, 2, "categorical", 17)
 
-## Table S7: number of meta-analyses using each effect-size type, by subfield.
-table_s7 <- base_half %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
+## Table S7 is descriptive and therefore uses all observations rather than an
+## estimator-specific outlier-screened sample.
+table_s7_all_data <- load_multilevel_all_data()
+table_s7 <- table_s7_all_data %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
   complete(etype, subfd = subfield_levels, fill = list(n = 0)) %>%
   pivot_wider(names_from = subfd, values_from = n) %>% rename(`Effect size` = etype) %>%
   arrange(`Effect size`) %>% mutate(No. = row_number(), .before = 1)
