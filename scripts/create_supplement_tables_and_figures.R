@@ -692,7 +692,7 @@ figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
       threshold_colour = palette()[c(3, 2, 6)]
     ),
     aes(xintercept = xintercept, colour = threshold_colour),
-    inherit.aes = FALSE, linetype = 2, linewidth = .5
+    linetype = 2, linewidth = .5
   ) +
   scale_colour_identity() +
   facet_wrap(~ Subfield, ncol = 2, scales = "free_y") + coord_cartesian(xlim = c(0, 8)) +
