@@ -546,24 +546,27 @@ significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
   filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
 write_word_table(make_power_table(base_half %>% filter(cID %in% significant_meta)), 2)
 
-## Table S3: adequately powered meta-analyses and small-study effects by subfield.
+## Table S3: small-study effects by subfield.
 small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
 table_s3_meta <- base_half %>%
   dplyr::select(-any_of(c("small_study_effect_pval", "sse_yn"))) %>%
-  left_join(small_study_effects, by = "cID") %>% mutate(
-  power = 1 - pnorm(qnorm(.975) - abs(.5 * GE) / sqrt(vi)) +
-    pnorm(qnorm(.025) - abs(.5 * GE) / sqrt(vi))) %>%
+  left_join(small_study_effects, by = "cID") %>%
   group_by(cID) %>% summarise(Subfield = first(subfd),
-    adequately_powered = median(power, na.rm = TRUE) >= .8,
     small_study_effect = first(small_study_effect_pval) <= .05,
     .groups = "drop")
-table_s3 <- table_s3_meta %>% group_by(Subfield) %>% summarise(
-  `Median power >= 80% (%)` = 100 * mean(adequately_powered),
+table_s3_detail <- table_s3_meta %>% group_by(Subfield) %>% summarise(
+  `No. of meta-analyses` = n_distinct(cID),
   `Small-study effects (%)` = 100 * mean(small_study_effect, na.rm = TRUE),
-  .groups = "drop") %>% bind_rows(tibble(Subfield = "All meta-analyses",
-    `Median power >= 80% (%)` = 100 * mean(table_s3_meta$adequately_powered),
-    `Small-study effects (%)` = 100 * mean(table_s3_meta$small_study_effect, na.rm = TRUE))) %>%
-  mutate(across(where(is.numeric), ~ sprintf("%.1f", .x)))
+  .groups = "drop") %>%
+  mutate(Subfield = factor(Subfield, subfield_levels)) %>% arrange(Subfield) %>%
+  mutate(Subfield = as.character(Subfield))
+table_s3 <- bind_rows(
+  tibble(Subfield = "All meta-analyses",
+    `No. of meta-analyses` = n_distinct(table_s3_meta$cID),
+    `Small-study effects (%)` = 100 * mean(table_s3_meta$small_study_effect, na.rm = TRUE)),
+  table_s3_detail
+) %>%
+  mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
 write_word_table(table_s3, 3)
 
 ## Figure S11: heterogeneity distributions and the corresponding summaries.
