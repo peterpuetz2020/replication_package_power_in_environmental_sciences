@@ -60,7 +60,7 @@ analysis_setups <- tidyr::expand_grid(
 
 ## Estimators used throughout the manuscript-output workflow. The identifiers
 ## are also used as filename suffixes, so keep them filesystem friendly.
-meta_analysis_estimators <- c("pet_peese", "multilevel_random")
+meta_analysis_estimators <- "multilevel_random"
 
 source(here("scripts", "functions.R"))
 

@@ -10,8 +10,8 @@ source(here::here("scripts", "analysis_setup.R"))
 ## Set to TRUE to overwrite and rebuild counterfactual simulation files.
 recreate_counterfactuals <- FALSE
 
-## Optional: Fit PET-PEESE and multilevel random-effects models, save their effect-level
-## analysis data, and write the meta-analysis estimates used below.
+## Fit the primary multilevel random-effects models and their Egger regressions,
+## save effect-level analysis data, and write the meta-analysis estimates used below.
 source(here::here("scripts", "compute_meta_estimates.R"))
 
 ## Build setup-specific datasets and any missing counterfactual simulations before

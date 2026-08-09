@@ -102,30 +102,28 @@ load_multilevel_data <- function(setup_label) {
   purrr::map_dfr(input_files, readRDS)
 }
 
-## Small-study effects are tested by the slope in the PET-PEESE model. The
-## intercept-only multilevel model has no corresponding slope, and therefore
-## correctly stores NA for this field. Load the PET-PEESE results explicitly
-## rather than silently turning those NAs into negative tests.
+## Small-study effects are tested by the standard-error slope in the multilevel
+## random-effects Egger regression fitted alongside the primary estimator.
 load_small_study_effects <- function(setup_label) {
   derived_path <- here(
     "data", "derived_data",
-    paste0("pps_rstandard_raw_", setup_label, "_pet_peese.rds")
+    paste0("pps_rstandard_raw_", setup_label, "_multilevel_random.rds")
   )
-  pet_data <- if (file.exists(derived_path)) {
+  egger_data <- if (file.exists(derived_path)) {
     readRDS(derived_path)
   } else {
     input_files <- list.files(
-      here("data", "derived_data", "pet_peese_rstandard"),
+      here("data", "derived_data", "multilevel_random"),
       pattern = "\\.rds$", full.names = TRUE
     )
     if (length(input_files) == 0) {
-      stop("No PET-PEESE inputs found for the small-study-effect tests. ",
+      stop("No random-effects Egger inputs found for the small-study-effect tests. ",
            "Run scripts/compute_meta_estimates.R first.")
     }
     purrr::map_dfr(input_files, readRDS)
   }
 
-  pet_data %>%
+  egger_data %>%
     group_by(cID) %>%
     summarise(
       small_study_effect_pval = first(small_study_effect_pval),
@@ -416,7 +414,6 @@ esr_plot_data <- all_esr_results %>%
     ci_upper = as.numeric(stringr::str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
     estimator = dplyr::recode(
       estimator,
-      pet_peese = "PET-PEESE",
       multilevel_random = "Random effects"
     )
   ) %>%
@@ -463,8 +460,7 @@ walk2(subfield_levels, 4:10, function(subfield, figure_number) {
       estimate = as.numeric(estimate),
       ci_lower = as.numeric(str_match(confidence_interval, "\\[([^,]+),")[, 2]),
       ci_upper = as.numeric(str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
-      estimator = recode(estimator, pet_peese = "PET-PEESE",
-                         multilevel_random = "Random effects")
+      estimator = recode(estimator, multilevel_random = "Random effects")
     ) %>%
     rename(`Meta average multiplier` = meta_average_multiplier)
   plot <- ggplot(plot_data, aes(heterogeneity_multiplier, estimate, color = estimator)) +
@@ -680,7 +676,7 @@ calculate_subfield_counterfactual <- function(label, code, grid, type,
   dat <- prepare_subfield_data(label, heterogeneity_multiplier)
   heterogeneity_suffix <- paste0("_heterogeneity_", heterogeneity_multiplier)
   get_counterfactual(
-    file.path(derived_data_dir, paste0("pet_peese_rstandard_", type,
+    file.path(derived_data_dir, paste0("multilevel_random_", type,
       if (ci) "_ci" else "", ".", code, heterogeneity_suffix, ".rds")),
     split(dat, dat$cID), grid, ci = ci,
     cluster = if (ci) unique(dat$cID) else NULL,

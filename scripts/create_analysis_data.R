@@ -37,8 +37,6 @@ ensure_output_dirs <- function() {
   invisible(lapply(
     list(
       here("results", "main"),
-      here("data", "derived_data", "pet_peese_rstandard"),
-      here("data", "derived_data", "pet_peese_all_data"),
       here("data", "derived_data", "multilevel_random"),
       here("data", "derived_data", "multilevel_random_all_data"),
       here("data", "derived_data")
@@ -52,8 +50,6 @@ ensure_output_dirs <- function() {
 load_estimator_data <- function(estimator, outlier_variant = "outliers_removed") {
   estimator_dir <- switch(
     paste(estimator, outlier_variant, sep = "_"),
-    pet_peese_outliers_removed = here("data", "derived_data", "pet_peese_rstandard"),
-    pet_peese_all_data = here("data", "derived_data", "pet_peese_all_data"),
     multilevel_random_outliers_removed = here("data", "derived_data", "multilevel_random"),
     multilevel_random_all_data = here("data", "derived_data", "multilevel_random_all_data"),
     stop("Unknown estimator/outlier variant: ", estimator, "/", outlier_variant)

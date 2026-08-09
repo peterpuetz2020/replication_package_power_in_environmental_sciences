@@ -136,10 +136,6 @@ load_estimator_data <- function(estimator, setup_label_value = setup_label,
 
   estimator_dir <- switch(
     estimator,
-    pet_peese = here(
-      "data", "derived_data",
-      if (outlier_variant == "all_data") "pet_peese_all_data" else "pet_peese_rstandard"
-    ),
     multilevel_random = here(
       "data", "derived_data",
       if (outlier_variant == "all_data") "multilevel_random_all_data" else "multilevel_random"
