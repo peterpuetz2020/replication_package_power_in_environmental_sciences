@@ -14,6 +14,33 @@ library(openxlsx)
 
 source(here("scripts", "analysis_setup.R"))
 
+## Keep the supplementary renderer runnable in a fresh session after its cached
+## analysis inputs have been created by create_tables_and_figures.R.
+if (!exists("write_latex_table", mode = "function")) {
+  latex_escape <- function(x) {
+    replacements <- c(
+      "\\" = "\\textbackslash{}", "&" = "\\&", "%" = "\\%", "#" = "\\#",
+      "_" = "\\_", "$" = "\\$", "{" = "\\{", "}" = "\\}"
+    )
+    vapply(as.character(x), function(value) {
+      characters <- strsplit(gsub("\n", " ", value, fixed = TRUE), "", fixed = TRUE)[[1]]
+      paste0(ifelse(characters %in% names(replacements), replacements[characters], characters),
+             collapse = "")
+    }, character(1), USE.NAMES = FALSE)
+  }
+  write_latex_table <- function(x, path, alignment = NULL) {
+    if (is.null(alignment)) alignment <- paste0("l", strrep("c", ncol(x) - 1))
+    rows <- apply(x, 1, function(row) {
+      paste0(paste(latex_escape(row), collapse = " & "), " \\\\")
+    })
+    writeLines(c(
+      paste0("\\begin{tabular}{", alignment, "}"), "\\hline",
+      paste0(paste(latex_escape(names(x)), collapse = " & "), " \\\\"),
+      "\\hline", rows, "\\hline", "\\end{tabular}"
+    ), path, useBytes = TRUE)
+  }
+}
+
 supplement_dir <- here("results", "supplement")
 dir.create(supplement_dir, recursive = TRUE, showWarnings = FALSE)
 derived_data_dir <- here("data", "derived_data")
@@ -415,9 +442,48 @@ save_supplement_plot(
   width = 10, height = 4.5, draw = function() print(esr_plot)
 )
 
-## Tables S1-S10 and Figures S4-S9 follow the order of the supplementary
-## material. Tables are deliberately emitted as editable Word documents and do
-## not contain captions or notes; captions belong in the manuscript.
+## Figures S4-S10: the Figure S3 analysis repeated separately for all seven
+## environmental-science subfields.
+subfield_levels <- c(
+  "Ecology", "Environmental Chemistry", "Environmental Engineering",
+  "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law",
+  "Nature and Landscape Conservation", "Water Science and Technology"
+)
+subfield_esr_path <- here(
+  "data", "derived_data", "Figure_S3_subfield_inputs.rds"
+)
+if (!file.exists(subfield_esr_path)) {
+  stop("Subfield Figure S3 inputs are unavailable. Run create_tables_and_figures.R first.")
+}
+subfield_esr_results <- readRDS(subfield_esr_path)
+walk2(subfield_levels, 4:10, function(subfield, figure_number) {
+  plot_data <- subfield_esr_results %>%
+    filter(.data$subfield == subfield, measure == "ESR_{0.05}^{sig}") %>%
+    mutate(
+      estimate = as.numeric(estimate),
+      ci_lower = as.numeric(str_match(confidence_interval, "\\[([^,]+),")[, 2]),
+      ci_upper = as.numeric(str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
+      estimator = recode(estimator, pet_peese = "PET-PEESE",
+                         multilevel_random = "Random effects")
+    ) %>%
+    rename(`Meta average multiplier` = meta_average_multiplier)
+  plot <- ggplot(plot_data, aes(heterogeneity_multiplier, estimate, color = estimator)) +
+    geom_hline(yintercept = 0, color = "grey70") +
+    geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = .03,
+                  position = position_dodge(width = .06)) +
+    geom_point(position = position_dodge(width = .06)) +
+    facet_grid(. ~ `Meta average multiplier`, labeller = label_both) +
+    labs(x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig),
+         color = "Estimator", title = subfield) +
+    theme_bw()
+  save_supplement_plot(
+    file.path(supplement_dir, paste0("Figure_S", figure_number)),
+    width = 10, height = 4.5, draw = function() print(plot)
+  )
+})
+
+## Tables and remaining figures follow the order of the supplementary material.
+## Every table is emitted as both an editable Word document and copy-ready LaTeX.
 library(officer)
 
 write_word_table <- function(x, number, alignment = NULL) {
@@ -426,13 +492,8 @@ write_word_table <- function(x, number, alignment = NULL) {
   doc <- officer::body_add_table(doc, x, style = NULL, header = TRUE,
     alignment = alignment, align_table = "center")
   print(doc, target = file.path(supplement_dir, paste0("Table_S", number, ".docx")))
+  write_latex_table(x, file.path(supplement_dir, paste0("Table_S", number, ".tex")))
 }
-
-subfield_levels <- c(
-  "Ecology", "Environmental Chemistry", "Environmental Engineering",
-  "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law",
-  "Nature and Landscape Conservation", "Water Science and Technology"
-)
 
 make_power_table <- function(dat) {
   dat <- dat %>% mutate(
@@ -495,7 +556,7 @@ table_s3 <- table_s3_meta %>% group_by(Subfield) %>% summarise(
   mutate(across(where(is.numeric), ~ sprintf("%.1f", .x)))
 write_word_table(table_s3, 3)
 
-## Figure S4: heterogeneity distributions and the corresponding summaries.
+## Figure S11: heterogeneity distributions and the corresponding summaries.
 heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
   mutate(subfd = factor(subfd, subfield_levels))
 heterogeneity_summary <- heterogeneity_data %>%
@@ -508,7 +569,7 @@ heterogeneity_summary <- heterogeneity_data %>%
   arrange(subfd)
 openxlsx::write.xlsx(
   heterogeneity_summary %>% rename(Subfield = subfd),
-  file.path(derived_data_dir, "Figure_S4_heterogeneity_by_subfield.xlsx"),
+  file.path(derived_data_dir, "Figure_S11_heterogeneity_by_subfield.xlsx"),
   overwrite = TRUE
 )
 
@@ -579,11 +640,11 @@ heterogeneity_plot <- ggplot() +
     plot.caption = element_text(hjust = .5, margin = margin(t = 12))
   )
 
-save_supplement_plot(file.path(supplement_dir, "Figure_S4"),
+save_supplement_plot(file.path(supplement_dir, "Figure_S11"),
               9, 5.25, function() print(heterogeneity_plot))
 
-## Tables S4-S6 and Figure S5: calculate each subfield input in R and save the
-## generated CSV/RDS files alongside the other derived analysis data.
+## Figures S12-S13: subfield counterfactual distributions with zero and 50%
+## genuine heterogeneity. The obsolete ESR Tables S4-S6 are no longer created.
 subfield_grids <- list(
   p = c(-Inf, qnorm(c(.001, .01, .05, .1, .2, .3, .4, .5, .6, .7, .8, .9) / 2),
     0, qnorm(c(.9, .8, .7, .6, .5, .4, .3, .2, .1, .05, .01, .001) / 2,
@@ -599,78 +660,42 @@ legacy_codes <- c(eco = "Ecology", enc = "Environmental Chemistry",
   mpl = "Management, Monitoring, Policy and Law", nlc = "Nature and Landscape Conservation",
   wst = "Water Science and Technology")
 
-prepare_subfield_data <- function(label) {
-  base_half %>% filter(subfd == label) %>% mutate(GE = .5 * GE) %>%
-    filter_counterfactual_data(0, context = paste("supplement subfield", label))
+prepare_subfield_data <- function(label, heterogeneity_multiplier) {
+  setup_label <- if (heterogeneity_multiplier == 0) {
+    "meta_0p5_heterogeneity_0"
+  } else {
+    "meta_0p5_heterogeneity_0p5"
+  }
+  load_multilevel_data(setup_label) %>%
+    filter(subfd == label) %>%
+    mutate(GE = .5 * GE) %>%
+    filter_counterfactual_data(
+      heterogeneity_multiplier, context = paste("supplement subfield", label)
+    )
 }
 
-calculate_subfield_counterfactual <- function(label, code, grid, type, ci = FALSE) {
-  dat <- prepare_subfield_data(label)
+calculate_subfield_counterfactual <- function(label, code, grid, type,
+                                               heterogeneity_multiplier,
+                                               ci = FALSE) {
+  dat <- prepare_subfield_data(label, heterogeneity_multiplier)
+  heterogeneity_suffix <- paste0("_heterogeneity_", heterogeneity_multiplier)
   get_counterfactual(
     file.path(derived_data_dir, paste0("pet_peese_rstandard_", type,
-      if (ci) "_ci" else "", ".", code, ".rds")),
+      if (ci) "_ci" else "", ".", code, heterogeneity_suffix, ".rds")),
     split(dat, dat$cID), grid, ci = ci,
     cluster = if (ci) unique(dat$cID) else NULL,
-    heterogeneity_multiplier = 0
+    heterogeneity_multiplier = heterogeneity_multiplier
   )
 }
-
-calculate_esr_table <- function(legacy_number, label) {
-  code <- names(legacy_codes)[match(label, legacy_codes)]
-  dat <- prepare_subfield_data(label)
-  observed <- count_intervals(abs(dat$yi / sqrt(dat$vi)), subfield_grids$p_absolute)
-  point <- calculate_subfield_counterfactual(label, code, subfield_grids$p, "p_tab")
-  ci <- calculate_subfield_counterfactual(label, code, subfield_grids$p, "p_tab", TRUE)
-  n_tests <- sum(observed)
-  intervals <- apply(
-    matrix(observed / n_tests, nrow = nrow(ci[[1]]), ncol = length(observed),
-      byrow = TRUE) - ci[[1]], 2, quantile, probs = c(.025, .975), na.rm = TRUE)
-  output <- tibble(
-    `p-value interval` = c("0.9 < p",
-      paste0(seq(.8, .1, -.1), " < p < ", seq(.9, .2, -.1)),
-      "0.05 < p < 0.1", "0.01 < p < 0.05", "0.001 < p < 0.01", "p < 0.001"),
-    Difference = round((observed - point) / n_tests, 3),
-    `0.95 Confidence interval` = paste0("[", round(intervals[1, ], 3),
-      ", ", round(intervals[2, ], 3), "]"))
-  summary_specs <- list(c("ESR_{0.1}^{all}", 10, 13, 1),
-    c("ESR_{0.05}^{all}", 11, 13, 1), c("ESR_{0.1}^{sig}", 10, 13, 2),
-    c("ESR_{0.05}^{sig}", 11, 13, 3))
-  output <- bind_rows(output, map_dfr(summary_specs, function(spec) {
-    indices <- as.integer(spec[2]):as.integer(spec[3])
-    denominator <- if (grepl("all", spec[1], fixed = TRUE)) n_tests else sum(observed[indices])
-    bounds <- quantile(sum(observed[indices] / denominator) -
-      rowSums(ci[[as.integer(spec[4])]][, indices, drop = FALSE]),
-      c(.025, .975), na.rm = TRUE)
-    tibble(`p-value interval` = spec[1],
-      Difference = round(sum((observed - point)[indices] / denominator), 3),
-      `0.95 Confidence interval` = paste0("[", round(bounds[1], 3),
-        ", ", round(bounds[2], 3), "]"))
-  }), tibble(`p-value interval` = c("No. of meta-analysis", "No. of tests"),
-    Difference = c(n_distinct(dat$cID), n_tests), `0.95 Confidence interval` = "0")) %>%
-    setNames(c("p-value interval", paste(label,
-      c("Difference", "0.95 Confidence interval"), sep = "\n")))
-  write.csv(output, file.path(derived_data_dir, paste0("Robustness_Table_",
-    legacy_number, "_ESR_", gsub("[^[:alnum:]]+", "_", label), ".csv")),
-    row.names = FALSE)
-  output
-}
-esr_specs <- tribble(
-  ~number, ~legacy, ~label,
-  2, 2, "Ecology", 2, 3, "Environmental Chemistry", 2, 4, "Environmental Engineering",
-  3, 8, "Health, Toxicology and Mutagenesis", 3, 6, "Management, Monitoring, Policy and Law",
-  3, 5, "Nature and Landscape Conservation", 4, 7, "Water Science and Technology"
-)
-for (table_number in 4:6) {
-  spec <- esr_specs %>% filter(number == table_number - 2)
-  pieces <- map2(spec$legacy, spec$label, calculate_esr_table)
-  combined <- reduce(pieces, full_join, by = "p-value interval")
-  write_word_table(combined, table_number)
-}
-
-subfield_plot_data <- imap_dfr(legacy_codes, function(label, code) {
-  dat <- prepare_subfield_data(label)
-  point <- calculate_subfield_counterfactual(label, code, subfield_grids$z, "z_plot")
-  ci <- calculate_subfield_counterfactual(label, code, subfield_grids$z, "z_plot", TRUE)
+make_subfield_counterfactual_plot <- function(heterogeneity_multiplier) {
+ subfield_plot_data <- imap_dfr(legacy_codes, function(label, code) {
+  dat <- prepare_subfield_data(label, heterogeneity_multiplier)
+  point <- calculate_subfield_counterfactual(
+    label, code, subfield_grids$z, "z_plot", heterogeneity_multiplier
+  )
+  ci <- calculate_subfield_counterfactual(
+    label, code, subfield_grids$z, "z_plot", heterogeneity_multiplier, TRUE
+  )
   observed <- abs(dat$yi / sqrt(dat$vi))
   tibble(Subfield = label,
     z = head(subfield_grids$z_absolute, -1) + diff(subfield_grids$z_absolute)[1] / 2,
@@ -678,8 +703,8 @@ subfield_plot_data <- imap_dfr(legacy_codes, function(label, code) {
     counterfactual = as.vector(point) / length(observed),
     lower = apply(ci[[1]], 2, quantile, .025, na.rm = TRUE),
     upper = apply(ci[[1]], 2, quantile, .975, na.rm = TRUE))
-})
-figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
+ })
+ ggplot(subfield_plot_data, aes(z)) +
   geom_line(aes(y = lower), colour = "orange", linetype = 3) +
   geom_line(aes(y = counterfactual), colour = "orange") +
   geom_point(aes(y = counterfactual), colour = "orange", size = 1) +
@@ -700,7 +725,8 @@ figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
     breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8),
     guide = guide_axis(n.dodge = 2)
   ) +
-  labs(x = "|z|-value", y = "Frequency") +
+  labs(x = "|z|-value", y = "Frequency",
+       title = paste0(heterogeneity_multiplier * 100, "% genuine heterogeneity")) +
   theme(
     panel.background = element_rect(fill = "gray100"),
     panel.border = element_blank(),
@@ -708,11 +734,15 @@ figure_s5 <- ggplot(subfield_plot_data, aes(z)) +
     panel.grid.minor = element_blank(),
     axis.line = element_line(linewidth = .5, colour = "gray")
   )
-save_supplement_plot(file.path(supplement_dir, "Figure_S5"),
-  11, 10, function() print(figure_s5))
+}
+walk2(c(0, .5), 12:13, function(heterogeneity_multiplier, figure_number) {
+  plot <- make_subfield_counterfactual_plot(heterogeneity_multiplier)
+  save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
+    11, 10, function() print(plot))
+})
 
-## Regression table formatting for Tables S7-S9. The negative-binomial fits
-## consumed by Tables S7-S8 are created in run_exploratory_regressions.R.
+## Regression table formatting for Tables S4-S6. The negative-binomial fits
+## consumed by Tables S4-S5 are created in run_exploratory_regressions.R.
 significance_stars <- function(p_value) {
   ifelse(p_value < .01, "***", ifelse(p_value < .05, "**",
     ifelse(p_value < .10, "*", "")))
@@ -776,8 +806,8 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   }
   bind_rows(result, summary_rows)
 }
-write_word_table(format_model_table(nb_sensitivity_full), 7)
-write_word_table(format_model_table(nb_sensitivity_quarter), 8)
+write_word_table(format_model_table(nb_sensitivity_full), 4)
+write_word_table(format_model_table(nb_sensitivity_quarter), 5)
 
 ols_formula <- esr_winsor ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric
 ols_fits <- map(c(0, .5), function(heterogeneity_multiplier) {
@@ -796,9 +826,9 @@ ols_fit <- list(
   models = flatten(map(ols_fits, "models")),
   robust = flatten(map(ols_fits, "robust"))
 )
-write_word_table(format_model_table(ols_fit, TRUE), 9)
+write_word_table(format_model_table(ols_fit, TRUE), 6)
 
-## Figures S6-S9: separate continuous and categorical diagnostics for both main
+## Figures S14-S17: separate continuous and categorical diagnostics for both main
 ## negative-binomial specifications, matching the requested four-figure layout.
 save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   dat <- final_nb %>% mutate(residual = residuals(model), fitted_value = fitted(model))
@@ -811,14 +841,14 @@ save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
     11, ifelse(kind == "continuous", 10, 7), function() grid::grid.draw(grob))
 }
-save_diagnostic_group(nbMod1, 1, "continuous", 6)
-save_diagnostic_group(nbMod1, 1, "categorical", 7)
-save_diagnostic_group(nbMod2, 2, "continuous", 8)
-save_diagnostic_group(nbMod2, 2, "categorical", 9)
+save_diagnostic_group(nbMod1, 1, "continuous", 14)
+save_diagnostic_group(nbMod1, 1, "categorical", 15)
+save_diagnostic_group(nbMod2, 2, "continuous", 16)
+save_diagnostic_group(nbMod2, 2, "categorical", 17)
 
-## Table S10: number of meta-analyses using each effect-size type, by subfield.
-table_s10 <- base_half %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
+## Table S7: number of meta-analyses using each effect-size type, by subfield.
+table_s7 <- base_half %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
   complete(etype, subfd = subfield_levels, fill = list(n = 0)) %>%
   pivot_wider(names_from = subfd, values_from = n) %>% rename(`Effect size` = etype) %>%
   arrange(`Effect size`) %>% mutate(No. = row_number(), .before = 1)
-write_word_table(table_s10, 10)
+write_word_table(table_s7, 7)

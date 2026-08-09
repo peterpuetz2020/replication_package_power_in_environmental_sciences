@@ -18,6 +18,32 @@ library(officer)
 
 source(here("scripts", "analysis_setup.R"))
 
+latex_escape <- function(x) {
+  replacements <- c(
+    "\\" = "\\textbackslash{}", "&" = "\\&", "%" = "\\%", "#" = "\\#",
+    "_" = "\\_", "$" = "\\$", "{" = "\\{", "}" = "\\}"
+  )
+  vapply(as.character(x), function(value) {
+    characters <- strsplit(gsub("\n", " ", value, fixed = TRUE), "", fixed = TRUE)[[1]]
+    paste0(ifelse(characters %in% names(replacements), replacements[characters], characters),
+           collapse = "")
+  }, character(1), USE.NAMES = FALSE)
+}
+
+write_latex_table <- function(x, path, alignment = NULL) {
+  if (is.null(alignment)) alignment <- paste0("l", strrep("c", ncol(x) - 1))
+  rows <- apply(x, 1, function(row) {
+    paste0(paste(latex_escape(row), collapse = " & "), " \\\\")
+  })
+  contents <- c(
+    paste0("\\begin{tabular}{", alignment, "}"),
+    "\\hline",
+    paste0(paste(latex_escape(names(x)), collapse = " & "), " \\\\"),
+    "\\hline", rows, "\\hline", "\\end{tabular}"
+  )
+  writeLines(contents, path, useBytes = TRUE)
+}
+
 required_setup_columns <- c("meta_average_multiplier", "heterogeneity_multiplier", "setup_label")
 if (!all(required_setup_columns %in% names(analysis_setups))) {
   stop("analysis_setups must contain: ", paste(required_setup_columns, collapse = ", "))
@@ -374,6 +400,7 @@ document <- officer::body_add_par(document, "Table 1. Characteristics of the met
 ## style, and officer rejects a style that is absent from the document.
 document <- officer::body_add_table(document, docx_table, style = NULL)
 print(document, target = here("results", "main", "Table_1.docx"))
+write_latex_table(table_data, here("results", "main", "Table_1.tex"))
 }
 
 write_table_1()
@@ -449,10 +476,14 @@ save_plot(
 ## Table 2
 ## -------------------------------
 calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
-                              setup_label, estimator, outlier_variant, ...) {
+                              setup_label, estimator, outlier_variant,
+                              subfield = NULL, ...) {
   pps_rstandard <- load_estimator_data(
     estimator, setup_label, outlier_variant
   )
+  if (!is.null(subfield)) {
+    pps_rstandard <- pps_rstandard %>% filter(subfd == subfield)
+  }
   grids <- make_grids()
   my_dat <- pps_rstandard %>%
     mutate(GE = meta_average_multiplier * GE) %>%
@@ -463,7 +494,12 @@ calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
   myDat <- split_meta_analyses(my_dat)
   facz <- abs(my_dat$yi / sqrt(my_dat$vi))
   p.orig.tab <- count_intervals(facz, grids$p_grid_tab2)
-  result_suffix <- paste(setup_label, estimator, outlier_variant, sep = "_")
+  subfield_suffix <- if (is.null(subfield)) "" else paste0(
+    "_", gsub("[^[:alnum:]]+", "_", subfield)
+  )
+  result_suffix <- paste0(
+    paste(setup_label, estimator, outlier_variant, sep = "_"), subfield_suffix
+  )
   p.tab <- get_counterfactual(here("data", "derived_data", paste0("p_tab_", result_suffix, ".rds")), myDat, grids$p_grid_tab, heterogeneity_multiplier_value = heterogeneity_multiplier)
   p.tab.ci <- get_counterfactual(here("data", "derived_data", paste0("p_tab_ci_", result_suffix, ".rds")), myDat, grids$p_grid_tab, ci = TRUE, cluster = unique(my_dat$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
@@ -537,6 +573,31 @@ saveRDS(
   ),
   figure_s3_inputs_path
 )
+
+## Retain a complete set of Figure S3-style ESR inputs for each subfield. These
+## use distinct cache names, so no full-sample counterfactual can be reused.
+subfield_levels <- c(
+  "Ecology", "Environmental Chemistry", "Environmental Engineering",
+  "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law",
+  "Nature and Landscape Conservation", "Water Science and Technology"
+)
+subfield_figure_parameters <- tidyr::crossing(
+  analysis_setups,
+  estimator = meta_analysis_estimators,
+  outlier_variant = "outliers_removed",
+  subfield = subfield_levels
+)
+subfield_figure_results <- subfield_figure_parameters %>%
+  pmap(calculate_table_2)
+subfield_esr_results <- map2_dfr(
+  subfield_figure_results, seq_len(nrow(subfield_figure_parameters)),
+  function(result, i) result$summary %>%
+    mutate(subfield = subfield_figure_parameters$subfield[[i]], .before = 1)
+)
+saveRDS(
+  subfield_esr_results,
+  here("data", "derived_data", "Figure_S3_subfield_inputs.rds")
+)
 table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
   filter(estimator == "multilevel_random", meta_average_multiplier == 0.5) %>%
@@ -564,6 +625,7 @@ table_2_document <- officer::body_add_table(
   alignment = c("left", rep("center", 4)), align_table = "center"
 )
 print(table_2_document, target = here("results", "main", "Table_2.docx"))
+write_latex_table(table_2, here("results", "main", "Table_2.tex"))
 
 ## -------------------------------
 ## Table 3
@@ -585,6 +647,7 @@ document <- officer::body_add_table(
   alignment = c("left", rep("center", 8)), align_table = "center"
 )
 print(document, target = here("results", "main", "Table_3.docx"))
+write_latex_table(power_table, here("results", "main", "Table_3.tex"))
 }
 
 analysis_setups %>%
@@ -671,6 +734,7 @@ table_4_document <- officer::body_add_par(
   style = NULL
 )
 print(table_4_document, target = here("results", "main", "Table_4.docx"))
+write_latex_table(table_4_terms, here("results", "main", "Table_4.tex"))
 
 ## -------------------------------
 ## Figure 2
