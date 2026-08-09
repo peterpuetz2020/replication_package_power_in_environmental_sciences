@@ -157,7 +157,7 @@ fit_sparse_effects <- function(dat) {
 empty_meta_estimate <- function(method = NA_character_) {
   list(
     method = method, estimate = NA_real_, standard_error = NA_real_,
-    p_value = NA_real_, small_study_effect_p_value = NA_real_,
+    p_value = NA_real_,
     tau2 = NA_real_, within_study_tau2 = NA_real_, isq = NA_real_,
     fallback = TRUE
   )
@@ -167,7 +167,6 @@ fit_pet_peese <- function(dat, pet = NULL, pet_test = NULL) {
   if (nrow(dat) <= 1) {
     result <- fit_sparse_effects(dat)
     result$method <- "PET-PEESE not estimable"
-    result$small_study_effect_p_value <- NA_real_
     return(result)
   }
 
@@ -195,7 +194,6 @@ fit_pet_peese <- function(dat, pet = NULL, pet_test = NULL) {
     selected_model <- pet
     selected_test <- pet_test
     method <- "PET"
-    slope_term <- "sei"
     outcome_scale <- 1
   } else {
     ## Put the complete PEESE model on a numerically more stable scale, rather
@@ -217,7 +215,6 @@ fit_pet_peese <- function(dat, pet = NULL, pet_test = NULL) {
     ))
     selected_test <- coefficient_test(selected_model, peese_data)
     method <- "PEESE"
-    slope_term <- "vi"
   }
 
   list(
@@ -229,15 +226,28 @@ fit_pet_peese <- function(dat, pet = NULL, pet_test = NULL) {
       selected_test, "intrcpt", "SE"
     ) / outcome_scale,
     p_value = extract_coefficient_statistic(selected_test, "intrcpt", "p_Satt"),
-    small_study_effect_p_value = extract_coefficient_statistic(
-      selected_test, slope_term, "p_Satt"
-    ),
     tau2 = extract_variance_components(selected_model)$between_study /
       outcome_scale^2,
     within_study_tau2 =
       extract_variance_components(selected_model)$within_study_effect_size /
       outcome_scale^2,
     isq = extract_total_isq(selected_model)
+  )
+}
+
+fit_egger <- function(dat) {
+  egger <- suppressWarnings(rma.mv(
+    yi, vi, mods = ~ sei,
+    random = random_effect_structure(dat),
+    method = "REML", test = "t", data = dat,
+    control = list(rel.tol = 1e-8)
+  ))
+  egger_test <- coefficient_test(egger, dat)
+
+  list(
+    slope = extract_coefficient_statistic(egger_test, "sei", "beta"),
+    standard_error = extract_coefficient_statistic(egger_test, "sei", "SE"),
+    p_value = extract_coefficient_statistic(egger_test, "sei", "p_Satt")
   )
 }
 
@@ -326,6 +336,11 @@ fit_one_meta_analysis <- function(dat) {
     dat, screening_fit = random_effect_all_data
   )
   random_effect_studies <- primary_study_count(random_effect_outlier_removed$data)
+  egger <- if (random_effect_studies >= minimum_primary_studies) {
+    fit_egger(random_effect_outlier_removed$data)
+  } else {
+    list(slope = NA_real_, standard_error = NA_real_, p_value = NA_real_)
+  }
 
   results <- list(
     all_data = list(
@@ -358,8 +373,7 @@ fit_one_meta_analysis <- function(dat) {
     result <- results[[variant]]
     saveRDS(
       make_effect_data(
-        result$pet_peese_data, result$pet_peese,
-        result$pet_peese$small_study_effect_p_value
+        result$pet_peese_data, result$pet_peese
       ),
       file.path(
         output_dirs[[paste0("pet_peese_", variant)]],
@@ -367,7 +381,10 @@ fit_one_meta_analysis <- function(dat) {
       )
     )
     saveRDS(
-      make_effect_data(result$random_effect_data, result$random_effect),
+      make_effect_data(
+        result$random_effect_data, result$random_effect,
+        if (variant == "outlier_removed") egger$p_value else NA_real_
+      ),
       file.path(
         output_dirs[[paste0("random_effect_", variant)]],
         paste0("meta_", dat$cID[[1]], ".rds")
@@ -386,6 +403,9 @@ fit_one_meta_analysis <- function(dat) {
     k_random_effect_outlier_removed = nrow(random_effect_outlier_removed$data),
     n_random_effect_outliers_removed =
       nrow(dat) - nrow(random_effect_outlier_removed$data),
+    egger_slope_outlier_removed = egger$slope,
+    egger_slope_se_outlier_removed = egger$standard_error,
+    egger_p_value_outlier_removed = egger$p_value,
     pet_peese_method_all_data = results$all_data$pet_peese$method,
     pet_peese_method_outlier_removed = results$outlier_removed$pet_peese$method,
     pet_peese_estimate_all_data = results$all_data$pet_peese$estimate,
