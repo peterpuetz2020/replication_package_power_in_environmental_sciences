@@ -463,7 +463,7 @@ walk2(subfield_levels, 4:10, function(subfield, figure_number) {
       estimate = as.numeric(estimate),
       ci_lower = as.numeric(str_match(confidence_interval, "\\[([^,]+),")[, 2]),
       ci_upper = as.numeric(str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
-      estimator = recode(estimator, pet_peese = "PET-PEESE",
+      estimator = dplyr::recode(estimator, pet_peese = "PET-PEESE",
                          multilevel_random = "Random effects")
     ) %>%
     rename(`Meta average multiplier` = meta_average_multiplier)
