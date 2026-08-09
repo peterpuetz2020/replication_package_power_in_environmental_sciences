@@ -2,7 +2,7 @@
 ## create_supplement_tables_and_figures.R
 ## ---------------------------------------------------------
 ## Recreate all supplementary tables and figures from the analysis outputs. The
-## fitted negative-binomial models used for Figure S4 are produced by
+## fitted negative-binomial models used for the supplementary tables are produced by
 ## run_exploratory_regressions.R.
 
 library(tidyverse)
@@ -452,49 +452,15 @@ save_supplement_plot(
   width = 10, height = 4.5, draw = function() print(esr_plot)
 )
 
-## Figures S4-S10: the Figure S3 analysis repeated separately for all seven
-## environmental-science subfields.
+## Tables and remaining figures follow the order of the supplementary material.
+## Every table is emitted as both an editable Word document and copy-ready LaTeX.
+library(officer)
+
 subfield_levels <- c(
   "Ecology", "Environmental Chemistry", "Environmental Engineering",
   "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law",
   "Nature and Landscape Conservation", "Water Science and Technology"
 )
-subfield_esr_path <- here(
-  "data", "derived_data", "Figure_S3_subfield_inputs.rds"
-)
-if (!file.exists(subfield_esr_path)) {
-  stop("Subfield Figure S3 inputs are unavailable. Run create_tables_and_figures.R first.")
-}
-subfield_esr_results <- readRDS(subfield_esr_path)
-walk2(subfield_levels, 4:10, function(subfield, figure_number) {
-  plot_data <- subfield_esr_results %>%
-    filter(.data$subfield == .env$subfield, measure == "ESR_{0.05}^{sig}") %>%
-    mutate(
-      estimate = as.numeric(estimate),
-      ci_lower = as.numeric(str_match(confidence_interval, "\\[([^,]+),")[, 2]),
-      ci_upper = as.numeric(str_match(confidence_interval, ", ([^]]+)\\]")[, 2]),
-      estimator = dplyr::recode(estimator, pet_peese = "PET-PEESE",
-                         multilevel_random = "Random effects")
-    ) %>%
-    rename(`Meta average multiplier` = meta_average_multiplier)
-  plot <- ggplot(plot_data, aes(heterogeneity_multiplier, estimate, color = estimator)) +
-    geom_hline(yintercept = 0, color = "grey70") +
-    geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = .03,
-                  position = position_dodge(width = .06)) +
-    geom_point(position = position_dodge(width = .06)) +
-    facet_grid(. ~ `Meta average multiplier`, labeller = label_both) +
-    labs(x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig),
-         color = "Estimator", title = subfield) +
-    theme_bw()
-  save_supplement_plot(
-    file.path(supplement_dir, paste0("Figure_S", figure_number)),
-    width = 10, height = 4.5, draw = function() print(plot)
-  )
-})
-
-## Tables and remaining figures follow the order of the supplementary material.
-## Every table is emitted as both an editable Word document and copy-ready LaTeX.
-library(officer)
 
 write_word_table <- function(x, number, alignment = NULL) {
   if (is.null(alignment)) alignment <- c("left", rep("center", ncol(x) - 1))
@@ -569,7 +535,46 @@ table_s3 <- bind_rows(
   mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
 write_word_table(table_s3, 3)
 
-## Figure S11: heterogeneity distributions and the corresponding summaries.
+## Table S4: excess-significance results by subfield at half the meta-average
+## and four degrees of genuine heterogeneity. Unlike Table 2, omit all p-value
+## interval rows and retain only ESR_0.05^sig and the two sample-size rows.
+subfield_esr_path <- here(
+  "data", "derived_data", "Table_S4_subfield_inputs.rds"
+)
+if (!file.exists(subfield_esr_path)) {
+  stop("Subfield Table S4 inputs are unavailable. Run create_tables_and_figures.R first.")
+}
+subfield_esr_results <- readRDS(subfield_esr_path)
+table_s4_columns <- subfield_esr_results %>%
+  filter(measure %in% c(
+    "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests"
+  )) %>%
+  mutate(
+    measure = recode(measure, `No. of meta-analysis` = "No. of meta-analyses"),
+    value = if_else(
+      confidence_interval == "0", estimate,
+      paste(estimate, confidence_interval)
+    ),
+    heterogeneity_multiplier = factor(
+      heterogeneity_multiplier, levels = c(0, .25, .5, .75)
+    )
+  ) %>%
+  dplyr::select(Subfield = subfield, measure, heterogeneity_multiplier, value) %>%
+  pivot_wider(names_from = heterogeneity_multiplier, values_from = value) %>%
+  arrange(factor(Subfield, levels = subfield_levels),
+          factor(measure, levels = c(
+            "ESR_{0.05}^{sig}", "No. of meta-analyses", "No. of tests"
+          )))
+names(table_s4_columns) <- c(
+  "Subfield", "Measure",
+  "(1)\nHalf the meta-average\nDifference [95% CI]",
+  "(2)\nHalf the meta-average and 25% genuine heterogeneity\nDifference [95% CI]",
+  "(3)\nHalf the meta-average and 50% genuine heterogeneity\nDifference [95% CI]",
+  "(4)\nHalf the meta-average and 75% genuine heterogeneity\nDifference [95% CI]"
+)
+write_word_table(table_s4_columns, 4)
+
+## Figure S4: heterogeneity distributions and the corresponding summaries.
 heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
   mutate(subfd = factor(subfd, subfield_levels))
 heterogeneity_summary <- heterogeneity_data %>%
@@ -583,7 +588,7 @@ heterogeneity_summary <- heterogeneity_data %>%
   arrange(subfd)
 openxlsx::write.xlsx(
   heterogeneity_summary %>% rename(Subfield = subfd),
-  file.path(derived_data_dir, "Figure_S11_heterogeneity_by_subfield.xlsx"),
+  file.path(derived_data_dir, "Figure_S4_heterogeneity_by_subfield.xlsx"),
   overwrite = TRUE
 )
 
@@ -656,11 +661,11 @@ heterogeneity_plot <- ggplot() +
     plot.caption = element_text(hjust = .5, margin = margin(t = 12))
   )
 
-save_supplement_plot(file.path(supplement_dir, "Figure_S11"),
+save_supplement_plot(file.path(supplement_dir, "Figure_S4"),
               9, 5.25, function() print(heterogeneity_plot))
 
-## Figures S12-S13: subfield counterfactual distributions with zero and 50%
-## genuine heterogeneity. The obsolete ESR Tables S4-S6 are no longer created.
+## Figures S5-S6: subfield counterfactual distributions with zero and 50%
+## genuine heterogeneity.
 subfield_grids <- list(
   p = c(-Inf, qnorm(c(.001, .01, .05, .1, .2, .3, .4, .5, .6, .7, .8, .9) / 2),
     0, qnorm(c(.9, .8, .7, .6, .5, .4, .3, .2, .1, .05, .01, .001) / 2,
@@ -751,14 +756,14 @@ make_subfield_counterfactual_plot <- function(heterogeneity_multiplier) {
     axis.line = element_line(linewidth = .5, colour = "gray")
   )
 }
-walk2(c(0, .5), 12:13, function(heterogeneity_multiplier, figure_number) {
+walk2(c(0, .5), 5:6, function(heterogeneity_multiplier, figure_number) {
   plot <- make_subfield_counterfactual_plot(heterogeneity_multiplier)
   save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
     11, 10, function() print(plot))
 })
 
-## Regression table formatting for Tables S4-S6. The negative-binomial fits
-## consumed by Tables S4-S5 are created in run_exploratory_regressions.R.
+## Regression table formatting for Tables S5-S7. The negative-binomial fits
+## consumed by Tables S5-S6 are created in run_exploratory_regressions.R.
 significance_stars <- function(p_value) {
   ifelse(p_value < .01, "***", ifelse(p_value < .05, "**",
     ifelse(p_value < .10, "*", "")))
@@ -822,8 +827,8 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   }
   bind_rows(result, summary_rows)
 }
-write_word_table(format_model_table(nb_sensitivity_full), 4)
-write_word_table(format_model_table(nb_sensitivity_quarter), 5)
+write_word_table(format_model_table(nb_sensitivity_full), 5)
+write_word_table(format_model_table(nb_sensitivity_quarter), 6)
 
 ols_formula <- esr_winsor ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric
 ols_fits <- map(c(0, .5), function(heterogeneity_multiplier) {
@@ -842,9 +847,9 @@ ols_fit <- list(
   models = flatten(map(ols_fits, "models")),
   robust = flatten(map(ols_fits, "robust"))
 )
-write_word_table(format_model_table(ols_fit, TRUE), 6)
+write_word_table(format_model_table(ols_fit, TRUE), 7)
 
-## Figures S14-S17: separate continuous and categorical diagnostics for both main
+## Figures S7-S10: separate continuous and categorical diagnostics for both main
 ## negative-binomial specifications, matching the requested four-figure layout.
 save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   dat <- final_nb %>% mutate(residual = residuals(model), fitted_value = fitted(model))
@@ -857,16 +862,16 @@ save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
     11, ifelse(kind == "continuous", 10, 7), function() grid::grid.draw(grob))
 }
-save_diagnostic_group(nbMod1, 1, "continuous", 14)
-save_diagnostic_group(nbMod1, 1, "categorical", 15)
-save_diagnostic_group(nbMod2, 2, "continuous", 16)
-save_diagnostic_group(nbMod2, 2, "categorical", 17)
+save_diagnostic_group(nbMod1, 1, "continuous", 7)
+save_diagnostic_group(nbMod1, 1, "categorical", 8)
+save_diagnostic_group(nbMod2, 2, "continuous", 9)
+save_diagnostic_group(nbMod2, 2, "categorical", 10)
 
-## Table S7 is descriptive and therefore uses all observations rather than an
+## Table S8 is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
 table_s7_all_data <- load_multilevel_all_data()
 table_s7 <- table_s7_all_data %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
   complete(etype, subfd = subfield_levels, fill = list(n = 0)) %>%
   pivot_wider(names_from = subfd, values_from = n) %>% rename(`Effect size` = etype) %>%
   arrange(`Effect size`) %>% mutate(No. = row_number(), .before = 1)
-write_word_table(table_s7, 7)
+write_word_table(table_s7, 8)
