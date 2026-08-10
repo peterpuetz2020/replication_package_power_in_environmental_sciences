@@ -195,7 +195,9 @@ Define these values before sourcing `scripts/main.R` (or edit their defaults in
 - `heterogeneity_multiplier`: vector of multipliers applied to the between-effect heterogeneity in the counterfactual calculations (default `c(0, 0.25, 0.5, 0.75)`).
 - `run_classification`: recreate classification CSV files (default `FALSE`).
 - `run_meta_analysis_fitting`: fit all meta-analyses and replace estimator RDS
-  files (default `FALSE`).
+  files (default `FALSE`). Even at the default, `scripts/main.R` automatically
+  runs the fitting script, with a console message, if any required estimator
+  directory contains no RDS files.
 - `recreate_meta_analysis_estimates`: ignore resumable per-meta-analysis fitting
   caches and refit every meta-analysis when fitting is enabled (default
   `FALSE`).
