@@ -31,17 +31,10 @@ latex_escape <- function(x) {
 }
 
 write_latex_table <- function(x, path, alignment = NULL) {
-  if (is.null(alignment)) alignment <- paste0("l", strrep("c", ncol(x) - 1))
   rows <- apply(x, 1, function(row) {
     paste0(paste(latex_escape(row), collapse = " & "), " \\\\")
   })
-  contents <- c(
-    paste0("\\begin{tabular}{", alignment, "}"),
-    "\\hline",
-    paste0(paste(latex_escape(names(x)), collapse = " & "), " \\\\"),
-    "\\hline", rows, "\\hline", "\\end{tabular}"
-  )
-  writeLines(contents, path, useBytes = TRUE)
+  writeLines(rows, path, useBytes = TRUE)
 }
 
 required_setup_columns <- c("meta_average_multiplier", "heterogeneity_multiplier", "setup_label")

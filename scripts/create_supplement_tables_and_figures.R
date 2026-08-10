@@ -374,6 +374,9 @@ esr_plot <- ggplot(
   ) +
   geom_point(position = position_dodge(width = 0.06)) +
   facet_grid(. ~ `Meta average multiplier`, labeller = label_both) +
+  scale_x_continuous(
+    breaks = c(0, 0.25, 0.5, 0.75)
+  ) +
   labs(
     x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig),
     color = "Estimator"
@@ -402,6 +405,203 @@ write_word_table <- function(x, number, alignment = NULL) {
   print(doc, target = file.path(supplement_dir, paste0("Table_S", number, ".docx")))
   write_latex_table(x, file.path(supplement_dir, paste0("Table_S", number, ".tex")))
 }
+
+write_table_s6 <- function(x, number = 6, alignment = NULL) {
+  
+  # ============================================================
+  # 1. WORD VERSION
+  # ============================================================
+  
+  if (is.null(alignment)) {
+    alignment <- c("left", rep("center", ncol(x) - 1))
+  }
+  
+  doc <- officer::read_docx()
+  
+  doc <- officer::body_add_table(
+    doc,
+    x,
+    style = NULL,
+    header = TRUE,
+    alignment = alignment,
+    align_table = "center"
+  )
+  
+  print(
+    doc,
+    target = file.path(
+      supplement_dir,
+      paste0("Table_S", number, ".docx")
+    )
+  )
+  
+  
+  # ============================================================
+  # 2. LATEX VERSION
+  # ============================================================
+  
+  path <- file.path(
+    supplement_dir,
+    paste0("Table_S", number, ".tex")
+  )
+  
+  subfields <- unique(x$Subfield)
+  
+  out <- c(
+    "\\begin{tabularx}{\\textwidth}{",
+    "  @{}",
+    "  >{\\RaggedRight\\arraybackslash}p{0.13\\textwidth}",
+    "  >{\\RaggedRight\\arraybackslash}p{0.145\\textwidth}",
+    "  *{4}{>{\\centering\\arraybackslash}X}",
+    "  @{}",
+    "}",
+    "\\toprule",
+    "& & \\multicolumn{4}{c}{Genuine heterogeneity} \\\\",
+    "\\cmidrule(lr){3-6}",
+    "Subfield & Measure & 0\\% & 25\\% & 50\\% & 75\\% \\\\",
+    "\\midrule"
+  )
+  
+  
+  # ============================================================
+  # Table body
+  # ============================================================
+  
+  for (s in subfields) {
+    
+    block <- x[
+      x$Subfield == s,
+      ,
+      drop = FALSE
+    ]
+    
+    esr <- block[
+      block$Measure == "ESR_{0.05}^{sig}",
+      ,
+      drop = FALSE
+    ]
+    
+    ma <- block[
+      block$Measure == "No. of meta-analyses",
+      ,
+      drop = FALSE
+    ]
+    
+    tests <- block[
+      block$Measure == "No. of tests",
+      ,
+      drop = FALSE
+    ]
+    
+    
+    # Check that exactly one row of each type exists
+    if (
+      nrow(esr) != 1 ||
+      nrow(ma) != 1 ||
+      nrow(tests) != 1
+    ) {
+      stop(
+        paste(
+          "Unexpected table structure for subfield:",
+          s
+        )
+      )
+    }
+    
+    
+    # Escape only the actual subfield text
+    s_latex <- latex_escape(s)
+    
+    
+    # ESR row
+    row1 <- paste0(
+      "\\multirow[t]{3}{0.13\\textwidth}{\\RaggedRight ",
+      s_latex,
+      "} & ",
+      "$\\mathrm{ESR}_{0.05}^{\\mathrm{sig}}$",
+      " & ", esr[[3]],
+      " & ", esr[[4]],
+      " & ", esr[[5]],
+      " & ", esr[[6]],
+      " \\\\"
+    )
+    
+    
+    # Number of meta-analyses
+    row2 <- paste0(
+      "& No. of meta-anal.",
+      " & ", ma[[3]],
+      " & ", ma[[4]],
+      " & ", ma[[5]],
+      " & ", ma[[6]],
+      " \\\\"
+    )
+    
+    
+    # Number of tests
+    row3 <- paste0(
+      "& No. of tests",
+      " & ", tests[[3]],
+      " & ", tests[[4]],
+      " & ", tests[[5]],
+      " & ", tests[[6]],
+      " \\\\"
+    )
+    
+    
+    out <- c(
+      out,
+      row1,
+      row2,
+      row3,
+      "\\addlinespace[0.4em]"
+    )
+  }
+  
+  
+  # Remove spacing after final subfield
+  if (
+    length(out) > 0 &&
+    tail(out, 1) == "\\addlinespace[0.4em]"
+  ) {
+    out <- head(out, -1)
+  }
+  
+  
+  # Close tabularx
+  out <- c(
+    out,
+    "\\bottomrule",
+    "\\end{tabularx}"
+  )
+  
+  
+  # Write LaTeX file
+  writeLines(
+    out,
+    path,
+    useBytes = TRUE
+  )
+  
+  
+  # ============================================================
+  # Useful confirmation
+  # ============================================================
+  
+  message(
+    "Written:\n",
+    file.path(
+      supplement_dir,
+      paste0("Table_S", number, ".docx")
+    ),
+    "\n",
+    path
+  )
+  
+  invisible(path)
+}
+
+
 
 make_power_table <- function(dat, meta_average_multiplier = 0.5) {
   dat <- dat %>% mutate(
@@ -495,39 +695,78 @@ if (!file.exists(subfield_esr_path)) {
   stop("Subfield Table S6 inputs are unavailable. Run create_tables_and_figures.R first.")
 }
 subfield_esr_results <- readRDS(subfield_esr_path)
+
+
 table_s6_columns <- subfield_esr_results %>%
   filter(
     meta_average_multiplier == 0.5,
     measure %in% c(
-      "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests"
+      "ESR_{0.05}^{sig}",
+      "No. of meta-analysis",
+      "No. of tests"
     )
   ) %>%
   mutate(
     measure = dplyr::recode(
-      measure, `No. of meta-analysis` = "No. of meta-analyses"
+      measure,
+      `No. of meta-analysis` = "No. of meta-analyses"
     ),
     value = if_else(
-      confidence_interval == "0", estimate,
-      paste(estimate, confidence_interval)
+      confidence_interval == "0",
+      estimate,
+      paste(
+        estimate,
+        confidence_interval
+      )
     ),
     heterogeneity_multiplier = factor(
-      heterogeneity_multiplier, levels = c(0, .25, .5, .75)
+      heterogeneity_multiplier,
+      levels = c(
+        0,
+        0.25,
+        0.5,
+        0.75
+      )
     )
   ) %>%
-  dplyr::select(Subfield = subfield, measure, heterogeneity_multiplier, value) %>%
-  pivot_wider(names_from = heterogeneity_multiplier, values_from = value) %>%
-  arrange(factor(Subfield, levels = subfield_levels),
-          factor(measure, levels = c(
-            "ESR_{0.05}^{sig}", "No. of meta-analyses", "No. of tests"
-          )))
+  dplyr::select(
+    Subfield = subfield,
+    Measure = measure,
+    heterogeneity_multiplier,
+    value
+  ) %>%
+  pivot_wider(
+    names_from = heterogeneity_multiplier,
+    values_from = value
+  ) %>%
+  arrange(
+    factor(
+      Subfield,
+      levels = subfield_levels
+    ),
+    factor(
+      Measure,
+      levels = c(
+        "ESR_{0.05}^{sig}",
+        "No. of meta-analyses",
+        "No. of tests"
+      )
+    )
+  )
+
+
 names(table_s6_columns) <- c(
-  "Subfield", "Measure",
-  "(1)\nHalf the meta-average\nDifference [95% CI]",
-  "(2)\nHalf the meta-average and 25% genuine heterogeneity\nDifference [95% CI]",
-  "(3)\nHalf the meta-average and 50% genuine heterogeneity\nDifference [95% CI]",
-  "(4)\nHalf the meta-average and 75% genuine heterogeneity\nDifference [95% CI]"
+  "Subfield",
+  "Measure",
+  "0%",
+  "25%",
+  "50%",
+  "75%"
 )
-write_word_table(table_s6_columns, 6)
+write_table_s6(
+  table_s6_columns,
+  number = 6
+)
 
 ## Figure S4: heterogeneity distributions and the corresponding summaries.
 heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
