@@ -80,6 +80,18 @@ analysis_setups <- tidyr::expand_grid(
 ) %>%
   dplyr::mutate(setup_label = make_setup_label(meta_average_multiplier, heterogeneity_multiplier))
 
+## Main-text Table 2 always uses these four manuscript specifications. Keep
+## them separate from the caller's requested setup grid so custom runs retain
+## their intended outputs while the preparation and rendering stages can still
+## create every input required by the fixed table.
+table_2_setups <- tibble::tibble(
+  meta_average_multiplier = 0.5,
+  heterogeneity_multiplier = c(0, 0.25, 0.5, 0.75)
+) %>%
+  dplyr::mutate(setup_label = make_setup_label(
+    meta_average_multiplier, heterogeneity_multiplier
+  ))
+
 ## Estimators used throughout the manuscript-output workflow. The identifiers
 ## are also used as filename suffixes, so keep them filesystem friendly.
 meta_analysis_estimators <- c("pet_peese", "multilevel_random")
