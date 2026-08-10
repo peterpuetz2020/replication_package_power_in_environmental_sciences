@@ -406,7 +406,7 @@ write_word_table <- function(x, number, alignment = NULL) {
   write_latex_table(x, file.path(supplement_dir, paste0("Table_S", number, ".tex")))
 }
 
-write_table_s6 <- function(x, number = 6, alignment = NULL) {
+write_subfield_esr_table <- function(x, number, alignment = NULL) {
   
   # ============================================================
   # 1. WORD VERSION
@@ -639,65 +639,79 @@ make_power_table <- function(dat, meta_average_multiplier = 0.5) {
 base_half <- load_multilevel_data("meta_0p5_heterogeneity_0")
 ## Table S1: remove primary estimates that are not significant at five percent.
 write_word_table(make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96)), 1)
-## Table S2: remove complete meta-analyses whose pooled effect is not significant.
 significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
   filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
-write_word_table(make_power_table(base_half %>% filter(cID %in% significant_meta)), 2)
-
-## Table S3: small-study effects by subfield.
-small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
-table_s3_meta <- base_half %>%
-  dplyr::select(-any_of(c("small_study_effect_pval", "sse_yn"))) %>%
-  left_join(small_study_effects, by = "cID") %>%
-  group_by(cID) %>% summarise(Subfield = first(subfd),
-    small_study_effect = first(small_study_effect_pval) <= .05,
-    .groups = "drop")
-table_s3_detail <- table_s3_meta %>% group_by(Subfield) %>% summarise(
-  `No. of meta-analyses` = n_distinct(cID),
-  `Small-study effects (%)` = 100 * mean(small_study_effect, na.rm = TRUE),
-  .groups = "drop") %>%
-  mutate(Subfield = factor(Subfield, subfield_levels)) %>% arrange(Subfield) %>%
-  mutate(Subfield = as.character(Subfield))
-table_s3 <- bind_rows(
-  tibble(Subfield = "All meta-analyses",
-    `No. of meta-analyses` = n_distinct(table_s3_meta$cID),
-    `Small-study effects (%)` = 100 * mean(table_s3_meta$small_study_effect, na.rm = TRUE)),
-  table_s3_detail
-) %>%
-  mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
-write_word_table(table_s3, 3)
-
-## Tables S4-S5: Table S2 sensitivity analyses at one-quarter and the full
-## meta-average, respectively. The significance screen is based on the pooled
-## effect and therefore selects the same meta-analyses for every multiplier.
+## Tables S2-S3: sensitivity analyses at one-quarter and the full meta-average.
+## Both retain meta-analyses with a significant pooled effect, so their numbers
+## of tests and meta-analyses are identical; only the assumed effect differs.
 power_table_sensitivities <- tribble(
   ~meta_average_multiplier, ~table_number,
-  0.25,                     4,
-  1,                        5
+  0.25,                     2,
+  1,                        3
 )
 pwalk(power_table_sensitivities, function(meta_average_multiplier, table_number) {
   write_word_table(
-    make_power_table(
-      base_half %>% filter(cID %in% significant_meta),
-      meta_average_multiplier
-    ),
+    make_power_table(base_half %>% filter(cID %in% significant_meta),
+                     meta_average_multiplier),
     table_number
   )
 })
 
-## Table S6: excess-significance results by subfield at half the meta-average
+## Table S4: half-meta-average results after excluding primary estimates that
+## are not statistically significant at the five-percent level.
+write_word_table(
+  make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96)),
+  4
+)
+
+## Table S5: remove complete meta-analyses whose pooled effect is not significant.
+write_word_table(make_power_table(base_half %>% filter(cID %in% significant_meta)), 5)
+
+## Table S6: small-study effects by subfield. Keep this after the power-table
+## sensitivity and significance-screening results.
+small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
+table_s6_meta <- base_half %>%
+  dplyr::select(-any_of(c("small_study_effect_pval", "sse_yn"))) %>%
+  left_join(small_study_effects, by = "cID") %>%
+  group_by(cID) %>% summarise(
+    Subfield = first(subfd),
+    small_study_effect = first(small_study_effect_pval) <= .05,
+    .groups = "drop"
+  )
+table_s6_detail <- table_s6_meta %>%
+  group_by(Subfield) %>%
+  summarise(
+    `No. of meta-analyses` = n_distinct(cID),
+    `Small-study effects (%)` = 100 * mean(small_study_effect, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(Subfield = factor(Subfield, subfield_levels)) %>%
+  arrange(Subfield) %>%
+  mutate(Subfield = as.character(Subfield))
+table_s6 <- bind_rows(
+  tibble(
+    Subfield = "All meta-analyses",
+    `No. of meta-analyses` = n_distinct(table_s6_meta$cID),
+    `Small-study effects (%)` = 100 * mean(table_s6_meta$small_study_effect, na.rm = TRUE)
+  ),
+  table_s6_detail
+) %>%
+  mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
+write_word_table(table_s6, 6)
+
+## Table S7: excess-significance results by subfield at half the meta-average
 ## and four degrees of genuine heterogeneity. Unlike Table 2, omit all p-value
 ## interval rows and retain only ESR_0.05^sig and the two sample-size rows.
 subfield_esr_path <- here(
   "data", "derived_data", "Table_S6_subfield_inputs.rds"
 )
 if (!file.exists(subfield_esr_path)) {
-  stop("Subfield Table S6 inputs are unavailable. Run create_tables_and_figures.R first.")
+  stop("Subfield ESR inputs are unavailable. Run create_tables_and_figures.R first.")
 }
 subfield_esr_results <- readRDS(subfield_esr_path)
 
 
-table_s6_columns <- subfield_esr_results %>%
+table_s7_columns <- subfield_esr_results %>%
   filter(
     meta_average_multiplier == 0.5,
     measure %in% c(
@@ -755,7 +769,7 @@ table_s6_columns <- subfield_esr_results %>%
   )
 
 
-names(table_s6_columns) <- c(
+names(table_s7_columns) <- c(
   "Subfield",
   "Measure",
   "0%",
@@ -763,9 +777,9 @@ names(table_s6_columns) <- c(
   "50%",
   "75%"
 )
-write_table_s6(
-  table_s6_columns,
-  number = 6
+write_subfield_esr_table(
+  table_s7_columns,
+  number = 7
 )
 
 ## Figure S4: heterogeneity distributions and the corresponding summaries.
@@ -960,8 +974,8 @@ walk2(c(0, .5), 5:6, function(heterogeneity_multiplier, figure_number) {
     11, 10, function() print(plot))
 })
 
-## Regression table formatting for Tables S7-S9. The negative-binomial fits
-## consumed by Tables S7-S8 are created in run_exploratory_regressions.R.
+## Regression table formatting for Tables S8-S10. The negative-binomial fits
+## consumed by Tables S8-S9 are created in run_exploratory_regressions.R.
 significance_stars <- function(p_value) {
   ifelse(p_value < .01, "***", ifelse(p_value < .05, "**",
     ifelse(p_value < .10, "*", "")))
@@ -1025,8 +1039,8 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   }
   bind_rows(result, summary_rows)
 }
-write_word_table(format_model_table(nb_sensitivity_full), 7)
-write_word_table(format_model_table(nb_sensitivity_quarter), 8)
+write_word_table(format_model_table(nb_sensitivity_full), 8)
+write_word_table(format_model_table(nb_sensitivity_quarter), 9)
 
 ols_formula <- esr_winsor ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric
 ols_fits <- map(c(0, .5), function(heterogeneity_multiplier) {
@@ -1045,7 +1059,7 @@ ols_fit <- list(
   models = flatten(map(ols_fits, "models")),
   robust = flatten(map(ols_fits, "robust"))
 )
-write_word_table(format_model_table(ols_fit, TRUE), 9)
+write_word_table(format_model_table(ols_fit, TRUE), 10)
 
 ## Figures S7-S10: separate continuous and categorical diagnostics for both main
 ## negative-binomial specifications, matching the requested four-figure layout.
@@ -1065,11 +1079,11 @@ save_diagnostic_group(nbMod1, 1, "categorical", 8)
 save_diagnostic_group(nbMod2, 2, "continuous", 9)
 save_diagnostic_group(nbMod2, 2, "categorical", 10)
 
-## Table S10 is descriptive and therefore uses all observations rather than an
+## Table S11 is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
-table_s10_all_data <- load_multilevel_all_data()
-table_s10 <- table_s10_all_data %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
+table_s11_all_data <- load_multilevel_all_data()
+table_s11 <- table_s11_all_data %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
   complete(etype, subfd = subfield_levels, fill = list(n = 0)) %>%
   pivot_wider(names_from = subfd, values_from = n) %>% rename(`Effect size` = etype) %>%
   arrange(`Effect size`) %>% mutate(No. = row_number(), .before = 1)
-write_word_table(table_s10, 10)
+write_word_table(table_s11, 11)
