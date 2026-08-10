@@ -56,10 +56,20 @@ read_counterfactual_cache <- function(path, key) {
 }
 
 write_counterfactual_cache <- function(result, path, key) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  temporary_path <- tempfile(paste0(".", basename(path), "-"), dirname(path))
+  on.exit(unlink(temporary_path), add = TRUE)
   saveRDS(
     list(version = counterfactual_cache_version, key = key, result = result),
-    path
+    temporary_path
   )
+  if (!file.rename(temporary_path, path)) {
+    if (!file.copy(temporary_path, path, overwrite = TRUE)) {
+      stop("Could not replace counterfactual cache: ", path)
+    }
+    unlink(temporary_path)
+  }
+  invisible(path)
 }
 
 ## Vectorized counterfactual calculations. Probability masses depend on an

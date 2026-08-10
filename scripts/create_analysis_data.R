@@ -15,33 +15,18 @@ source(here::here("scripts", "analysis_setup.R"))
 ## n_iterations <- 1000.
 recreate_counterfactuals <- if (exists("recreate_counterfactuals")) recreate_counterfactuals else FALSE
 
-save_counterfactual <- function(path, calculate, progress_bar = NULL,
-                                progress_value = NULL, expected_iterations = NULL) {
-  ## Point estimates have no iteration dimension. For bootstrap results, every
-  ## returned interval matrix must have exactly the requested number of rows;
-  ## checking only the first element could incorrectly accept a partial cache.
-  cached_result_is_stale <- FALSE
-  if (file.exists(path) && !is.null(expected_iterations)) {
-    cached_result <- readRDS(path)
-    cached_result_is_stale <- !is.list(cached_result) ||
-      length(cached_result) == 0 ||
-      !all(vapply(
-        cached_result,
-        function(interval_matrix) {
-          is.matrix(interval_matrix) &&
-            nrow(interval_matrix) == expected_iterations
-        },
-        logical(1)
-      ))
+save_counterfactual <- function(path, cache_key, calculate, progress_bar = NULL,
+                                progress_value = NULL) {
+  cached_result <- if (recreate_counterfactuals) {
+    NULL
+  } else {
+    read_counterfactual_cache(path, cache_key)
   }
-  if (recreate_counterfactuals || !file.exists(path) || cached_result_is_stale) {
-    if (cached_result_is_stale) {
-      message(
-        "Rebuilding ", basename(path), " because its cached iteration count ",
-        "does not match n_iterations = ", expected_iterations, "."
-      )
+  if (is.null(cached_result)) {
+    if (file.exists(path)) {
+      message("Rebuilding stale counterfactual: ", basename(path))
     }
-    saveRDS(calculate(), path)
+    write_counterfactual_cache(calculate(), path, cache_key)
   } else {
     message("Reusing existing counterfactual: ", basename(path))
   }
@@ -197,28 +182,42 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
   p_tab_ci_path <- here("data", "derived_data", paste0("p_tab_ci_", result_suffix, ".rds"))
 
   if (outlier_variant == "outliers_removed") {
-    save_counterfactual(z_plot_path, function() cf(
+    z_point_key <- counterfactual_cache_key(
+      myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier
+    )
+    z_ci_key <- counterfactual_cache_key(
+      myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier,
+      ci = TRUE, cluster = unique(counterfactual_data$cID), iters = n_iterations
+    )
+    save_counterfactual(z_plot_path, z_point_key, function() cf(
       myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier,
       components = get_components("z", grids$z_grid_plot)
     ), progress_bar, progress_offset + 1)
-    save_counterfactual(z_plot_ci_path, function() cf.ci.cluster(
+    save_counterfactual(z_plot_ci_path, z_ci_key, function() cf.ci.cluster(
       myDat_counterfactual, grids$z_grid_plot, n_iterations,
       unique(counterfactual_data$cID), heterogeneity_multiplier,
       components = get_components("z", grids$z_grid_plot)
-    ), progress_bar, progress_offset + 2, n_iterations)
+    ), progress_bar, progress_offset + 2)
   } else {
     update_progress_bar(progress_bar, progress_offset + 1)
     update_progress_bar(progress_bar, progress_offset + 2)
   }
-  save_counterfactual(p_tab_path, function() cf(
+  p_point_key <- counterfactual_cache_key(
+    myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier
+  )
+  p_ci_key <- counterfactual_cache_key(
+    myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier,
+    ci = TRUE, cluster = unique(counterfactual_data$cID), iters = n_iterations
+  )
+  save_counterfactual(p_tab_path, p_point_key, function() cf(
     myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier,
     components = get_components("p", grids$p_grid_tab)
   ), progress_bar, progress_offset + 3)
-  save_counterfactual(p_tab_ci_path, function() cf.ci.cluster(
+  save_counterfactual(p_tab_ci_path, p_ci_key, function() cf.ci.cluster(
     myDat_counterfactual, grids$p_grid_tab, n_iterations,
     unique(counterfactual_data$cID), heterogeneity_multiplier,
     components = get_components("p", grids$p_grid_tab)
-  ), progress_bar, progress_offset + 4, n_iterations)
+  ), progress_bar, progress_offset + 4)
 }
 
 ensure_output_dirs()
