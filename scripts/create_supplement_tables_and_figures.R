@@ -637,13 +637,12 @@ make_power_table <- function(dat, meta_average_multiplier = 0.5) {
 }
 
 base_half <- load_multilevel_data("meta_0p5_heterogeneity_0")
-## Table S1: remove primary estimates that are not significant at five percent.
-write_word_table(make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96)), 1)
+## Table S4: remove primary estimates that are not significant at five percent.
+write_word_table(make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96)), 4)
 significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
   filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
 ## Tables S2-S3: sensitivity analyses at one-quarter and the full meta-average.
-## Both retain meta-analyses with a significant pooled effect, so their numbers
-## of tests and meta-analyses are identical; only the assumed effect differs.
+## Both use the full sample; only the assumed effect differs.
 power_table_sensitivities <- tribble(
   ~meta_average_multiplier, ~table_number,
   0.25,                     2,
@@ -651,18 +650,10 @@ power_table_sensitivities <- tribble(
 )
 pwalk(power_table_sensitivities, function(meta_average_multiplier, table_number) {
   write_word_table(
-    make_power_table(base_half %>% filter(cID %in% significant_meta),
-                     meta_average_multiplier),
+    make_power_table(base_half, meta_average_multiplier),
     table_number
   )
 })
-
-## Table S4: half-meta-average results after excluding primary estimates that
-## are not statistically significant at the five-percent level.
-write_word_table(
-  make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96)),
-  4
-)
 
 ## Table S5: remove complete meta-analyses whose pooled effect is not significant.
 write_word_table(make_power_table(base_half %>% filter(cID %in% significant_meta)), 5)
@@ -699,7 +690,7 @@ table_s6 <- bind_rows(
   mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
 write_word_table(table_s6, 6)
 
-## Table S7: excess-significance results by subfield at half the meta-average
+## Table S1: excess-significance results by subfield at half the meta-average
 ## and four degrees of genuine heterogeneity. Unlike Table 2, omit all p-value
 ## interval rows and retain only ESR_0.05^sig and the two sample-size rows.
 subfield_esr_path <- here(
@@ -711,7 +702,7 @@ if (!file.exists(subfield_esr_path)) {
 subfield_esr_results <- readRDS(subfield_esr_path)
 
 
-table_s7_columns <- subfield_esr_results %>%
+table_s1_columns <- subfield_esr_results %>%
   filter(
     meta_average_multiplier == 0.5,
     measure %in% c(
@@ -769,7 +760,7 @@ table_s7_columns <- subfield_esr_results %>%
   )
 
 
-names(table_s7_columns) <- c(
+names(table_s1_columns) <- c(
   "Subfield",
   "Measure",
   "0%",
@@ -778,8 +769,8 @@ names(table_s7_columns) <- c(
   "75%"
 )
 write_subfield_esr_table(
-  table_s7_columns,
-  number = 7
+  table_s1_columns,
+  number = 1
 )
 
 ## Figure S4: heterogeneity distributions and the corresponding summaries.
