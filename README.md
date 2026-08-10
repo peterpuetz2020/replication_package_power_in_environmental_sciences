@@ -188,7 +188,9 @@ Define these values before sourcing `scripts/main.R` (or edit their defaults in
 - `n_cores`: number of parallel worker cores.
 - `n_iterations`: number of Monte Carlo/bootstrap iterations for confidence intervals
   (default `1000`). Cached confidence-interval simulations with a different number
-  of iterations are rebuilt automatically.
+  of iterations are rebuilt automatically. Edited defaults take effect when the
+  setup is sourced again in the same R session; values assigned before sourcing
+  remain explicit overrides for the rest of that workflow.
 - `meta_average_multiplier`: vector of multipliers applied to the meta-analytic average when calculating power (default `c(0.25, 0.5, 1)`).
 - `heterogeneity_multiplier`: vector of multipliers applied to the between-effect heterogeneity in the counterfactual calculations (default `c(0, 0.25, 0.5, 0.75)`).
 - `run_classification`: recreate classification CSV files (default `FALSE`).

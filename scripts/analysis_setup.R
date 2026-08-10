@@ -10,6 +10,8 @@ library(gridExtra); library(ggeasy)
 library(orchaRd)
 library(scales); library(here)
 
+source(here("scripts", "runtime_settings.R"))
+
 ## Console progress bars use base R so they also work in a restored renv and in
 ## non-interactive batch jobs.
 
@@ -53,8 +55,8 @@ if (exists("analysis_setups") &&
 
 ## Set defaults without replacing values supplied before source("scripts/main.R").
 ## This makes short test runs and custom setups possible from the calling script.
-if (!exists("n_cores")) n_cores <- 6L
-if (!exists("n_iterations")) n_iterations <- 1000L
+resolve_runtime_setting("n_cores", 6L)
+resolve_runtime_setting("n_iterations", 1000L)
 if (length(n_iterations) != 1L || is.na(n_iterations) ||
     n_iterations < 1 || n_iterations != as.integer(n_iterations)) {
   stop("n_iterations must be one positive whole number.")
