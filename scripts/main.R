@@ -29,10 +29,32 @@ if (run_classification) {
 
 source(here::here("scripts", "analysis_setup.R"))
 
-## Fitting all 708 meta-analyses is the longest stage. Leave this disabled when
-## the per-meta-analysis files already exist under data/derived_data, and enable
-## it for a clean, from-source rebuild.
-if (run_meta_analysis_fitting) {
+## Fitting all 708 meta-analyses is the longest stage. Run it when explicitly
+## requested or automatically when any required estimator directory has no RDS
+## inputs. The fitting caches make an interrupted automatic run resumable.
+estimator_input_dirs <- c(
+  here::here("data", "derived_data", "pet_peese_rstandard"),
+  here::here("data", "derived_data", "pet_peese_all_data"),
+  here::here("data", "derived_data", "multilevel_random"),
+  here::here("data", "derived_data", "multilevel_random_all_data")
+)
+missing_estimator_inputs <- estimator_input_dirs[vapply(
+  estimator_input_dirs,
+  function(path) {
+    !dir.exists(path) || length(list.files(path, pattern = "\\.rds$")) == 0
+  },
+  logical(1)
+)]
+
+if (length(missing_estimator_inputs) > 0 && !run_meta_analysis_fitting) {
+  message(
+    "Required estimator RDS files are missing from: ",
+    paste(missing_estimator_inputs, collapse = ", "),
+    ". Running scripts/compute_meta_estimates.R automatically."
+  )
+}
+
+if (run_meta_analysis_fitting || length(missing_estimator_inputs) > 0) {
   source(here::here("scripts", "compute_meta_estimates.R"))
 }
 
