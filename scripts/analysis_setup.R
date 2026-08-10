@@ -39,6 +39,18 @@ close_progress_bar <- function(progress_bar) {
   invisible(NULL)
 }
 
+## When the setup is sourced again in the same workflow, recover the configured
+## multiplier vectors from the setup grid. Rendering scripts use the scalar
+## names for the setup currently being rendered, so those names no longer
+## contain the original configuration by the time a later script sources this
+## file (for example, before creating the supplementary figures).
+if (exists("analysis_setups") &&
+    all(c("meta_average_multiplier", "heterogeneity_multiplier") %in%
+        names(analysis_setups))) {
+  meta_average_multiplier <- unique(analysis_setups$meta_average_multiplier)
+  heterogeneity_multiplier <- unique(analysis_setups$heterogeneity_multiplier)
+}
+
 ## Set defaults without replacing values supplied before source("scripts/main.R").
 ## This makes short test runs and custom setups possible from the calling script.
 if (!exists("n_cores")) n_cores <- 6L
