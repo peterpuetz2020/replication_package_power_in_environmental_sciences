@@ -591,7 +591,7 @@ saveRDS(
 )
 
 ## Calculate only the subfield counterfactuals needed for supplementary Table
-## S4: half the meta-average, the four heterogeneity specifications, and the
+## S6: half the meta-average, the four heterogeneity specifications, and the
 ## primary multilevel random-effects estimator. These use distinct cache names,
 ## so no full-sample counterfactual can be reused.
 subfield_levels <- c(
@@ -600,7 +600,7 @@ subfield_levels <- c(
   "Nature and Landscape Conservation", "Water Science and Technology"
 )
 subfield_table_parameters <- tidyr::crossing(
-  analysis_setups,
+  analysis_setups %>% filter(meta_average_multiplier == 0.5),
   estimator = "multilevel_random",
   outlier_variant = "outliers_removed",
   subfield = subfield_levels
