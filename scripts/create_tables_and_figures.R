@@ -767,22 +767,9 @@ figure_2_summary <- tibble(
 ) %>%
   mutate(percentage = round(100 * count / total_meta_analyses, 1))
 
-high_power_subfields <- pps_rstandard_median %>%
-  filter(median > 0.8) %>%
-  count(subf, name = "count") %>%
-  mutate(
-    total_high_power_meta_analyses = sum(count),
-    percentage = round(100 * count / total_high_power_meta_analyses, 1)
-  ) %>%
-  arrange(desc(count)) %>%
-  rename(subfield = subf)
-
 write.xlsx(
-  list(
-    `Figure 2 summary` = figure_2_summary,
-    `High-power subfields` = high_power_subfields
-  ),
-  here("data", "derived_data", "Figure_2_summary.xlsx"),
+  list(`Figure 2 summary` = figure_2_summary),
+  here("results", "main", "Figure_2_summary.xlsx"),
   overwrite = TRUE
 )
 med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + main_figure_theme() + theme(legend.position = "none", panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
