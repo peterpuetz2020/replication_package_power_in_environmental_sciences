@@ -619,34 +619,54 @@ saveRDS(
   subfield_esr_results,
   here("data", "derived_data", "Table_S6_subfield_inputs.rds")
 )
+required_table_2_heterogeneity <- c(0, 0.25, 0.5, 0.75)
 table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
-  filter(estimator == "multilevel_random", meta_average_multiplier == 0.5) %>%
-  arrange(heterogeneity_multiplier)
-table_2_columns <- map2(
-  table_2_indices$result_index,
-  table_2_indices$heterogeneity_multiplier,
-  function(i, h) table_2_results[[i]]$detailed %>%
-    transmute(measure, !!paste0("heterogeneity_", h) := if_else(
-      confidence_interval == "0", estimate, paste(estimate, confidence_interval)
-    ))
+  filter(
+    estimator == "multilevel_random",
+    meta_average_multiplier == 0.5,
+    heterogeneity_multiplier %in% required_table_2_heterogeneity
+  ) %>%
+  arrange(heterogeneity_multiplier) %>%
+  distinct(heterogeneity_multiplier, .keep_all = TRUE)
+missing_table_2_heterogeneity <- setdiff(
+  required_table_2_heterogeneity,
+  table_2_indices$heterogeneity_multiplier
 )
-table_2 <- reduce(table_2_columns, full_join, by = "measure") %>%
-  filter(!measure %in% c("ESR_{0.1}^{all}", "ESR_{0.1}^{sig}"))
-names(table_2) <- c(
-  "p-value interval",
-  "(1)\nHalf the meta-average\nDifference [95% CI]",
-  "(2)\nHalf the meta-average and 25% genuine heterogeneity\nDifference [95% CI]",
-  "(3)\nHalf the meta-average and 50% genuine heterogeneity\nDifference [95% CI]",
-  "(4)\nHalf the meta-average and 75% genuine heterogeneity\nDifference [95% CI]"
-)
-table_2_document <- officer::read_docx()
-table_2_document <- officer::body_add_table(
-  table_2_document, table_2, style = NULL, header = TRUE,
-  alignment = c("left", rep("center", 4)), align_table = "center"
-)
-print(table_2_document, target = here("results", "main", "Table_2.docx"))
-write_latex_table(table_2, here("results", "main", "Table_2.tex"))
+
+if (length(missing_table_2_heterogeneity) > 0) {
+  message(
+    "Skipping Table 2: its fixed manuscript setup requires ",
+    "meta_average_multiplier = 0.5 and heterogeneity_multiplier = ",
+    "c(0, 0.25, 0.5, 0.75). Missing heterogeneity multiplier(s): ",
+    paste(missing_table_2_heterogeneity, collapse = ", "), "."
+  )
+} else {
+  table_2_columns <- map2(
+    table_2_indices$result_index,
+    table_2_indices$heterogeneity_multiplier,
+    function(i, h) table_2_results[[i]]$detailed %>%
+      transmute(measure, !!paste0("heterogeneity_", h) := if_else(
+        confidence_interval == "0", estimate, paste(estimate, confidence_interval)
+      ))
+  )
+  table_2 <- reduce(table_2_columns, full_join, by = "measure") %>%
+    filter(!measure %in% c("ESR_{0.1}^{all}", "ESR_{0.1}^{sig}"))
+  names(table_2) <- c(
+    "p-value interval",
+    "(1)\nHalf the meta-average\nDifference [95% CI]",
+    "(2)\nHalf the meta-average and 25% genuine heterogeneity\nDifference [95% CI]",
+    "(3)\nHalf the meta-average and 50% genuine heterogeneity\nDifference [95% CI]",
+    "(4)\nHalf the meta-average and 75% genuine heterogeneity\nDifference [95% CI]"
+  )
+  table_2_document <- officer::read_docx()
+  table_2_document <- officer::body_add_table(
+    table_2_document, table_2, style = NULL, header = TRUE,
+    alignment = c("left", rep("center", 4)), align_table = "center"
+  )
+  print(table_2_document, target = here("results", "main", "Table_2.docx"))
+  write_latex_table(table_2, here("results", "main", "Table_2.tex"))
+}
 
 ## -------------------------------
 ## Table 3
