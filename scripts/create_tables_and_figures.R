@@ -459,19 +459,34 @@ ggplot(datFull) +
 figure_1_setups <- analysis_setups %>%
   filter(meta_average_multiplier == 0.5, heterogeneity_multiplier %in% c(0, 0.5)) %>%
   arrange(heterogeneity_multiplier)
-figure_1_panels <- purrr::pmap(
-  figure_1_setups,
-  function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
-    make_figure_1_panel(meta_average_multiplier, heterogeneity_multiplier, setup_label, "multilevel_random")
-  }
+required_figure_1_heterogeneity <- c(0, 0.5)
+missing_figure_1_heterogeneity <- setdiff(
+  required_figure_1_heterogeneity,
+  figure_1_setups$heterogeneity_multiplier
 )
-figure_1 <- arrangeGrob(grobs = figure_1_panels, ncol = 1)
-save_plot(
-  here("results", "main", "Figure_1"),
-  width = 10,
-  height = 10,
-  draw = function() grid::grid.draw(figure_1)
-)
+
+if (length(missing_figure_1_heterogeneity) > 0) {
+  message(
+    "Skipping Figure 1: its fixed manuscript setup requires ",
+    "meta_average_multiplier = 0.5 and heterogeneity_multiplier = c(0, 0.5). ",
+    "Missing heterogeneity multiplier(s): ",
+    paste(missing_figure_1_heterogeneity, collapse = ", "), "."
+  )
+} else {
+  figure_1_panels <- purrr::pmap(
+    figure_1_setups,
+    function(meta_average_multiplier, heterogeneity_multiplier, setup_label, ...) {
+      make_figure_1_panel(meta_average_multiplier, heterogeneity_multiplier, setup_label, "multilevel_random")
+    }
+  )
+  figure_1 <- arrangeGrob(grobs = figure_1_panels, ncol = 1)
+  save_plot(
+    here("results", "main", "Figure_1"),
+    width = 10,
+    height = 10,
+    draw = function() grid::grid.draw(figure_1)
+  )
+}
 
 ## -------------------------------
 ## Table 2

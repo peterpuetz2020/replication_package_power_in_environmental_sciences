@@ -77,6 +77,11 @@ source("scripts/create_supplement_tables_and_figures.R")
 
 This script creates outputs in numeric order: Table 1, Figure 1, Table 2, Table 3, and Figure 2. Each table/figure section reloads the data, settings, and grid definitions it needs, so a single section can be run independently in a fresh R session after the helper setup at the beginning of the file has been sourced. Setup-specific filenames are generated from the selected multipliers (for example, `meta_0p5_heterogeneity_0p25`). Main-text Figure 1 uses a meta-average multiplier of 0.5 and heterogeneity multipliers 0 and 0.5; its 0.25 and 1 meta-average sensitivity counterparts are Figures S1 and S2. Table 2 is written for every combination of `meta_average_multiplier` and `heterogeneity_multiplier`, using the estimator-specific outlier-removed data. Main-text Figure 2 uses only the random-effects, 0.5 meta-average, zero-heterogeneity setup and is saved simply as `Figure_2` in each graphics format. Its statement-level counts and percentages, including the subfield distribution among meta-analyses with median power above 80%, are written to `results/main/Figure_2_summary.xlsx`. The other Figure 2 estimator/meta-average variants are supplementary outputs and, because heterogeneity does not enter their power calculation, are generated only at zero heterogeneity. A supplied `analysis_setups` data frame can instead assign a custom, unique `setup_label` to each combination.
 
+When a custom setup omits either fixed combination required by main-text
+Figure 1, the renderer reports that Figure 1 was skipped and continues with the
+remaining outputs. Include `0.5` in `meta_average_multiplier` and both `0` and
+`0.5` in `heterogeneity_multiplier` to render Figure 1.
+
 The workflow renders each setup for PET-PEESE and multilevel random effects. The
 outlier-removed samples are estimator-specific: PET-PEESE uses its PET residual
 screen, while the multilevel random-effects model removes observations with an
