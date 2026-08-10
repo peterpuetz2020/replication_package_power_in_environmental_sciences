@@ -17,118 +17,128 @@ library(readxl)
 dir.create(here("data"), recursive = TRUE, showWarnings = FALSE)
 
 ## Import meta-articles. Note that 32 articles were dropped as they don't have list of references when imported from Scopus
-my_data <- read_excel(here("data", "meta-articles.xlsx"))
-dim(my_data)
+meta_articles <- read_excel(here("data", "meta-articles.xlsx"))
+dim(meta_articles)
 
-## Import all journal names (both full & abbreviated names) with their corresponding scimago category
-scimago <- read_excel(here("data", "scimago_sjr.xlsx"))
+## Import full and abbreviated journal names with their Scimago categories.
+journal_categories <- read_excel(here("data", "scimago_sjr.xlsx"))
 
 ## Cleaning the journal names
-scimago$jname <- gsub("\\.", "", scimago$jname)
-scimago$jname <- tolower(scimago$jname)
-scimago$jname <- stripWhitespace(scimago$jname)
+journal_categories$jname <- gsub("\\.", "", journal_categories$jname)
+journal_categories$jname <- tolower(journal_categories$jname)
+journal_categories$jname <- stripWhitespace(journal_categories$jname)
 
 ## Cleaning the categories names
-scimago$sjr_category <- gsub("[()]", "", scimago$sjr_category)
-scimago$sjr_category <- gsub("[[:digit:]]", "", scimago$sjr_category)
-scimago$sjr_category <- gsub("Q", "", scimago$sjr_category)
-scimago$sjr_category <- stripWhitespace(scimago$sjr_category)
+journal_categories$sjr_category <- gsub("[()]", "", journal_categories$sjr_category)
+journal_categories$sjr_category <- gsub("[[:digit:]]", "", journal_categories$sjr_category)
+journal_categories$sjr_category <- gsub("Q", "", journal_categories$sjr_category)
+journal_categories$sjr_category <- stripWhitespace(journal_categories$sjr_category)
 
 ## List of all journal names separated by "|"
-pattern <- str_c(scimago$jname, collapse = "|")
+journal_name_pattern <- str_c(journal_categories$jname, collapse = "|")
 
-## Identifying meta-articles which are not published in environmental science journals
-id <- sjr_cat <- jnames <- freq <- nref <- nenvir <- perc <- list()
-year <- journal <- references <- list()
+## Allocate the per-article intermediate lists once, rather than growing them in
+## the loop. Descriptive object names distinguish counts from percentages.
+matched_journal_names <- journal_frequencies <- reference_count <- list()
+environmental_reference_count <- list()
 
 ## Preallocate one row per article. Extending an individual data-frame column with
-## ref_env$id[i] fails as soon as i exceeds the data frame's current row count.
-ref_env <- data.frame(
-  id = my_data$id,
-  authors = my_data$authors,
-  title = my_data$title,
-  year = my_data$year,
-  journal = my_data$journal,
-  sjr_cat = my_data$sjr_category,
-  references = my_data$references,
-  nref = rep(NA_integer_, nrow(my_data)),
-  nenvir = rep(NA_integer_, nrow(my_data)),
-  perc = rep(NA_real_, nrow(my_data))
+## article_reference_summary$id[i] fails as soon as i exceeds the data frame's current row count.
+article_reference_summary <- data.frame(
+  id = meta_articles$id,
+  authors = meta_articles$authors,
+  title = meta_articles$title,
+  year = meta_articles$year,
+  journal = meta_articles$journal,
+  sjr_cat = meta_articles$sjr_category,
+  references = meta_articles$references,
+  nref = rep(NA_integer_, nrow(meta_articles)),
+  nenvir = rep(NA_integer_, nrow(meta_articles)),
+  perc = rep(NA_real_, nrow(meta_articles))
 )
 
-s.time <- Sys.time()
-for (i in seq_along(my_data$references)) {
+start_time <- Sys.time()
+for (i in seq_along(meta_articles$references)) {
   print(i)
   
-  nref[[i]] <- str_count(my_data$references[i], "\\(19[0-9]{2}\\)|\\(20[0-9]{2}\\)")
-  jnames[[i]] <- unlist(
+  reference_count[[i]] <- str_count(meta_articles$references[i], "\\(19[0-9]{2}\\)|\\(20[0-9]{2}\\)")
+  matched_journal_names[[i]] <- unlist(
     str_extract_all(
-      my_data$references[i],
-      str_c("(?<=\\(?\\d{4}\\)?\\s)(", pattern, ")(?=,)")
+      meta_articles$references[i],
+      str_c("(?<=\\(?\\d{4}\\)?\\s)(", journal_name_pattern, ")(?=,)")
     )
   )
-  freq[[i]] <- table(jnames[[i]])
-  nenvir[[i]] <- sum(freq[[i]])
-  ref_env$nref[i] <- nref[[i]]
-  ref_env$nenvir[i] <- nenvir[[i]]
-  ref_env$perc[i] <- ifelse(nref[[i]] > 0, nenvir[[i]] / nref[[i]] * 100, NA)
+  journal_frequencies[[i]] <- table(matched_journal_names[[i]])
+  environmental_reference_count[[i]] <- sum(journal_frequencies[[i]])
+  article_reference_summary$nref[i] <- reference_count[[i]]
+  article_reference_summary$nenvir[i] <- environmental_reference_count[[i]]
+  article_reference_summary$perc[i] <- ifelse(
+    reference_count[[i]] > 0,
+    environmental_reference_count[[i]] / reference_count[[i]] * 100,
+    NA_real_
+  )
 }
-e.time <- Sys.time()
-print(e.time - s.time)  # about 15 minutes
+end_time <- Sys.time()
+print(end_time - start_time)  # about 15 minutes
 
-length(which(ref_env$nenvir==0))
-#ref_env0 <- ref_env %>% filter(nenvir==0)
+sum(article_reference_summary$nenvir == 0, na.rm = TRUE)
 
 ## Dropping meta-articles that are not published in environmental sciences journal
-ref_env1 <- ref_env %>% filter(nenvir != 0)
-round(median(ref_env1$perc), digits = 0)
+articles_with_environmental_references <- article_reference_summary %>%
+  filter(nenvir != 0)
+round(median(articles_with_environmental_references$perc), digits = 0)
 
-hist(ref_env1$perc, breaks = 60, xlab = "Meta-articles published in environmental sciences journal (in %)",
+hist(articles_with_environmental_references$perc, breaks = 60, xlab = "Meta-articles published in environmental sciences journal (in %)",
   main = "",  cex.lab = 0.9,  cex.axis = 0.85,  col = "lightblue")
 abline(v = 25, col = "red", lty = "dashed")
 
 ## We used the median of the percentages as a cut-off point (25%)
-ref_env_final <- ref_env1 %>% filter(perc >= 25)
-write.csv(ref_env_final, here("data", "ref_env_percentage.csv"), row.names = FALSE)
+environmental_articles <- articles_with_environmental_references %>%
+  filter(perc >= 25)
+write.csv(environmental_articles, here("data", "ref_env_percentage.csv"), row.names = FALSE)
 
 ## Meta-classification into subfields
-refenv <- read.csv(here("data", "ref_env_percentage.csv"), header = TRUE, sep = ",")
+environmental_article_references <- read.csv(here("data", "ref_env_percentage.csv"), header = TRUE, sep = ",")
 
 ## Older generated files did not contain titles. Add an explicit value for every
 ## row so this stage also works when it is run on its own with the supplied CSV.
-if (!"title" %in% names(refenv)) {
-  refenv$title <- rep(NA_character_, nrow(refenv))
+if (!"title" %in% names(environmental_article_references)) {
+  environmental_article_references$title <- rep(NA_character_, nrow(environmental_article_references))
 }
-dim(refenv)
+dim(environmental_article_references)
 
-## Identifying the most frequent subfield for each meta-article
-id <- title <- year <- jnames <- sjr_cat <- refs <- list()
-subfield <- nref <- nenvir <- perc <- freq_cat1 <- list()
-df1 <- df2 <- df3 <- df4 <- list()
+## Identify the most frequent subfield for each retained meta-article. Each
+## journal's weight is divided equally among all categories assigned to it.
+matched_journal_names <- matched_subfields <- leading_subfield <- list()
+subfield_rows <- weighted_subfield_counts <- tied_subfield_counts <- ranked_subfields <- list()
 
-subMeta <- data.frame(
+classified_meta_articles <- data.frame(
   id = NA, title = NA, year = NA, jnames = NA, sjr_cat = NA, refs = NA,
-  nref = NA, nenvir = NA, perc = NA, freq_cat1 = NA)
+  nref = NA, nenvir = NA, perc = NA, freq_cat1 = NA
+)
 
-s.time <- Sys.time()
-for (i in seq_along(refenv$references)) {
+start_time <- Sys.time()
+for (i in seq_along(environmental_article_references$references)) {
   print(i)
-  jnames[[i]] <- unlist(
+  matched_journal_names[[i]] <- unlist(
     str_extract_all(
-      refenv$references[i],
-      str_c("(?<=\\(?\\d{4}\\)?\\s)(", pattern, ")(?=,)")
+      environmental_article_references$references[i],
+      str_c("(?<=\\(?\\d{4}\\)?\\s)(", journal_name_pattern, ")(?=,)")
     )
   )
-  pos <- match(jnames[[i]], scimago$jname)
-  subfield[[i]] <- scimago$sjr_category[pos]
+  journal_match_positions <- match(
+    matched_journal_names[[i]], journal_categories$jname
+  )
+  matched_subfields[[i]] <-
+    journal_categories$sjr_category[journal_match_positions]
   
-  df1[[i]] <- structure(
-    list(var1 = subfield[[i]]),
+  subfield_rows[[i]] <- structure(
+    list(var1 = matched_subfields[[i]]),
     class = "data.frame",
-    row.names = c(NA, length(subfield[[i]]))
+    row.names = c(NA, length(matched_subfields[[i]]))
   )
   
-  df2[[i]] <- df1[[i]] %>%
+  weighted_subfield_counts[[i]] <- subfield_rows[[i]] %>%
     mutate(rn = row_number()) %>%
     separate_rows(var1, sep = "\\s*;\\s*") %>%
     add_count(rn) %>%
@@ -136,26 +146,25 @@ for (i in seq_along(refenv$references)) {
     group_by(var1) %>%
     summarise(n = sum(n), .groups = "drop")
   
-  df3[[i]] <- df2[[i]] %>%
+  tied_subfield_counts[[i]] <- weighted_subfield_counts[[i]] %>%
     group_by(n) %>%
     summarise(var1 = paste(var1, collapse = "|"), .groups = "drop")
   
-  df4[[i]] <- df3[[i]][order(df3[[i]]$n, decreasing = TRUE), ]
-  freq_cat1[[i]] <- df4[[i]]$var1[1]
+  ranked_subfields[[i]] <- tied_subfield_counts[[i]][order(tied_subfield_counts[[i]]$n, decreasing = TRUE), ]
+  leading_subfield[[i]] <- ranked_subfields[[i]]$var1[1]
   
-  subMeta[i, 1] <- refenv$id[i]
-  subMeta[i, 2] <- as.character(refenv$title[i])
-  subMeta[i, 3] <- refenv$year[i]
-  subMeta[i, 4] <- as.character(refenv$journal[i])
-  subMeta[i, 5] <- as.character(refenv$sjr_cat[i])
-  subMeta[i, 6] <- as.character(refenv$references[i])
-  subMeta[i, 7] <- refenv$nref[i]
-  subMeta[i, 8] <- refenv$nenvir[i]
-  subMeta[i, 9] <- refenv$perc[i]
-  subMeta[i, 10] <- freq_cat1[[i]]
+  classified_meta_articles[i, 1] <- environmental_article_references$id[i]
+  classified_meta_articles[i, 2] <- as.character(environmental_article_references$title[i])
+  classified_meta_articles[i, 3] <- environmental_article_references$year[i]
+  classified_meta_articles[i, 4] <- as.character(environmental_article_references$journal[i])
+  classified_meta_articles[i, 5] <- as.character(environmental_article_references$sjr_cat[i])
+  classified_meta_articles[i, 6] <- as.character(environmental_article_references$references[i])
+  classified_meta_articles[i, 7] <- environmental_article_references$nref[i]
+  classified_meta_articles[i, 8] <- environmental_article_references$nenvir[i]
+  classified_meta_articles[i, 9] <- environmental_article_references$perc[i]
+  classified_meta_articles[i, 10] <- leading_subfield[[i]]
 }
-e.time <- Sys.time()
-print(e.time - s.time)
+end_time <- Sys.time()
+print(end_time - start_time)
 
-write.csv(subMeta, here("data", "meta-classified into subfields.csv"), row.names = FALSE)
-
+write.csv(classified_meta_articles, here("data", "meta-classified into subfields.csv"), row.names = FALSE)

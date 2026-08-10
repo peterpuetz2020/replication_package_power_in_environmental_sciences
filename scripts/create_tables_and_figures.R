@@ -82,17 +82,22 @@ ensure_output_dirs <- function() {
   ))
 }
 
+## Apply one consistent, publication-sized theme to every main-text figure.
+## Main figures are one point larger than their supplementary counterparts.
+main_figure_theme <- function() {
+  theme_minimal(base_size = 11) +
+    theme(
+      axis.title = element_text(size = 11),
+      axis.text = element_text(size = 10),
+      legend.title = element_text(size = 10),
+      legend.text = element_text(size = 9.5),
+      strip.text = element_text(size = 10)
+    )
+}
+
+## Publication figures are distributed only in scalable PDF and SVG formats.
 save_plot <- function(filename_stem, width, height, draw) {
   pdf(paste0(filename_stem, ".pdf"), width = width, height = height)
-  draw()
-  dev.off()
-
-  cairo_ps(
-    paste0(filename_stem, ".eps"),
-    width = width,
-    height = height,
-    onefile = FALSE
-  )
   draw()
   dev.off()
 
@@ -100,17 +105,6 @@ save_plot <- function(filename_stem, width, height, draw) {
     paste0(filename_stem, ".svg"),
     width = width,
     height = height
-  )
-  draw()
-  dev.off()
-
-  png(
-    paste0(filename_stem, ".png"),
-    width = width,
-    height = height,
-    units = "in",
-    res = 300,
-    type = "cairo"
   )
   draw()
   dev.off()
@@ -458,6 +452,7 @@ ggplot(datFull) +
     breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8),
     guide = guide_axis(n.dodge = 2)
   ) +
+  main_figure_theme() +
   theme(panel.background = element_rect(fill = "gray100"), panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(linewidth = 0.5, color = "gray"))
 }
 
@@ -772,26 +767,13 @@ figure_2_summary <- tibble(
 ) %>%
   mutate(percentage = round(100 * count / total_meta_analyses, 1))
 
-high_power_subfields <- pps_rstandard_median %>%
-  filter(median > 0.8) %>%
-  count(subf, name = "count") %>%
-  mutate(
-    total_high_power_meta_analyses = sum(count),
-    percentage = round(100 * count / total_high_power_meta_analyses, 1)
-  ) %>%
-  arrange(desc(count)) %>%
-  rename(subfield = subf)
-
 write.xlsx(
-  list(
-    `Figure 2 summary` = figure_2_summary,
-    `High-power subfields` = high_power_subfields
-  ),
-  here("data", "derived_data", "Figure_2_summary.xlsx"),
+  list(`Figure 2 summary` = figure_2_summary),
+  here("results", "main", "Figure_2_summary.xlsx"),
   overwrite = TRUE
 )
-med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
-sape <- pps_rstandard_median %>% ggplot(aes(x = sape100)) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1, fill = "skyblue2") + xlab("Share of adequately powered primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(b)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + theme(legend.position = "none") + theme(panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
+med_pwr <- pps_rstandard_median %>% ggplot(aes(x = median100, fill = as.factor(yn80))) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1) + scale_fill_manual(values = c("brown2", "skyblue2")) + xlab("Median statistical power of primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(a)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + main_figure_theme() + theme(legend.position = "none", panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
+sape <- pps_rstandard_median %>% ggplot(aes(x = sape100)) + geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30, alpha = I(0.6), linewidth = 0.1, fill = "skyblue2") + xlab("Share of adequately powered primary estimates per meta-analysis") + ylab("Percentage") + ggtitle("(b)") + scale_x_continuous(breaks = breaks_width(20), labels = label_percent(scale = 1), expand = c(0, 0.5)) + scale_y_continuous(labels = label_percent(scale = 1), expand = c(0, 0.5)) + main_figure_theme() + theme(legend.position = "none", panel.background = element_rect(fill = "white"), axis.line = element_line(linewidth = 0.5, color = "gray"))
 figure_2 <- arrangeGrob(med_pwr, sape, ncol = 2)
 save_plot(
   here("results", "main", "Figure_2"),

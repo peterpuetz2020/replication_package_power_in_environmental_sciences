@@ -10,7 +10,11 @@ library(orchaRd)
 library(here)
 
 if (!exists("n_cores")) n_cores <- 6
+if (!exists("recreate_meta_analysis_estimates")) {
+  recreate_meta_analysis_estimates <- FALSE
+}
 minimum_primary_studies <- 5L
+meta_estimate_cache_version <- 1L
 if (!exists("new_progress_bar")) {
   new_progress_bar <- function(total, label) {
     message(label)
@@ -35,8 +39,9 @@ if (!exists("new_progress_bar")) {
   }
 }
 
-meta <- read_excel(here("data", "MasterData.xlsx"))
-meta_analyses <- split(meta, meta$cID)
+master_data_path <- here("data", "MasterData.xlsx")
+meta_analysis_data <- read_excel(master_data_path)
+meta_analyses <- split(meta_analysis_data, meta_analysis_data$cID)
 
 derived_data_dir <- here("data", "derived_data")
 output_dirs <- c(
@@ -49,6 +54,32 @@ invisible(lapply(
   c(output_dirs, derived_data_dir), dir.create,
   recursive = TRUE, showWarnings = FALSE
 ))
+
+## Cache one compact summary per meta-analysis as soon as that analysis
+## finishes. This makes interrupted runs resumable and avoids refitting all 708
+## analyses on every invocation. The manifest invalidates the cache whenever
+## the master workbook or cache schema changes; users can also force a complete
+## rebuild with recreate_meta_analysis_estimates <- TRUE.
+summary_cache_dir <- file.path(derived_data_dir, "meta_analysis_summary_cache")
+dir.create(summary_cache_dir, recursive = TRUE, showWarnings = FALSE)
+cache_manifest_path <- file.path(summary_cache_dir, "manifest.rds")
+cache_manifest <- list(
+  version = meta_estimate_cache_version,
+  master_data_md5 = unname(tools::md5sum(master_data_path)),
+  minimum_primary_studies = minimum_primary_studies
+)
+stored_manifest <- if (file.exists(cache_manifest_path)) {
+  readRDS(cache_manifest_path)
+} else {
+  NULL
+}
+cache_is_current <- !recreate_meta_analysis_estimates &&
+  identical(stored_manifest, cache_manifest)
+if (!cache_is_current) {
+  unlink(summary_cache_dir, recursive = TRUE)
+  dir.create(summary_cache_dir, recursive = TRUE, showWarnings = FALSE)
+  saveRDS(cache_manifest, cache_manifest_path)
+}
 
 extract_coefficient_statistic <- function(test, term, statistic) {
   as.numeric(test[term, statistic])
@@ -298,6 +329,15 @@ fit_random_effects_with_outlier_removal <- function(
     abs(standardized_residuals) <= cutoff
   analysis_data <- analysis_data[keep, , drop = FALSE]
 
+  ## When screening removes nothing, the screening model is already the exact
+  ## final all-data model. Reusing it avoids an unnecessary REML fit and CR2
+  ## calculation, which is a common case across hundreds of meta-analyses.
+  if (all(keep)) {
+    reused_fit <- screening_fit
+    reused_fit$model <- NULL
+    return(list(data = analysis_data, result = reused_fit))
+  }
+
   ## Let the caller exclude the complete meta-analysis before attempting the
   ## final fit (and, in particular, before requesting CR2 inference).
   if (primary_study_count(analysis_data) < minimum_primary_studies) {
@@ -331,6 +371,21 @@ fit_one_meta_analysis <- function(dat) {
   pet_outlier_removed_data <- dat[abs(standardized_residuals) < 3, , drop = FALSE]
   pet_studies <- primary_study_count(pet_outlier_removed_data)
 
+  pet_peese_all_data <- fit_pet_peese(
+    dat, outlier_model, outlier_model_test
+  )
+  pet_peese_outlier_removed <- if (
+    nrow(pet_outlier_removed_data) == nrow(dat)
+  ) {
+    ## The PET screen retained every effect, so refitting the identical PET or
+    ## PEESE model would produce the same result at substantial extra cost.
+    pet_peese_all_data
+  } else if (pet_studies >= minimum_primary_studies) {
+    fit_pet_peese(pet_outlier_removed_data)
+  } else {
+    empty_meta_estimate("PET-PEESE not estimable after outlier removal")
+  }
+
   random_effect_all_data <- fit_random_effects(dat)
   random_effect_outlier_removed <- fit_random_effects_with_outlier_removal(
     dat, screening_fit = random_effect_all_data
@@ -344,17 +399,13 @@ fit_one_meta_analysis <- function(dat) {
 
   results <- list(
     all_data = list(
-      pet_peese = fit_pet_peese(dat, outlier_model, outlier_model_test),
+      pet_peese = pet_peese_all_data,
       pet_peese_data = dat,
       random_effect = random_effect_all_data,
       random_effect_data = dat
     ),
     outlier_removed = list(
-      pet_peese = if (pet_studies >= minimum_primary_studies) {
-        fit_pet_peese(pet_outlier_removed_data)
-      } else {
-        empty_meta_estimate("PET-PEESE not estimable after outlier removal")
-      },
+      pet_peese = pet_peese_outlier_removed,
       pet_peese_data = pet_outlier_removed_data,
       random_effect = if (random_effect_studies >= minimum_primary_studies) {
         random_effect_outlier_removed$result
@@ -423,23 +474,92 @@ fit_one_meta_analysis <- function(dat) {
   )
 }
 
-cluster <- makeCluster(n_cores)
-registerDoParallel(cluster)
-message("Fitting ", length(meta_analyses), " meta-analyses")
-meta_analysis_estimates <- foreach(
-  dat = meta_analyses,
-  .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),
-  .combine = bind_rows,
-  .options.snow = list(preschedule = FALSE)
-) %dopar% fit_one_meta_analysis(dat)
-stopCluster(cluster)
+summary_cache_path <- function(c_id) {
+  file.path(summary_cache_dir, paste0("meta_", c_id, ".rds"))
+}
 
-meta_analysis_estimates <- meta_analysis_estimates %>%
-  filter(is.na(exclusion_reason)) %>%
+write_summary_cache <- function(result, path) {
+  temporary_path <- tempfile(
+    pattern = paste0(basename(path), "_"),
+    tmpdir = dirname(path), fileext = ".tmp"
+  )
+  on.exit(unlink(temporary_path), add = TRUE)
+  saveRDS(result, temporary_path)
+  if (!file.rename(temporary_path, path)) {
+    stop("Could not move completed meta-analysis cache to ", path)
+  }
+  invisible(path)
+}
+
+expected_effect_paths <- function(c_id) {
+  file.path(output_dirs, paste0("meta_", c_id, ".rds"))
+}
+
+cached_meta_analysis_is_complete <- function(c_id) {
+  path <- summary_cache_path(c_id)
+  if (!file.exists(path)) return(FALSE)
+
+  summary <- tryCatch(readRDS(path), error = function(...) NULL)
+  if (is.null(summary) || !"exclusion_reason" %in% names(summary)) {
+    return(FALSE)
+  }
+  is_excluded <- !is.na(summary$exclusion_reason[[1]])
+  is_excluded || all(file.exists(expected_effect_paths(c_id)))
+}
+
+fit_and_cache_meta_analysis <- function(dat) {
+  result <- fit_one_meta_analysis(dat)
+  write_summary_cache(
+    result, summary_cache_path(as.character(dat$cID[[1]]))
+  )
+  result
+}
+
+meta_analysis_ids <- names(meta_analyses)
+completed_ids <- meta_analysis_ids[vapply(
+  meta_analysis_ids, cached_meta_analysis_is_complete, logical(1)
+)]
+pending_ids <- setdiff(meta_analysis_ids, completed_ids)
+message(
+  "Reusing ", length(completed_ids), " cached meta-analyses; fitting ",
+  length(pending_ids), " of ", length(meta_analyses), "."
+)
+
+if (length(pending_ids) > 0L) {
+  cluster <- makeCluster(min(n_cores, length(pending_ids)))
+  registerDoParallel(cluster)
+  invisible(tryCatch(
+    foreach(
+      dat = meta_analyses[pending_ids],
+      .packages = c("metafor", "clubSandwich", "dplyr", "tibble", "orchaRd"),
+      ## Dynamic scheduling prevents a few large meta-analyses from leaving
+      ## otherwise idle workers near the end of the run. Each result is cached
+      ## immediately; the small summaries are assembled from disk below.
+      .options.snow = list(preschedule = FALSE)
+    ) %dopar% fit_and_cache_meta_analysis(dat),
+    finally = stopCluster(cluster)
+  ))
+}
+
+## Read summaries from disk so cached and newly fitted analyses follow exactly
+## the same aggregation path and an interrupted run needs no special handling.
+all_meta_analysis_summaries <- purrr::map_dfr(
+  meta_analysis_ids,
+  ~ readRDS(summary_cache_path(.x))
+)
+excluded_meta_analyses <- all_meta_analysis_summaries %>%
+  dplyr::filter(!is.na(exclusion_reason))
+readr::write_csv(
+  excluded_meta_analyses,
+  file.path(derived_data_dir, "excluded_meta_analyses.csv")
+)
+
+meta_analysis_estimates <- all_meta_analysis_summaries %>%
+  dplyr::filter(is.na(exclusion_reason)) %>%
   dplyr::select(-exclusion_reason)
 
-meta_analysis_estimates <- meta_analysis_estimates %>% arrange(cID)
-write_csv(
+meta_analysis_estimates <- meta_analysis_estimates %>% dplyr::arrange(cID)
+readr::write_csv(
   meta_analysis_estimates,
   file.path(derived_data_dir, "meta_analysis_estimates.csv")
 )

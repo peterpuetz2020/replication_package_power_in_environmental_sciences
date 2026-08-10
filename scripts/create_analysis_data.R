@@ -5,12 +5,9 @@
 ## Set the parameters in scripts/analysis_setup.R, then source this script to create the
 ## setup-specific data files used by scripts/create_tables_and_figures.R.
 
-library(tidyverse)
-library(foreach)
-library(doParallel)
-library(here)
-
-source(here("scripts", "analysis_setup.R"))
+## analysis_setup.R loads the shared package set, helper functions, and runtime
+## defaults, so package imports are deliberately not duplicated here.
+source(here::here("scripts", "analysis_setup.R"))
 
 ## Missing counterfactual z-/p-value files are created separately for each
 ## estimator. Set this to TRUE (for example in scripts/main.R) to overwrite
@@ -20,15 +17,33 @@ recreate_counterfactuals <- if (exists("recreate_counterfactuals")) recreate_cou
 
 save_counterfactual <- function(path, calculate, progress_bar = NULL,
                                 progress_value = NULL, expected_iterations = NULL) {
+  ## Point estimates have no iteration dimension. For bootstrap results, every
+  ## returned interval matrix must have exactly the requested number of rows;
+  ## checking only the first element could incorrectly accept a partial cache.
   cached_result_is_stale <- FALSE
   if (file.exists(path) && !is.null(expected_iterations)) {
     cached_result <- readRDS(path)
     cached_result_is_stale <- !is.list(cached_result) ||
       length(cached_result) == 0 ||
-      !isTRUE(nrow(cached_result[[1]]) == expected_iterations)
+      !all(vapply(
+        cached_result,
+        function(interval_matrix) {
+          is.matrix(interval_matrix) &&
+            nrow(interval_matrix) == expected_iterations
+        },
+        logical(1)
+      ))
   }
   if (recreate_counterfactuals || !file.exists(path) || cached_result_is_stale) {
+    if (cached_result_is_stale) {
+      message(
+        "Rebuilding ", basename(path), " because its cached iteration count ",
+        "does not match n_iterations = ", expected_iterations, "."
+      )
+    }
     saveRDS(calculate(), path)
+  } else {
+    message("Reusing existing counterfactual: ", basename(path))
   }
   if (!is.null(progress_value)) update_progress_bar(progress_bar, progress_value)
 }

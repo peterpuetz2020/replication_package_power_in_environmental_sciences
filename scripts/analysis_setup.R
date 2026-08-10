@@ -39,11 +39,16 @@ close_progress_bar <- function(progress_bar) {
   invisible(NULL)
 }
 
-## Set analysis parameters here. All downstream scripts consume these settings.
-n_cores <- 6
-n_iterations <- 1000
-meta_average_multiplier <- c(0.25, 0.5, 1)
-heterogeneity_multiplier <- c(0, 0.25, 0.5, 0.75)
+## Set defaults without replacing values supplied before source("scripts/main.R").
+## This makes short test runs and custom setups possible from the calling script.
+if (!exists("n_cores")) n_cores <- 6L
+if (!exists("n_iterations")) n_iterations <- 1000L
+if (!exists("meta_average_multiplier")) {
+  meta_average_multiplier <- c(0.25, 0.5, 1)
+}
+if (!exists("heterogeneity_multiplier")) {
+  heterogeneity_multiplier <- c(0, 0.25, 0.5, 0.75)
+}
 
 make_setup_label <- function(meta_average_multiplier, heterogeneity_multiplier) {
   paste0(
