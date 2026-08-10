@@ -227,15 +227,7 @@ analysis_data_parameters <- tidyr::crossing(
   analysis_setups,
   estimator = meta_analysis_estimators,
   outlier_variant = "outliers_removed"
-) %>%
-  bind_rows(
-    table_2_setups %>%
-      mutate(
-        estimator = "multilevel_random",
-        outlier_variant = "outliers_removed"
-      )
-  ) %>%
-  distinct()
+)
 
 counterfactual_progress <- new_progress_bar(
   4 * nrow(analysis_data_parameters),

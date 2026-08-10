@@ -82,10 +82,10 @@ Figure 1, the renderer reports that Figure 1 was skipped and continues with the
 remaining outputs. Include `0.5` in `meta_average_multiplier` and both `0` and
 `0.5` in `heterogeneity_multiplier` to render Figure 1.
 
-Main-text Table 2 likewise has a fixed manuscript specification: a `0.5`
-meta-average multiplier and `0`, `0.25`, `0.5`, and `0.75` heterogeneity
-multipliers. The data-preparation stage always creates these four random-effects
-inputs in addition to any custom setups, so Table 2 is rendered on custom runs.
+Table 2 uses every meta-average and heterogeneity combination specified by
+`meta_average_multiplier` and `heterogeneity_multiplier` in the shared analysis
+setup. Its columns and labels are generated from those values, so custom runs do
+not silently add fixed manuscript configurations or skip the table.
 
 The workflow renders each setup for PET-PEESE and multilevel random effects. The
 outlier-removed samples are estimator-specific: PET-PEESE uses its PET residual
