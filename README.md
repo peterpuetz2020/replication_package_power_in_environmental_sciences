@@ -10,7 +10,7 @@ The repository contains the data and R scripts needed to reproduce the subfield 
 
 The project uses [`renv`](https://rstudio.github.io/renv/) to restore the package versions recorded in `renv.lock`. The lockfile records **R 4.5.0** and the CRAN repository snapshot configured through Posit Package Manager. Most packages are installed from CRAN; the non-CRAN dependency `orchaRd` is pinned in `renv.lock` to the GitHub repository `daniel1noble/orchaRd` at commit `5e9ac55cd28d717681bcbcf17527bace42500903`, so `renv::restore()` can install it reproducibly.
 
-Chrome or Chromium is **not required**. The analysis writes tables directly as CSV/XLSX files and renders its PNG/PDF outputs through R graphics devices (including the heterogeneity summary table); it does not take browser screenshots. Consequently, the browser automation packages `webshot2`, `chromote`, and `websocket` are not included in the lockfile. Some installed packages list browser tooling only as an optional suggested dependency, but none of the replication scripts use that feature.
+Chrome or Chromium is **not required**. The analysis writes tables directly as CSV/XLSX files and renders its PDF/SVG outputs through R graphics devices (including the heterogeneity summary table); it does not take browser screenshots. Consequently, the browser automation packages `webshot2`, `chromote`, and `websocket` are not included in the lockfile. Some installed packages list browser tooling only as an optional suggested dependency, but none of the replication scripts use that feature.
 
 ### RStudio
 
@@ -38,14 +38,33 @@ renv::restore()
 
 ## Reproducing the results
 
-Run the scripts from the repository root in this order for the complete legacy workflow:
+For a normal run using previously generated classifications and fitted
+meta-analysis files, source the orchestrator from the repository root:
 
 ```r
-source("scripts/classification.R")
 source("scripts/main.R")
 ```
 
-Alternatively, open `scripts/classification.R` and run it first, then open `scripts/main.R` and run it second. In RStudio, this can be done by opening each file and choosing **Source**. Without RStudio, paste or source the same commands in an R session started from the repository root.
+The classification and fitting stages are intentionally **off by default**.
+Fitting PET-PEESE and multilevel random-effects models for all 708
+meta-analyses is slow, and rerunning it is unnecessary when its
+per-meta-analysis RDS files already exist. For a complete rebuild from the raw
+inputs, enable either or both optional stages before sourcing `main.R`:
+
+```r
+run_classification <- TRUE
+run_meta_analysis_fitting <- TRUE
+source("scripts/main.R")
+```
+
+The switches apply only to that R session. `run_classification <- TRUE`
+recreates `data/ref_env_percentage.csv` and
+`data/meta-classified into subfields.csv`; `run_meta_analysis_fitting <- TRUE`
+recreates the estimator inputs under `data/derived_data/`. In RStudio, open the
+file and choose **Source**. Without RStudio, use the same commands in an R
+session started from the repository root. Avoid sourcing `main.R` through an
+absolute, machine-specific Windows path; running from the project root lets
+`here` resolve portable repository-relative paths.
 
 ### Ordered manuscript tables and figures
 
@@ -77,10 +96,10 @@ estimator analyses but is not used for the Egger test or prevalence calculation.
 The supplementary script writes Figure S1 (meta-average multiplier 0.25),
 Figure S2 (meta-average multiplier 1), the across-combination ESR plot in
 the non-main-text Figure 2 power-distribution variants to
-`results/supplement/`, in PDF, EPS, SVG, and 300 dpi PNG format. SVG is
+`results/supplement/`, in PDF and SVG format. SVG is
 the preferred format for insertion into recent versions of Microsoft Word and
-LibreOffice Writer because it remains sharp when resized; PNG is the compatible
-fallback for applications that do not support SVG. The main table-and-figure
+LibreOffice Writer because it remains sharp when resized; PDF provides a second
+scalable format. The main table-and-figure
 script saves the intermediate Figure S3 inputs to
 `data/derived_data/Figure_S3_inputs.rds`. The supplementary script loads that
 file automatically, so it can create Figure S3 and its source numbers in a new
@@ -88,14 +107,15 @@ R session.
 Before the first run, create the random-effects estimator datasets:
 
 ```r
-source("scripts/compare_meta_analysis_estimators.R")
+source("scripts/compute_meta_estimates.R")
+source("scripts/create_analysis_data.R")
 source("scripts/create_tables_and_figures.R")
 ```
 
-The comparison script applies the PET residual screen consistently, then saves
-effect-level inputs under `results/main/multilevel_random/`. Output filenames
-end in `_pet_peese` or `_multilevel_random`, so results from each estimator
-remain separate.
+The fitting script applies the estimator-specific residual screens, then saves
+effect-level inputs in estimator-specific directories under
+`data/derived_data/`. Setup-specific output filenames identify PET-PEESE or
+multilevel random effects so results from each estimator remain separate.
 
 To compare the two random-effects heterogeneity components directly, run
 `scripts/compute_meta_estimates.R`. In addition to the estimator inputs, it
@@ -125,21 +145,26 @@ meta-analysis is omitted from both the all-data and outlier-removed outputs.
 The script removes any stale per-meta-analysis RDS files and records all such
 omissions in `data/derived_data/excluded_meta_analyses.csv`.
 
-Publication outputs use numbered table and figure names. Figures are saved as PDF, EPS, SVG, and 300 dpi PNG files. The workbook underlying Figure 2 is saved in `data/derived_data`, while Figure S3 and its source numbers are saved in `results/supplement`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
+Publication outputs use numbered table and figure names. Figures are saved as PDF and SVG files. The workbook underlying Figure 2 is saved in `data/derived_data`, while Figure S3 and its source numbers are saved in `results/supplement`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 
 ### Optional setup-specific data creation
 
-The data-preparation step is separated from table/figure rendering. To generate one or more alternative setups, define `meta_average_multipliers`, `heterogeneity_multipliers`, or `n_iterations` before running:
+The data-preparation step is separated from table/figure rendering. To generate one or more alternative setups, define `meta_average_multiplier`, `heterogeneity_multiplier`, or `n_iterations` before running:
 
 ```r
 source("scripts/create_analysis_data.R")
 ```
 
-This writes setup-specific derived datasets under `data/derived_data/`. `meta_average_multipliers` and `heterogeneity_multipliers` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. The script also creates any missing setup-specific counterfactual z-value and p-value RDS files needed by the tables and plots, while reusing files that already exist. Define `recreate_counterfactuals <- TRUE` before sourcing the script to overwrite and rebuild all matching counterfactual files. `scripts/create_tables_and_figures.R` uses these derived datasets when available; otherwise, it falls back to the existing PET-PEESE RDS files under `results/main/pet_peese_rstandard/`.
+This writes setup-specific derived datasets under `data/derived_data/`. `meta_average_multiplier` and `heterogeneity_multiplier` can each contain one or more values; `scripts/create_analysis_data.R` computes and stores outputs for every combination. To use custom labels, define an `analysis_setups` tibble/data frame with `meta_average_multiplier`, `heterogeneity_multiplier`, and `setup_label` columns before sourcing the script. The script also creates any missing setup-specific counterfactual z-value and p-value RDS files needed by the tables and plots, while reusing files that already exist. A cached confidence-interval result is reused only when every stored result matrix has exactly `n_iterations` rows; a mismatch triggers an automatic rebuild. Define `recreate_counterfactuals <- TRUE` before sourcing the script to overwrite and rebuild all matching counterfactual files even when that validation passes.
 
-### Optional data-recreation step
+### Optional data-recreation steps
 
-The optional model-fitting script, `scripts/fit_pet_peese_models.R`, reads `data/MasterData.xlsx`. Running `scripts/classification.R` is only necessary if you want to recreate the classification files from the raw Scopus and Scimago inputs. `scripts/main.R` is now an orchestrator: it loads shared setup, renders outputs from the supplied derived data, and runs the exploratory regressions. Expensive scripts that replace supplied derived data are listed as commented, optional `source()` calls in `scripts/main.R`.
+The optional model-fitting script, `scripts/compute_meta_estimates.R`, reads
+`data/MasterData.xlsx`. Running `scripts/classification.R` is only necessary to
+recreate classification files from the raw Scopus and Scimago inputs.
+`scripts/main.R` exposes both operations through the switches documented above,
+then creates setup-specific data, renders outputs, and runs the exploratory
+regressions.
 
 ```r
 source("scripts/main.R")
@@ -147,7 +172,8 @@ source("scripts/main.R")
 
 ## Runtime settings in `scripts/analysis_setup.R`
 
-In `scripts/analysis_setup.R`, adjust:
+Define these values before sourcing `scripts/main.R` (or edit their defaults in
+`scripts/analysis_setup.R`):
 
 - `n_cores`: number of parallel worker cores.
 - `n_iterations`: number of Monte Carlo/bootstrap iterations for confidence intervals
@@ -155,6 +181,14 @@ In `scripts/analysis_setup.R`, adjust:
   of iterations are rebuilt automatically.
 - `meta_average_multiplier`: vector of multipliers applied to the meta-analytic average when calculating power (default `c(0.25, 0.5, 1)`).
 - `heterogeneity_multiplier`: vector of multipliers applied to the between-effect heterogeneity in the counterfactual calculations (default `c(0, 0.25, 0.5, 0.75)`).
+- `run_classification`: recreate classification CSV files (default `FALSE`).
+- `run_meta_analysis_fitting`: fit all meta-analyses and replace estimator RDS
+  files (default `FALSE`).
+- `recreate_meta_analysis_estimates`: ignore resumable per-meta-analysis fitting
+  caches and refit every meta-analysis when fitting is enabled (default
+  `FALSE`).
+- `recreate_counterfactuals`: replace matching counterfactual caches even when
+  their iteration count is correct (default `FALSE`).
 
 The two multiplier vectors are independent. Setup-specific data generation, Figure 1, and Table 2 evaluate every combination of their values. Table 1, Table 3, and Figure 2 are saved once for each meta-average multiplier, using the first supplied heterogeneity multiplier in their filenames. Define custom vectors before sourcing `scripts/main.R`:
 
@@ -198,7 +232,12 @@ dataset are reused across all requested setups.
 The meta-estimate workflow similarly reuses its all-data PET and random-effects
 screening fits for the corresponding reported estimates. Its parallel loop is
 dynamically scheduled so that workers finishing small meta-analyses can start
-new ones without waiting for the slowest member of a fixed batch.
+new ones without waiting for the slowest member of a fixed batch. Each completed
+meta-analysis writes a compact summary cache, so an interrupted or repeated run
+fits only unfinished analyses. The cache is invalidated automatically when
+`MasterData.xlsx` or the fitting-cache schema changes. Set
+`recreate_meta_analysis_estimates <- TRUE` before sourcing `main.R` to force a
+complete refit.
 
 To check the optimized counterfactual functions against a direct-loop reference
 implementation, run:
@@ -225,11 +264,11 @@ The analysis scripts create their output folders automatically if they do not al
 - `scripts/classification.R`: optional script that recreates subfield classifications from raw inputs.
 - `scripts/functions.R`: helper functions used by the analysis.
 - `scripts/analysis_setup.R`: shared packages, runtime settings, helpers, and output-directory setup.
-- `scripts/fit_pet_peese_models.R`: optional PET-PEESE fitting and per-meta-analysis RDS generation.
+- `scripts/compute_meta_estimates.R`: optional PET-PEESE and multilevel
+  random-effects fitting and per-meta-analysis RDS generation.
 - `scripts/create_analysis_data.R`: setup-specific derived-data creation for table/figure rendering, including the ESR and regression-covariate inputs for Table 4.
 - `scripts/create_tables_and_figures.R`: creates manuscript tables and figures in numeric order, with independently rerunnable sections.
 - `scripts/create_supplement_tables_and_figures.R`: creates supplementary counterfactual sensitivity figures and the across-combination excess-significance plot.
-- `scripts/create_full_tables_figures_and_robustness.R`: optional complete legacy counterfactual, supplementary, and robustness workflow.
 - `scripts/run_exploratory_regressions.R`: exploratory regression models and diagnostic figures, loading inputs generated by `create_analysis_data.R`.
 - `scripts/main.R`: short orchestrator that sources the analysis steps.
 - `results/main/`: generated main results.

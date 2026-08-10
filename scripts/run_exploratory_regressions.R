@@ -43,7 +43,7 @@ load_regression_multilevel_data <- function(setup_label) {
   if (length(input_files) == 0) {
     stop(
       "No multilevel random-effects inputs found. Run ",
-      "compare_meta_analysis_estimators.R first."
+      "scripts/compute_meta_estimates.R first."
     )
   }
   purrr::map_dfr(input_files, readRDS)

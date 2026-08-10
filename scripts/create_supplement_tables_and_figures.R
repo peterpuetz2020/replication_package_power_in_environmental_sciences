@@ -46,6 +46,19 @@ dir.create(supplement_dir, recursive = TRUE, showWarnings = FALSE)
 derived_data_dir <- here("data", "derived_data")
 dir.create(derived_data_dir, recursive = TRUE, showWarnings = FALSE)
 
+## Use a uniform compact theme for every supplementary figure. Plot-specific
+## theme calls below alter only layout details such as legend placement.
+supplement_figure_theme <- function() {
+  theme_minimal(base_size = 10) +
+    theme(
+      axis.title = element_text(size = 10),
+      axis.text = element_text(size = 9),
+      legend.title = element_text(size = 9),
+      legend.text = element_text(size = 8.5),
+      strip.text = element_text(size = 9)
+    )
+}
+
 save_supplement_plot <- function(filename_stem, width, height, draw) {
   save_with_device <- function(extension, open_device) {
     output_path <- paste0(filename_stem, extension)
@@ -69,17 +82,10 @@ save_supplement_plot <- function(filename_stem, width, height, draw) {
     }
   }
 
-  ## Write each format to a temporary file first. If drawing fails, this keeps
-  ## a truncated device output from masquerading as a valid PDF (or image).
+  ## Write each scalable format to a temporary file first. If drawing fails,
+  ## this keeps a truncated device output from masquerading as a valid figure.
   save_with_device(".pdf", function(path) pdf(path, width = width, height = height))
-  save_with_device(".eps", function(path) cairo_ps(
-    path, width = width, height = height, onefile = FALSE
-  ))
   save_with_device(".svg", function(path) svg(path, width = width, height = height))
-  save_with_device(".png", function(path) png(
-    path, width = width, height = height, units = "in", res = 300,
-    type = "cairo"
-  ))
 }
 
 load_multilevel_data <- function(setup_label) {
@@ -275,6 +281,7 @@ make_figure_1_panel <- function(meta_average_multiplier, heterogeneity_multiplie
       breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8),
       guide = guide_axis(n.dodge = 2)
     ) +
+    supplement_figure_theme() +
     theme(
       panel.background = element_rect(fill = "gray100"),
       panel.border = element_blank(),
@@ -357,6 +364,7 @@ write_supplement_figure_2 <- function(meta_average_multiplier,
     scale_y_continuous(labels = scales::label_percent(scale = 1)) +
     labs(x = "Median statistical power of primary estimates per meta-analysis",
          y = "Percentage", title = "(a)") +
+    supplement_figure_theme() +
     theme(legend.position = "none", panel.background = element_rect(fill = "white"))
   sape_plot <- ggplot(plot_data, aes(sape)) +
     geom_histogram(aes(y = after_stat(count / sum(count) * 100)), bins = 30,
@@ -366,6 +374,7 @@ write_supplement_figure_2 <- function(meta_average_multiplier,
     scale_y_continuous(labels = scales::label_percent(scale = 1)) +
     labs(x = "Share of adequately powered primary estimates per meta-analysis",
          y = "Percentage", title = "(b)") +
+    supplement_figure_theme() +
     theme(panel.background = element_rect(fill = "white"))
 
   stem <- paste0("Figure_2_", setup_label, "_", estimator)
@@ -446,7 +455,7 @@ esr_plot <- ggplot(
     x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig),
     color = "Estimator"
   ) +
-  theme_bw()
+  supplement_figure_theme()
 save_supplement_plot(
   file.path(supplement_dir, "Figure_S3"),
   width = 10, height = 4.5, draw = function() print(esr_plot)
@@ -568,7 +577,9 @@ table_s6_columns <- subfield_esr_results %>%
     "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests"
   )) %>%
   mutate(
-    measure = recode(measure, `No. of meta-analysis` = "No. of meta-analyses"),
+    measure = dplyr::recode(
+      measure, `No. of meta-analysis` = "No. of meta-analyses"
+    ),
     value = if_else(
       confidence_interval == "0", estimate,
       paste(estimate, confidence_interval)
@@ -673,8 +684,11 @@ heterogeneity_plot <- ggplot() +
            hjust = c(0, rep(.5, length(column_positions) - 1)), size = 3.6) +
   coord_cartesian(xlim = c(0, 100), ylim = c(.45, nrow(figure_s4_rows) + 1.35),
                   expand = FALSE, clip = "off") +
-  theme_void(base_size = 11) +
+  supplement_figure_theme() +
   theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    panel.grid = element_blank(),
     plot.margin = margin(6, 12, 6, 12, unit = "mm"),
     plot.caption = element_text(hjust = .5, margin = margin(t = 12))
   )
@@ -766,6 +780,7 @@ make_subfield_counterfactual_plot <- function(heterogeneity_multiplier) {
   ) +
   labs(x = "|z|-value", y = "Frequency",
        title = paste0(heterogeneity_multiplier * 100, "% genuine heterogeneity")) +
+  supplement_figure_theme() +
   theme(
     panel.background = element_rect(fill = "gray100"),
     panel.border = element_blank(),
@@ -873,8 +888,8 @@ save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   dat <- final_nb %>% mutate(residual = residuals(model), fitted_value = fitted(model))
   vars <- if (kind == "continuous") c("fitted_value", "med_perc", "lognps", "logtotall", "logjif", "pyear") else c("design_merged", "guid", "prer", "subf")
   plots <- map(vars, function(v) {
-    if (is.numeric(dat[[v]])) ggplot(dat, aes(.data[[v]], residual)) + geom_point(colour = "skyblue3", shape = 1) + geom_hline(yintercept = 0, colour = "red") + theme_bw() + labs(x = v)
-    else ggplot(dat, aes(.data[[v]], residual)) + geom_boxplot() + geom_hline(yintercept = 0, colour = "red") + theme_bw() + labs(x = v)
+    if (is.numeric(dat[[v]])) ggplot(dat, aes(.data[[v]], residual)) + geom_point(colour = "skyblue3", shape = 1) + geom_hline(yintercept = 0, colour = "red") + labs(x = v) + supplement_figure_theme()
+    else ggplot(dat, aes(.data[[v]], residual)) + geom_boxplot() + geom_hline(yintercept = 0, colour = "red") + labs(x = v) + supplement_figure_theme()
   })
   grob <- arrangeGrob(grobs = plots, ncol = 2)
   save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
