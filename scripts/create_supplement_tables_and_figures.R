@@ -573,9 +573,12 @@ if (!file.exists(subfield_esr_path)) {
 }
 subfield_esr_results <- readRDS(subfield_esr_path)
 table_s6_columns <- subfield_esr_results %>%
-  filter(measure %in% c(
-    "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests"
-  )) %>%
+  filter(
+    meta_average_multiplier == 0.5,
+    measure %in% c(
+      "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests"
+    )
+  ) %>%
   mutate(
     measure = dplyr::recode(
       measure, `No. of meta-analysis` = "No. of meta-analyses"
