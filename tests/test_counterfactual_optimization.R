@@ -85,6 +85,25 @@ actual_ci <- cf.ci.cluster(
 )
 stopifnot(isTRUE(all.equal(actual_ci, expected_ci, tolerance = 1e-14)))
 
+cache_path <- tempfile(fileext = ".rds")
+cache_key <- counterfactual_cache_key(
+  dat, grid, heterogeneity_multiplier, TRUE, cluster, iters
+)
+write_counterfactual_cache(actual_ci, cache_path, cache_key)
+stopifnot(identical(read_counterfactual_cache(cache_path, cache_key), actual_ci))
+different_iteration_key <- counterfactual_cache_key(
+  dat, grid, heterogeneity_multiplier, TRUE, cluster, iters + 1L
+)
+stopifnot(is.null(read_counterfactual_cache(
+  cache_path, different_iteration_key
+)))
+replacement <- lapply(actual_ci, function(result) result[1, , drop = FALSE])
+write_counterfactual_cache(replacement, cache_path, different_iteration_key)
+stopifnot(identical(
+  read_counterfactual_cache(cache_path, different_iteration_key), replacement
+))
+unlink(cache_path)
+
 components <- counterfactual_components(dat, grid, heterogeneity_multiplier)
 stopifnot(isTRUE(all.equal(
   cf(dat, grid, components = components), expected_point, tolerance = 1e-14

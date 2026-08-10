@@ -55,6 +55,11 @@ if (exists("analysis_setups") &&
 ## This makes short test runs and custom setups possible from the calling script.
 if (!exists("n_cores")) n_cores <- 6L
 if (!exists("n_iterations")) n_iterations <- 1000L
+if (length(n_iterations) != 1L || is.na(n_iterations) ||
+    n_iterations < 1 || n_iterations != as.integer(n_iterations)) {
+  stop("n_iterations must be one positive whole number.")
+}
+n_iterations <- as.integer(n_iterations)
 if (!exists("meta_average_multiplier")) {
   meta_average_multiplier <- c(0.25, 0.5, 1)
 }
