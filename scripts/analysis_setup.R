@@ -56,7 +56,7 @@ if (exists("analysis_setups") &&
 ## Set defaults without replacing values supplied before source("scripts/main.R").
 ## This makes short test runs and custom setups possible from the calling script.
 resolve_runtime_setting("n_cores", 6L)
-resolve_runtime_setting("n_iterations", 10L)
+resolve_runtime_setting("n_iterations", 1000L)
 if (length(n_iterations) != 1L || is.na(n_iterations) ||
     n_iterations < 1 || n_iterations != as.integer(n_iterations)) {
   stop("n_iterations must be one positive whole number.")
