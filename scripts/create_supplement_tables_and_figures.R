@@ -1092,11 +1092,14 @@ table_s6 <- format_model_table(ols_fit, TRUE)
 save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   dat <- final_nb_heterogeneity_0p5 %>%
     mutate(residual = residuals(model), fitted_value = fitted(model))
-  vars <- if (kind == "continuous") c("fitted_value", "med_perc", "lognps", "logtotall", "logjif", "pyear") else c("design_merged", "guid", "prer", "subf")
+  vars <- if (kind == "continuous") c("fitted_value", "med_perc", "lognps", "logjif", "pyear") else c("design_merged", "guid", "prer", "subf")
   diagnostic_labels <- c(
     "fitted_value" = "Fitted value",
-    setNames(names(regression_labels), sub("yes$", "", regression_labels)),
-    "logtotall" = "Log number of primary estimates",
+    sub(
+      " \\(yes\\)$",
+      "",
+      names(regression_labels)
+    ),
     "subf" = "Subfield"
   )
   plots <- map(vars, function(v) {
