@@ -157,3 +157,6 @@ nbMod2.robu <- nb_main$robust[[2]]
 nbMod3.robu <- nb_main$robust[[3]]
 nbMod4.robu <- nb_main$robust[[4]]
 final_nb <- build_regression_data(.5, 0, nonnegative_response = TRUE)
+final_nb_heterogeneity_0p5 <- build_regression_data(
+  .5, .5, nonnegative_response = TRUE
+)
