@@ -47,7 +47,7 @@ derived_data_dir <- here("data", "derived_data")
 dir.create(derived_data_dir, recursive = TRUE, showWarnings = FALSE)
 
 ## Use one font size for every text element in the supplementary figures.
-supplement_font_size <- 10
+supplement_font_size <- 12
 supplement_figure_theme <- function() {
   theme_minimal(base_size = supplement_font_size) +
     theme(text = element_text(size = supplement_font_size))
@@ -621,7 +621,8 @@ esr_plot <- ggplot(
     x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig),
     color = "Estimator"
   ) +
-  supplement_figure_theme()
+  supplement_figure_theme() +
+  theme(legend.position = "bottom")
 save_supplement_plot(
   file.path(supplement_dir, "Figure_S4"),
   width = 10, height = 4.5, draw = function() print(esr_plot)
