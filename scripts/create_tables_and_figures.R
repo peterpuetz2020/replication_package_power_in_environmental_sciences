@@ -614,7 +614,10 @@ saveRDS(
 )
 table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
-  filter(estimator == "multilevel_random") %>%
+  filter(
+    estimator == "multilevel_random",
+    meta_average_multiplier == 0.5
+  ) %>%
   arrange(meta_average_multiplier, heterogeneity_multiplier)
 table_2_columns <- map2(
   table_2_indices$result_index,
