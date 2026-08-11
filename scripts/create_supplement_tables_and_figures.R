@@ -46,17 +46,11 @@ dir.create(supplement_dir, recursive = TRUE, showWarnings = FALSE)
 derived_data_dir <- here("data", "derived_data")
 dir.create(derived_data_dir, recursive = TRUE, showWarnings = FALSE)
 
-## Use a uniform compact theme for every supplementary figure. Plot-specific
-## theme calls below alter only layout details such as legend placement.
+## Use one font size for every text element in the supplementary figures.
+supplement_font_size <- 10
 supplement_figure_theme <- function() {
-  theme_minimal(base_size = 10) +
-    theme(
-      axis.title = element_text(size = 10),
-      axis.text = element_text(size = 9),
-      legend.title = element_text(size = 9),
-      legend.text = element_text(size = 8.5),
-      strip.text = element_text(size = 9)
-    )
+  theme_minimal(base_size = supplement_font_size) +
+    theme(text = element_text(size = supplement_font_size))
 }
 
 save_supplement_plot <- function(filename_stem, width, height, draw) {
@@ -448,7 +442,7 @@ heterogeneity_plot <- ggplot() +
       label = subfd
     ),
     hjust = 0,
-    size = 3.6
+    size = supplement_font_size / ggplot2::.pt
   ) +
 
   # number of meta-analyses
@@ -460,7 +454,7 @@ heterogeneity_plot <- ggplot() +
       label = `No. of meta-analyses`
     ),
     hjust = 0.5,
-    size = 3.6
+    size = supplement_font_size / ggplot2::.pt
   ) +
 
   # median
@@ -472,7 +466,7 @@ heterogeneity_plot <- ggplot() +
       label = sprintf("%.2f", Median)
     ),
     hjust = 0.5,
-    size = 3.6
+    size = supplement_font_size / ggplot2::.pt
   ) +
 
   # mean
@@ -484,7 +478,7 @@ heterogeneity_plot <- ggplot() +
       label = sprintf("%.2f", Mean)
     ),
     hjust = 0.5,
-    size = 3.6
+    size = supplement_font_size / ggplot2::.pt
   ) +
 
   # Q25
@@ -496,7 +490,7 @@ heterogeneity_plot <- ggplot() +
       label = sprintf("%.2f", Q25)
     ),
     hjust = 0.5,
-    size = 3.6
+    size = supplement_font_size / ggplot2::.pt
   ) +
 
   # Q75
@@ -508,7 +502,7 @@ heterogeneity_plot <- ggplot() +
       label = sprintf("%.2f", Q75)
     ),
     hjust = 0.5,
-    size = 3.6
+    size = supplement_font_size / ggplot2::.pt
   ) +
 
   # column headers
@@ -522,7 +516,7 @@ heterogeneity_plot <- ggplot() +
     ),
     vjust = 1,
     lineheight = 0.9,
-    size = 3.6
+    size = supplement_font_size / ggplot2::.pt
   ) +
 
   coord_cartesian(
@@ -535,9 +529,10 @@ heterogeneity_plot <- ggplot() +
     clip = "off"
   ) +
 
-  theme_void() +
+  theme_void(base_size = supplement_font_size) +
 
   theme(
+    text = element_text(size = supplement_font_size),
     panel.background = element_rect(
       fill = "white",
       colour = NA
@@ -1003,16 +998,23 @@ significance_stars <- function(p_value) {
   ifelse(p_value < .01, "***", ifelse(p_value < .05, "**",
     ifelse(p_value < .10, "*", "")))
 }
+regression_labels <- c(
+  "Intercept" = "(Intercept)",
+  "Median power" = "med_perc",
+  "Experimental research design? (yes)" = "design_mergedyes",
+  "Followed reporting guidelines? (yes)" = "guidyes",
+  "Protocol registered? (yes)" = "preryes",
+  "Log number of independent studies" = "lognps",
+  "Log journal impact factor" = "logjif",
+  "Publication year" = "pyear"
+)
 format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   ## Force the fitted-model bundle before doing any validation. In particular,
   ## this makes the function safe to step through with debug()/debugonce()
   ## without repeatedly restarting evaluation of the lazy `fit` promise.
   models <- fit[["models"]]
   robust_tables <- fit[["robust"]]
-  labels <- c("Intercept" = "(Intercept)", "Median power" = "med_perc",
-    "Experimental research design? (yes)" = "design_mergedyes", "Followed reporting guidelines? (yes)" = "guidyes",
-    "Protocol registered? (yes)" = "preryes", "Log number of independent studies" = "lognps",
-    "Log journal impact factor" = "logjif", "Publication year" = "pyear",
+  labels <- c(regression_labels,
     setNames(paste0("subf", subfield_levels[-1]), subfield_levels[-1]))
   if (length(models) != 4 || length(robust_tables) != 4) {
     stop("Expected four fitted models and four robust coefficient tables.")
@@ -1091,9 +1093,15 @@ save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   dat <- final_nb_heterogeneity_0p5 %>%
     mutate(residual = residuals(model), fitted_value = fitted(model))
   vars <- if (kind == "continuous") c("fitted_value", "med_perc", "lognps", "logtotall", "logjif", "pyear") else c("design_merged", "guid", "prer", "subf")
+  diagnostic_labels <- c(
+    "fitted_value" = "Fitted value",
+    setNames(names(regression_labels), sub("yes$", "", regression_labels)),
+    "logtotall" = "Log number of primary estimates",
+    "subf" = "Subfield"
+  )
   plots <- map(vars, function(v) {
-    if (is.numeric(dat[[v]])) ggplot(dat, aes(.data[[v]], residual)) + geom_point(colour = "skyblue3", shape = 1) + geom_hline(yintercept = 0, colour = "red") + labs(x = v) + supplement_figure_theme()
-    else ggplot(dat, aes(.data[[v]], residual)) + geom_boxplot() + geom_hline(yintercept = 0, colour = "red") + labs(x = v) + supplement_figure_theme()
+    if (is.numeric(dat[[v]])) ggplot(dat, aes(.data[[v]], residual)) + geom_point(colour = "skyblue3", shape = 1) + geom_hline(yintercept = 0, colour = "red") + labs(x = diagnostic_labels[[v]]) + supplement_figure_theme()
+    else ggplot(dat, aes(.data[[v]], residual)) + geom_boxplot() + geom_hline(yintercept = 0, colour = "red") + labs(x = diagnostic_labels[[v]]) + supplement_figure_theme()
   })
   grob <- arrangeGrob(grobs = plots, ncol = 2)
   save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
