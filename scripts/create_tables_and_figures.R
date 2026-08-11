@@ -572,15 +572,15 @@ all_combination_results <- map2_dfr(
     ) %>% dplyr::select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1", "outlier_variant1")))
   }
 )
-figure_s3_inputs_path <- here(
-  "data", "derived_data", "Figure_S3_inputs.rds"
+figure_s4_inputs_path <- here(
+  "data", "derived_data", "Figure_S4_inputs.rds"
 )
 saveRDS(
   list(
     all_combination_results = all_combination_results,
     all_esr_results = all_esr_results
   ),
-  figure_s3_inputs_path
+  figure_s4_inputs_path
 )
 
 ## Calculate only the subfield counterfactuals needed for supplementary Table

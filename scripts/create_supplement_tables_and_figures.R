@@ -315,6 +315,251 @@ write_counterfactual_figure <- function(meta_multiplier, figure_number) {
   )
 }
 
+subfield_levels <- c(
+  "Ecology", "Environmental Chemistry", "Environmental Engineering",
+  "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law",
+  "Nature and Landscape Conservation", "Water Science and Technology"
+)
+base_half <- load_multilevel_data("meta_0p5_heterogeneity_0")
+
+## Figure S1: heterogeneity distributions and the corresponding summaries.
+heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
+  mutate(subfd = factor(subfd, subfield_levels))
+heterogeneity_summary <- heterogeneity_data %>%
+  group_by(subfd) %>%
+  summarise(
+    `No. of meta-analyses` = n(), Median = median(isq, na.rm = TRUE),
+    Mean = mean(isq, na.rm = TRUE),
+    Q25 = quantile(isq, .25, na.rm = TRUE),
+    Q75 = quantile(isq, .75, na.rm = TRUE), .groups = "drop"
+  ) %>%
+  arrange(subfd)
+openxlsx::write.xlsx(
+  heterogeneity_summary %>% rename(Subfield = subfd),
+  file.path(derived_data_dir, "Figure_S1_heterogeneity_by_subfield.xlsx"),
+  overwrite = TRUE
+)
+
+figure_s1_rows <- heterogeneity_summary %>%
+  mutate(row = rev(seq_len(n())))
+
+## Draw the table and ridgelines in one coordinate system. Keeping every visual
+## element in the same panel makes the row centres identical by construction;
+## separate table and plot grobs can acquire different header and cell heights.
+density_scale <- c(80, 99)
+
+figure_s1_densities <- heterogeneity_data %>%
+  filter(!is.na(isq)) %>%
+  group_by(subfd) %>%
+  group_modify(~ {
+    curve <- density(
+      .x$isq,
+      from = 0,
+      to = 100,
+      adjust = 0.8,
+      n = 256
+    )
+
+    tibble(
+      x = scales::rescale(
+        curve$x,
+        to = density_scale,
+        from = c(0, 100)
+      ),
+      height = curve$y / max(curve$y)
+    )
+  }) %>%
+  ungroup() %>%
+  left_join(
+    dplyr::select(figure_s1_rows, subfd, row),
+    by = "subfd"
+  ) %>%
+  mutate(
+    y = row + 0.34 * height
+  )
+
+
+column_positions <- c(
+  Subfield = 1,
+  `No. of meta-analyses` = 40,
+  Median = 50,
+  Mean = 58,
+  Q25 = 66,
+  Q75 = 74,
+  Heterogeneity = mean(density_scale)
+)
+
+
+header_df <- tibble(
+  label = c(
+    "Subfield",
+    "No. of\nmeta-anal.",
+    "Median",
+    "Mean",
+    "Q25",
+    "Q75",
+    "Heterogeneity"
+  ),
+  x = unname(column_positions),
+  hjust = c(
+    0,
+    rep(0.5, 6)
+  )
+)
+
+
+heterogeneity_plot <- ggplot() +
+
+  # horizontal table lines
+  geom_hline(
+    yintercept = c(
+      0.5,
+      seq(
+        1.5,
+        nrow(figure_s1_rows) + 0.5,
+        by = 1
+      ),
+      nrow(figure_s1_rows) + 1.35
+    ),
+    colour = "#d0d0d0",
+    linewidth = 0.45
+  ) +
+
+  # heterogeneity distributions
+  geom_ribbon(
+    data = figure_s1_densities,
+    aes(
+      x = x,
+      ymin = row,
+      ymax = y,
+      group = subfd
+    ),
+    fill = "#66c2df",
+    colour = "#b5b5b5",
+    linewidth = 0.55
+  ) +
+
+  # subfield names
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Subfield"]],
+      y = row,
+      label = subfd
+    ),
+    hjust = 0,
+    size = 3.6
+  ) +
+
+  # number of meta-analyses
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["No. of meta-analyses"]],
+      y = row,
+      label = `No. of meta-analyses`
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+
+  # median
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Median"]],
+      y = row,
+      label = sprintf("%.2f", Median)
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+
+  # mean
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Mean"]],
+      y = row,
+      label = sprintf("%.2f", Mean)
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+
+  # Q25
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Q25"]],
+      y = row,
+      label = sprintf("%.2f", Q25)
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+
+  # Q75
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Q75"]],
+      y = row,
+      label = sprintf("%.2f", Q75)
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+
+  # column headers
+  geom_text(
+    data = header_df,
+    aes(
+      x = x,
+      y = nrow(figure_s1_rows) + 1.18,
+      label = label,
+      hjust = hjust
+    ),
+    vjust = 1,
+    lineheight = 0.9,
+    size = 3.6
+  ) +
+
+  coord_cartesian(
+    xlim = c(0, 100),
+    ylim = c(
+      0.45,
+      nrow(figure_s1_rows) + 1.35
+    ),
+    expand = FALSE,
+    clip = "off"
+  ) +
+
+  theme_void() +
+
+  theme(
+    panel.background = element_rect(
+      fill = "white",
+      colour = NA
+    ),
+    plot.background = element_rect(
+      fill = "white",
+      colour = NA
+    ),
+    panel.grid = element_blank(),
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    plot.margin = margin(
+      6, 12, 6, 12,
+      unit = "mm"
+    )
+  )
+
+save_supplement_plot(file.path(supplement_dir, "Figure_S1"),
+              9, 5.25, function() print(heterogeneity_plot))
+
 ## Figures S2 and S3: Figure 1 sensitivity analyses.
 write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 2)
 write_counterfactual_figure(meta_multiplier = 1, figure_number = 3)
@@ -391,11 +636,6 @@ save_supplement_plot(
 ## Every table is emitted as both an editable Word document and copy-ready LaTeX.
 library(officer)
 
-subfield_levels <- c(
-  "Ecology", "Environmental Chemistry", "Environmental Engineering",
-  "Health, Toxicology and Mutagenesis", "Management, Monitoring, Policy and Law",
-  "Nature and Landscape Conservation", "Water Science and Technology"
-)
 
 write_word_table <- function(x, number, alignment = NULL) {
   if (is.null(alignment)) alignment <- c("left", rep("center", ncol(x) - 1))
@@ -407,17 +647,17 @@ write_word_table <- function(x, number, alignment = NULL) {
 }
 
 write_subfield_esr_table <- function(x, number, alignment = NULL) {
-  
+
   # ============================================================
   # 1. WORD VERSION
   # ============================================================
-  
+
   if (is.null(alignment)) {
     alignment <- c("left", rep("center", ncol(x) - 1))
   }
-  
+
   doc <- officer::read_docx()
-  
+
   doc <- officer::body_add_table(
     doc,
     x,
@@ -426,7 +666,7 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
     alignment = alignment,
     align_table = "center"
   )
-  
+
   print(
     doc,
     target = file.path(
@@ -434,19 +674,19 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
       paste0("Table_S", number, ".docx")
     )
   )
-  
-  
+
+
   # ============================================================
   # 2. LATEX VERSION
   # ============================================================
-  
+
   path <- file.path(
     supplement_dir,
     paste0("Table_S", number, ".tex")
   )
-  
+
   subfields <- unique(x$Subfield)
-  
+
   out <- c(
     "\\begin{tabularx}{\\textwidth}{",
     "  @{}",
@@ -461,39 +701,39 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
     "Subfield & Measure & 0\\% & 25\\% & 50\\% & 75\\% \\\\",
     "\\midrule"
   )
-  
-  
+
+
   # ============================================================
   # Table body
   # ============================================================
-  
+
   for (s in subfields) {
-    
+
     block <- x[
       x$Subfield == s,
       ,
       drop = FALSE
     ]
-    
+
     esr <- block[
       block$Measure == "ESR_{0.05}^{sig}",
       ,
       drop = FALSE
     ]
-    
+
     ma <- block[
       block$Measure == "No. of meta-analyses",
       ,
       drop = FALSE
     ]
-    
+
     tests <- block[
       block$Measure == "No. of tests",
       ,
       drop = FALSE
     ]
-    
-    
+
+
     # Check that exactly one row of each type exists
     if (
       nrow(esr) != 1 ||
@@ -507,12 +747,12 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
         )
       )
     }
-    
-    
+
+
     # Escape only the actual subfield text
     s_latex <- latex_escape(s)
-    
-    
+
+
     # ESR row
     row1 <- paste0(
       "\\multirow[t]{3}{0.13\\textwidth}{\\RaggedRight ",
@@ -525,8 +765,8 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
       " & ", esr[[6]],
       " \\\\"
     )
-    
-    
+
+
     # Number of meta-analyses
     row2 <- paste0(
       "& No. of meta-anal.",
@@ -536,8 +776,8 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
       " & ", ma[[6]],
       " \\\\"
     )
-    
-    
+
+
     # Number of tests
     row3 <- paste0(
       "& No. of tests",
@@ -547,8 +787,8 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
       " & ", tests[[6]],
       " \\\\"
     )
-    
-    
+
+
     out <- c(
       out,
       row1,
@@ -557,8 +797,8 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
       "\\addlinespace[0.4em]"
     )
   }
-  
-  
+
+
   # Remove spacing after final subfield
   if (
     length(out) > 0 &&
@@ -566,28 +806,28 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
   ) {
     out <- head(out, -1)
   }
-  
-  
+
+
   # Close tabularx
   out <- c(
     out,
     "\\bottomrule",
     "\\end{tabularx}"
   )
-  
-  
+
+
   # Write LaTeX file
   writeLines(
     out,
     path,
     useBytes = TRUE
   )
-  
-  
+
+
   # ============================================================
   # Useful confirmation
   # ============================================================
-  
+
   message(
     "Written:\n",
     file.path(
@@ -597,7 +837,7 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
     "\n",
     path
   )
-  
+
   invisible(path)
 }
 
@@ -636,7 +876,6 @@ make_power_table <- function(dat, meta_average_multiplier = 0.5) {
     mutate(across(`Median of medians`:SAPE, ~ sprintf("%.2f", .x)))
 }
 
-base_half <- load_multilevel_data("meta_0p5_heterogeneity_0")
 ## Table S4: remove primary estimates that are not significant at five percent.
 table_s4 <- make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96))
 significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
@@ -758,244 +997,6 @@ names(table_s1_columns) <- c(
   "75%"
 )
 
-## Figure S1: heterogeneity distributions and the corresponding summaries.
-heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
-  mutate(subfd = factor(subfd, subfield_levels))
-heterogeneity_summary <- heterogeneity_data %>%
-  group_by(subfd) %>%
-  summarise(
-    `No. of meta-analyses` = n(), Median = median(isq, na.rm = TRUE),
-    Mean = mean(isq, na.rm = TRUE),
-    Q25 = quantile(isq, .25, na.rm = TRUE),
-    Q75 = quantile(isq, .75, na.rm = TRUE), .groups = "drop"
-  ) %>%
-  arrange(subfd)
-openxlsx::write.xlsx(
-  heterogeneity_summary %>% rename(Subfield = subfd),
-  file.path(derived_data_dir, "Figure_S1_heterogeneity_by_subfield.xlsx"),
-  overwrite = TRUE
-)
-
-figure_s1_rows <- heterogeneity_summary %>%
-  mutate(row = rev(seq_len(n())))
-
-## Draw the table and ridgelines in one coordinate system. Keeping every visual
-## element in the same panel makes the row centres identical by construction;
-## separate table and plot grobs can acquire different header and cell heights.
-density_scale <- c(80, 99)
-
-figure_s1_densities <- heterogeneity_data %>%
-  filter(!is.na(isq)) %>%
-  group_by(subfd) %>%
-  group_modify(~ {
-    curve <- density(
-      .x$isq,
-      from = 0,
-      to = 100,
-      adjust = 0.8,
-      n = 256
-    )
-    
-    tibble(
-      x = scales::rescale(
-        curve$x,
-        to = density_scale,
-        from = c(0, 100)
-      ),
-      height = curve$y / max(curve$y)
-    )
-  }) %>%
-  ungroup() %>%
-  left_join(
-    dplyr::select(figure_s4_rows, subfd, row),
-    by = "subfd"
-  ) %>%
-  mutate(
-    y = row + 0.34 * height
-  )
-
-
-column_positions <- c(
-  Subfield = 1,
-  `No. of meta-analyses` = 40,
-  Median = 50,
-  Mean = 58,
-  Q25 = 66,
-  Q75 = 74,
-  Heterogeneity = mean(density_scale)
-)
-
-
-header_df <- tibble(
-  label = c(
-    "Subfield",
-    "No. of\nmeta-anal.",
-    "Median",
-    "Mean",
-    "Q25",
-    "Q75",
-    "Heterogeneity"
-  ),
-  x = unname(column_positions),
-  hjust = c(
-    0,
-    rep(0.5, 6)
-  )
-)
-
-
-heterogeneity_plot <- ggplot() +
-  
-  # horizontal table lines
-  geom_hline(
-    yintercept = c(
-      0.5,
-      seq(
-        1.5,
-        nrow(figure_s1_rows) + 0.5,
-        by = 1
-      ),
-      nrow(figure_s1_rows) + 1.35
-    ),
-    colour = "#d0d0d0",
-    linewidth = 0.45
-  ) +
-  
-  # heterogeneity distributions
-  geom_ribbon(
-    data = figure_s1_densities,
-    aes(
-      x = x,
-      ymin = row,
-      ymax = y,
-      group = subfd
-    ),
-    fill = "#66c2df",
-    colour = "#b5b5b5",
-    linewidth = 0.55
-  ) +
-  
-  # subfield names
-  geom_text(
-    data = figure_s1_rows,
-    aes(
-      x = column_positions[["Subfield"]],
-      y = row,
-      label = subfd
-    ),
-    hjust = 0,
-    size = 3.6
-  ) +
-  
-  # number of meta-analyses
-  geom_text(
-    data = figure_s1_rows,
-    aes(
-      x = column_positions[["No. of meta-analyses"]],
-      y = row,
-      label = `No. of meta-analyses`
-    ),
-    hjust = 0.5,
-    size = 3.6
-  ) +
-  
-  # median
-  geom_text(
-    data = figure_s1_rows,
-    aes(
-      x = column_positions[["Median"]],
-      y = row,
-      label = sprintf("%.2f", Median)
-    ),
-    hjust = 0.5,
-    size = 3.6
-  ) +
-  
-  # mean
-  geom_text(
-    data = figure_s1_rows,
-    aes(
-      x = column_positions[["Mean"]],
-      y = row,
-      label = sprintf("%.2f", Mean)
-    ),
-    hjust = 0.5,
-    size = 3.6
-  ) +
-  
-  # Q25
-  geom_text(
-    data = figure_s1_rows,
-    aes(
-      x = column_positions[["Q25"]],
-      y = row,
-      label = sprintf("%.2f", Q25)
-    ),
-    hjust = 0.5,
-    size = 3.6
-  ) +
-  
-  # Q75
-  geom_text(
-    data = figure_s1_rows,
-    aes(
-      x = column_positions[["Q75"]],
-      y = row,
-      label = sprintf("%.2f", Q75)
-    ),
-    hjust = 0.5,
-    size = 3.6
-  ) +
-  
-  # column headers
-  geom_text(
-    data = header_df,
-    aes(
-      x = x,
-      y = nrow(figure_s1_rows) + 1.18,
-      label = label,
-      hjust = hjust
-    ),
-    vjust = 1,
-    lineheight = 0.9,
-    size = 3.6
-  ) +
-  
-  coord_cartesian(
-    xlim = c(0, 100),
-    ylim = c(
-      0.45,
-      nrow(figure_s4_rows) + 1.35
-    ),
-    expand = FALSE,
-    clip = "off"
-  ) +
-  
-  theme_void() +
-  
-  theme(
-    panel.background = element_rect(
-      fill = "white",
-      colour = NA
-    ),
-    plot.background = element_rect(
-      fill = "white",
-      colour = NA
-    ),
-    panel.grid = element_blank(),
-    axis.line = element_blank(),
-    axis.ticks = element_blank(),
-    axis.text = element_blank(),
-    axis.title = element_blank(),
-    plot.margin = margin(
-      6, 12, 6, 12,
-      unit = "mm"
-    )
-  )
-
-save_supplement_plot(file.path(supplement_dir, "Figure_S1"),
-              9, 5.25, function() print(heterogeneity_plot))
-
 ## Regression table formatting for Tables S6-S8. The negative-binomial fits
 ## consumed by Tables S7-S8 are created in run_exploratory_regressions.R.
 significance_stars <- function(p_value) {
@@ -1083,10 +1084,12 @@ ols_fit <- list(
 )
 table_s6 <- format_model_table(ols_fit, TRUE)
 
-## Figures S6-S8: separate continuous and categorical diagnostics for both main
-## negative-binomial specifications, matching the requested four-figure layout.
+## Figures S5-S8: separate continuous and categorical diagnostics for the two
+## 50% genuine-heterogeneity negative-binomial specifications, matching the
+## requested four-figure layout.
 save_diagnostic_group <- function(model, model_number, kind, figure_number) {
-  dat <- final_nb %>% mutate(residual = residuals(model), fitted_value = fitted(model))
+  dat <- final_nb_heterogeneity_0p5 %>%
+    mutate(residual = residuals(model), fitted_value = fitted(model))
   vars <- if (kind == "continuous") c("fitted_value", "med_perc", "lognps", "logtotall", "logjif", "pyear") else c("design_merged", "guid", "prer", "subf")
   plots <- map(vars, function(v) {
     if (is.numeric(dat[[v]])) ggplot(dat, aes(.data[[v]], residual)) + geom_point(colour = "skyblue3", shape = 1) + geom_hline(yintercept = 0, colour = "red") + labs(x = v) + supplement_figure_theme()
@@ -1096,15 +1099,15 @@ save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
     11, ifelse(kind == "continuous", 10, 7), function() grid::grid.draw(grob))
 }
-save_diagnostic_group(nbMod1, 1, "continuous", 5)
-save_diagnostic_group(nbMod1, 1, "categorical", 6)
-save_diagnostic_group(nbMod2, 2, "continuous", 7)
-save_diagnostic_group(nbMod2, 2, "categorical", 8)
+save_diagnostic_group(nbMod3, 1, "continuous", 5)
+save_diagnostic_group(nbMod3, 1, "categorical", 6)
+save_diagnostic_group(nbMod4, 2, "continuous", 7)
+save_diagnostic_group(nbMod4, 2, "categorical", 8)
 
 ## Table S9 is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
 table_s9_all_data <- load_multilevel_all_data()
-table_s9 <- table_s9_all_data %>% distinct(cID, etype, subfd) %>% 
+table_s9 <- table_s9_all_data %>% distinct(cID, etype, subfd) %>%
   mutate(
     etype = dplyr::recode(
       etype,
@@ -1124,7 +1127,7 @@ table_s9 <- table_s9_all_data %>% distinct(cID, etype, subfd) %>%
       "regression coefficient" = "Regression coefficient ($\\beta$)",
       "ratio"                  = "Log-response ratio (lnRR)"
     )
-  ) %>% 
+  ) %>%
  count(etype, subfd) %>%
   complete(etype, subfd = subfield_levels, fill = list(n = 0)) %>%
   pivot_wider(names_from = subfd, values_from = n) %>% rename(`Effect size` = etype) %>%

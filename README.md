@@ -103,16 +103,16 @@ removed separately by the random-effects and PET-PEESE screens. Small-study
 effects are tested only with a multilevel random-effects Egger regression on the
 random-effects outlier-removed sample; PET-PEESE remains available for the other
 estimator analyses but is not used for the Egger test or prevalence calculation.
-The supplementary script writes Figure S1 (meta-average multiplier 0.25),
-Figure S2 (meta-average multiplier 1), the across-combination ESR plot in
-the non-main-text Figure 2 power-distribution variants to
+The supplementary script writes Figure S1 (heterogeneity distributions by subfield),
+Figure S2 (meta-average multiplier 0.25), Figure S3 (meta-average multiplier 1),
+and Figure S4 (the across-combination ESR plot) to
 `results/supplement/`, in PDF and SVG format. SVG is
 the preferred format for insertion into recent versions of Microsoft Word and
 LibreOffice Writer because it remains sharp when resized; PDF provides a second
 scalable format. The main table-and-figure
-script saves the intermediate Figure S3 inputs to
-`data/derived_data/Figure_S3_inputs.rds`. The supplementary script loads that
-file automatically, so it can create Figure S3 and its source numbers in a new
+script saves the intermediate Figure S4 inputs to
+`data/derived_data/Figure_S4_inputs.rds`. The supplementary script loads that
+file automatically, so it can create Figure S4 and its source numbers in a new
 R session.
 Before the first run, create the random-effects estimator datasets:
 
@@ -155,7 +155,7 @@ meta-analysis is omitted from both the all-data and outlier-removed outputs.
 The script removes any stale per-meta-analysis RDS files and records all such
 omissions in `data/derived_data/excluded_meta_analyses.csv`.
 
-Publication outputs use numbered table and figure names. Figures are saved as PDF and SVG files. The workbook underlying Figure 2 is saved in `data/derived_data`, while Figure S3 and its source numbers are saved in `results/supplement`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
+Publication outputs use numbered table and figure names. Figures are saved as PDF and SVG files. The workbook underlying Figure 2 is saved in `data/derived_data`, while supplementary Figure S4 is saved in `results/supplement/` and its source numbers in `data/derived_data/`. Supplementary analyses use separately numbered, descriptive `Robustness_Table_<number>_...` and `Robustness_Figure_<number>_...` filenames.
 
 ### Optional setup-specific data creation
 
