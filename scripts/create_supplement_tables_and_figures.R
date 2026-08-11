@@ -1090,15 +1090,24 @@ table_s6 <- format_model_table(ols_fit, TRUE)
 ## 50% genuine-heterogeneity negative-binomial specifications, matching the
 ## requested four-figure layout.
 save_diagnostic_group <- function(model, model_number, kind, figure_number) {
+  diagnostic_subfield_levels <- c(
+    "Health, Toxicology and Mutagenesis", "Ecology",
+    "Environmental Chemistry", "Environmental Engineering",
+    "Management, Monitoring, Policy and Law",
+    "Nature and Landscape Conservation", "Water Science and Technology"
+  )
   dat <- final_nb_heterogeneity_0p5 %>%
-    mutate(residual = residuals(model), fitted_value = fitted(model))
+    mutate(
+      residual = residuals(model),
+      fitted_value = fitted(model),
+      subf = factor(subf, levels = diagnostic_subfield_levels, labels = 0:6)
+    )
   vars <- if (kind == "continuous") c("fitted_value", "med_perc", "lognps", "logjif", "pyear") else c("design_merged", "guid", "prer", "subf")
   diagnostic_labels <- c(
     "fitted_value" = "Fitted value",
-    sub(
-      " \\(yes\\)$",
-      "",
-      names(regression_labels)
+    setNames(
+      sub(" \\(yes\\)$", "", names(regression_labels)),
+      sub("yes$", "", unname(regression_labels))
     ),
     "subf" = "Subfield"
   )
