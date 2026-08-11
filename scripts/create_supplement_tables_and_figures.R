@@ -340,7 +340,7 @@ figure_s1_rows <- heterogeneity_summary %>%
 ## Draw the table and ridgelines in one coordinate system. Keeping every visual
 ## element in the same panel makes the row centres identical by construction;
 ## separate table and plot grobs can acquire different header and cell heights.
-density_scale <- c(80, 99)
+density_scale <- c(91, 111)
 
 figure_s1_densities <- heterogeneity_data %>%
   filter(!is.na(isq)) %>%
@@ -375,11 +375,11 @@ figure_s1_densities <- heterogeneity_data %>%
 
 column_positions <- c(
   Subfield = 1,
-  `No. of meta-analyses` = 40,
-  Median = 50,
-  Mean = 58,
-  Q25 = 66,
-  Q75 = 74,
+  `No. of meta-analyses` = 47,
+  Median = 59,
+  Mean = 68,
+  Q25 = 77,
+  Q75 = 86,
   Heterogeneity = mean(density_scale)
 )
 
@@ -872,8 +872,8 @@ make_power_table <- function(dat, meta_average_multiplier = 0.5) {
     mutate(across(`Median of medians`:SAPE, ~ sprintf("%.2f", .x)))
 }
 
-## Table S4: remove primary estimates that are not significant at five percent.
-table_s4 <- make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96))
+## Table S5: remove primary estimates that are not significant at five percent.
+table_s5 <- make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96))
 significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
   filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
 ## Tables S2-S3: sensitivity analyses at one-quarter and the full meta-average.
@@ -881,8 +881,8 @@ significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
 table_s2 <- make_power_table(base_half, 0.25)
 table_s3 <- make_power_table(base_half, 1)
 
-## Table S5: remove complete meta-analyses whose pooled effect is not significant.
-table_s5 <- make_power_table(base_half %>% filter(cID %in% significant_meta))
+## Table S4: remove complete meta-analyses whose pooled effect is not significant.
+table_s4 <- make_power_table(base_half %>% filter(cID %in% significant_meta))
 
 ## Table S10: share of meta-analyses with small-study effects by subfield.
 small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
