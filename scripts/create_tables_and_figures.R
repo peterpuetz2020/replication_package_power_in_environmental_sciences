@@ -415,7 +415,7 @@ facz <- abs(my_dat$yi / sqrt(my_dat$vi))
 z.orig <- count_intervals(facz, grids$z_grid_plot2)
 p.orig.plot <- count_intervals(facz, grids$p_grid_plot[which(grids$p_grid_plot >= 0)])
 z.plot <- get_counterfactual(here("data", "derived_data", paste0("z_plot_", setup_label, "_", estimator, ".rds")), myDat, grids$z_grid_plot, heterogeneity_multiplier_value = heterogeneity_multiplier)
-z.plot.ci <- get_counterfactual(here("data", "derived_data", paste0("z_plot_ci_", setup_label, "_", estimator, ".rds")), myDat, grids$z_grid_plot, ci = TRUE, cluster = unique(my_dat$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
+z.plot.ci <- get_counterfactual(here("data", "derived_data", paste0("z_plot_ci_", setup_label, "_", estimator, ".rds")), myDat, grids$z_grid_plot, ci = TRUE, cluster = counterfactual_meta_clusters(myDat), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
 xs <- as.vector(grids$z_grid_plot2[-length(grids$z_grid_plot2)] + (grids$z_grid_plot2[2] - grids$z_grid_plot2[1]) / 2)
 ## cf.ci.cluster() normalizes every bootstrap draw by the number of effects in
@@ -510,7 +510,7 @@ calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
     paste(setup_label, estimator, outlier_variant, sep = "_"), subfield_suffix
   )
   p.tab <- get_counterfactual(here("data", "derived_data", paste0("p_tab_", result_suffix, ".rds")), myDat, grids$p_grid_tab, heterogeneity_multiplier_value = heterogeneity_multiplier)
-  p.tab.ci <- get_counterfactual(here("data", "derived_data", paste0("p_tab_ci_", result_suffix, ".rds")), myDat, grids$p_grid_tab, ci = TRUE, cluster = unique(my_dat$cID), heterogeneity_multiplier_value = heterogeneity_multiplier)
+  p.tab.ci <- get_counterfactual(here("data", "derived_data", paste0("p_tab_ci_", result_suffix, ".rds")), myDat, grids$p_grid_tab, ci = TRUE, cluster = counterfactual_meta_clusters(myDat), heterogeneity_multiplier_value = heterogeneity_multiplier)
 
   include_p_value_intervals <- estimator == "multilevel_random"
   p.table <- matrix(NA_character_, ncol = 2, nrow = length(grids$p_grid_tab2) - 1)

@@ -5,6 +5,20 @@
 
 counterfactual_cache_version <- 3L
 
+## Return one article-level cluster identifier for every meta-analysis in the
+## split counterfactual data. Several meta-analyses (cID) can come from the same
+## article (metaID), so bootstrapping cID would incorrectly treat them as
+## independent.
+counterfactual_meta_clusters <- function(dat) {
+  vapply(dat, function(meta_data) {
+    meta_ids <- unique(meta_data$metaID)
+    if (length(meta_ids) != 1L || is.na(meta_ids)) {
+      stop("Each meta-analysis must have exactly one non-missing metaID.")
+    }
+    as.character(meta_ids)
+  }, character(1))
+}
+
 counterfactual_valid_rows <- function(dat, heterogeneity_multiplier = 0.25) {
   variance <- if (heterogeneity_multiplier == 0) {
     dat$vi

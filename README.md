@@ -236,12 +236,13 @@ Useful `n_cores` choices depend on the computer:
 ### Performance notes
 
 Counterfactual probabilities are vectorized and summed into one contribution
-row per meta-analysis before bootstrapping. Bootstrap replications therefore
-resample these rows with matrix operations instead of recalculating normal CDFs
-for every effect size and grid interval. Point estimates and confidence
-intervals reuse the same contribution matrices during setup-specific data
-creation, and one parallel cluster and one in-memory copy of each estimator
-dataset are reused across all requested setups.
+row per meta-analysis before bootstrapping. Bootstrap replications sample at
+the article (`metaID`) level, keeping all meta-analyses from the same article
+together, and resample their contribution rows with matrix operations instead
+of recalculating normal CDFs for every effect size and grid interval. Point
+estimates and confidence intervals reuse the same contribution matrices during
+setup-specific data creation, and one parallel cluster and one in-memory copy
+of each estimator dataset are reused across all requested setups.
 
 The meta-estimate workflow similarly reuses its all-data PET and random-effects
 screening fits for the corresponding reported estimates. Its parallel loop is

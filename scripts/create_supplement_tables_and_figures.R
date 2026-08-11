@@ -239,7 +239,8 @@ make_figure_1_panel <- function(meta_average_multiplier, heterogeneity_multiplie
   )
   counterfactual_ci <- get_counterfactual(
     here("data", "derived_data", paste0("z_plot_ci_", filename_suffix)),
-    split_dat, z_grid, ci = TRUE, cluster = unique(dat$cID),
+    split_dat, z_grid, ci = TRUE,
+    cluster = counterfactual_meta_clusters(split_dat),
     heterogeneity_multiplier = heterogeneity_multiplier
   )
 
