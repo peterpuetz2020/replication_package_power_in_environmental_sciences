@@ -996,105 +996,6 @@ heterogeneity_plot <- ggplot() +
 save_supplement_plot(file.path(supplement_dir, "Figure_S1"),
               9, 5.25, function() print(heterogeneity_plot))
 
-## Figures S5-S6: subfield counterfactual distributions with zero and 50%
-## genuine heterogeneity.
-subfield_grids <- list(
-  p = c(-Inf, qnorm(c(.001, .01, .05, .1, .2, .3, .4, .5, .6, .7, .8, .9) / 2),
-    0, qnorm(c(.9, .8, .7, .6, .5, .4, .3, .2, .1, .05, .01, .001) / 2,
-      lower.tail = FALSE), Inf),
-  p_absolute = c(0,
-    qnorm(c(.9, .8, .7, .6, .5, .4, .3, .2, .1, .05, .01, .001) / 2,
-      lower.tail = FALSE), Inf),
-  z = seq(-10.25, 10.25, .1025),
-  z_absolute = seq(0, 10.25, .1025)
-)
-legacy_codes <- c(eco = "Ecology", enc = "Environmental Chemistry",
-  ene = "Environmental Engineering", htm = "Health, Toxicology and Mutagenesis",
-  mpl = "Management, Monitoring, Policy and Law", nlc = "Nature and Landscape Conservation",
-  wst = "Water Science and Technology")
-
-prepare_subfield_data <- function(label, heterogeneity_multiplier) {
-  setup_label <- if (heterogeneity_multiplier == 0) {
-    "meta_0p5_heterogeneity_0"
-  } else {
-    "meta_0p5_heterogeneity_0p5"
-  }
-  load_multilevel_data(setup_label) %>%
-    filter(subfd == label) %>%
-    mutate(GE = .5 * GE) %>%
-    filter_counterfactual_data(
-      heterogeneity_multiplier, context = paste("supplement subfield", label)
-    )
-}
-
-calculate_subfield_counterfactual <- function(label, code, grid, type,
-                                               heterogeneity_multiplier,
-                                               ci = FALSE) {
-  dat <- prepare_subfield_data(label, heterogeneity_multiplier)
-  heterogeneity_suffix <- paste0("_heterogeneity_", heterogeneity_multiplier)
-  get_counterfactual(
-    file.path(derived_data_dir, paste0("pet_peese_rstandard_", type,
-      if (ci) "_ci" else "", ".", code, heterogeneity_suffix, ".rds")),
-    split(dat, dat$cID), grid, ci = ci,
-    cluster = if (ci) unique(dat$cID) else NULL,
-    heterogeneity_multiplier = heterogeneity_multiplier
-  )
-}
-make_subfield_counterfactual_plot <- function(heterogeneity_multiplier) {
- subfield_plot_data <- imap_dfr(legacy_codes, function(label, code) {
-  dat <- prepare_subfield_data(label, heterogeneity_multiplier)
-  point <- calculate_subfield_counterfactual(
-    label, code, subfield_grids$z, "z_plot", heterogeneity_multiplier
-  )
-  ci <- calculate_subfield_counterfactual(
-    label, code, subfield_grids$z, "z_plot", heterogeneity_multiplier, TRUE
-  )
-  observed <- abs(dat$yi / sqrt(dat$vi))
-  tibble(Subfield = label,
-    z = head(subfield_grids$z_absolute, -1) + diff(subfield_grids$z_absolute)[1] / 2,
-    factual = count_intervals(observed, subfield_grids$z_absolute) / length(observed),
-    counterfactual = as.vector(point) / length(observed),
-    lower = apply(ci[[1]], 2, quantile, .025, na.rm = TRUE),
-    upper = apply(ci[[1]], 2, quantile, .975, na.rm = TRUE))
- })
- ggplot(subfield_plot_data, aes(z)) +
-  geom_line(aes(y = lower), colour = "orange", linetype = 3) +
-  geom_line(aes(y = counterfactual), colour = "orange") +
-  geom_point(aes(y = counterfactual), colour = "orange", size = 1) +
-  geom_line(aes(y = upper), colour = "orange", linetype = 3) +
-  geom_line(aes(y = factual), colour = "blue", linetype = 2) +
-  geom_point(aes(y = factual), colour = "blue", size = 1) +
-  geom_vline(
-    data = tibble(
-      xintercept = c(1.64, 1.96, 2.58),
-      threshold_colour = palette()[c(3, 2, 6)]
-    ),
-    aes(xintercept = xintercept, colour = threshold_colour),
-    linetype = 2, linewidth = .5
-  ) +
-  scale_colour_identity() +
-  facet_wrap(~ Subfield, ncol = 2, scales = "free_y") + coord_cartesian(xlim = c(0, 8)) +
-  scale_x_continuous(
-    breaks = c(0, 1.64, 1.96, 2.58, 4, 6, 8),
-    guide = guide_axis(n.dodge = 2)
-  ) +
-  labs(x = "|z|-value", y = "Frequency",
-       title = paste0(heterogeneity_multiplier * 100, "% genuine heterogeneity")) +
-  supplement_figure_theme() +
-  theme(
-    panel.background = element_rect(fill = "gray100"),
-    panel.border = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.line = element_line(linewidth = .5, colour = "gray")
-  )
-}
-walk2(c(0, .5), 5:6, function(heterogeneity_multiplier, figure_number) {
-  plot <- make_subfield_counterfactual_plot(heterogeneity_multiplier)
-  save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
-    11, 10, function() print(plot))
-})
-
 ## Regression table formatting for Tables S6-S8. The negative-binomial fits
 ## consumed by Tables S7-S8 are created in run_exploratory_regressions.R.
 significance_stars <- function(p_value) {
@@ -1182,7 +1083,7 @@ ols_fit <- list(
 )
 table_s6 <- format_model_table(ols_fit, TRUE)
 
-## Figures S7-S10: separate continuous and categorical diagnostics for both main
+## Figures S6-S8: separate continuous and categorical diagnostics for both main
 ## negative-binomial specifications, matching the requested four-figure layout.
 save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   dat <- final_nb %>% mutate(residual = residuals(model), fitted_value = fitted(model))
@@ -1195,10 +1096,10 @@ save_diagnostic_group <- function(model, model_number, kind, figure_number) {
   save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
     11, ifelse(kind == "continuous", 10, 7), function() grid::grid.draw(grob))
 }
-save_diagnostic_group(nbMod1, 1, "continuous", 7)
-save_diagnostic_group(nbMod1, 1, "categorical", 8)
-save_diagnostic_group(nbMod2, 2, "continuous", 9)
-save_diagnostic_group(nbMod2, 2, "categorical", 10)
+save_diagnostic_group(nbMod1, 1, "continuous", 5)
+save_diagnostic_group(nbMod1, 1, "categorical", 6)
+save_diagnostic_group(nbMod2, 2, "continuous", 7)
+save_diagnostic_group(nbMod2, 2, "categorical", 8)
 
 ## Table S9 is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
