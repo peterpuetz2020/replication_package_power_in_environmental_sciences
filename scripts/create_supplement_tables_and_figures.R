@@ -315,39 +315,39 @@ write_counterfactual_figure <- function(meta_multiplier, figure_number) {
   )
 }
 
-## Figures S1 and S2: Figure 1 sensitivity analyses.
-write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 1)
-write_counterfactual_figure(meta_multiplier = 1, figure_number = 2)
+## Figures S2 and S3: Figure 1 sensitivity analyses.
+write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 2)
+write_counterfactual_figure(meta_multiplier = 1, figure_number = 3)
 
-## Figure S3: excess-significance estimates across all analysis setups. The
+## Figure S4: excess-significance estimates across all analysis setups. The
 ## estimates are calculated with Table 2 in create_tables_and_figures.R, while
 ## all supplementary output is deliberately written here.
 if (!exists("all_combination_results") || !exists("all_esr_results")) {
-  figure_s3_inputs_path <- here(
-    "data", "derived_data", "Figure_S3_inputs.rds"
+  figure_s4_inputs_path <- here(
+    "data", "derived_data", "Figure_S4_inputs.rds"
   )
-  if (!file.exists(figure_s3_inputs_path)) {
+  if (!file.exists(figure_s4_inputs_path)) {
     stop(
-      "Figure S3 inputs are unavailable. Run create_tables_and_figures.R first ",
-      "to create ", figure_s3_inputs_path, "."
+      "Figure S4 inputs are unavailable. Run create_tables_and_figures.R first ",
+      "to create ", figure_s4_inputs_path, "."
     )
   }
-  figure_s3_inputs <- readRDS(figure_s3_inputs_path)
-  required_figure_s3_inputs <- c(
+  figure_s4_inputs <- readRDS(figure_s4_inputs_path)
+  required_figure_s4_inputs <- c(
     "all_combination_results", "all_esr_results"
   )
-  if (!all(required_figure_s3_inputs %in% names(figure_s3_inputs))) {
+  if (!all(required_figure_s4_inputs %in% names(figure_s4_inputs))) {
     stop(
-      "Figure S3 input file is incomplete. Rerun create_tables_and_figures.R ",
-      "to recreate ", figure_s3_inputs_path, "."
+      "Figure S4 input file is incomplete. Rerun create_tables_and_figures.R ",
+      "to recreate ", figure_s4_inputs_path, "."
     )
   }
-  all_combination_results <- figure_s3_inputs$all_combination_results
-  all_esr_results <- figure_s3_inputs$all_esr_results
+  all_combination_results <- figure_s4_inputs$all_combination_results
+  all_esr_results <- figure_s4_inputs$all_esr_results
 }
 write.csv(
   all_combination_results,
-  file.path(derived_data_dir, "Figure_S3_numbers.csv"),
+  file.path(derived_data_dir, "Figure_S4_numbers.csv"),
   row.names = FALSE
 )
 esr_plot_data <- all_esr_results %>%
@@ -383,7 +383,7 @@ esr_plot <- ggplot(
   ) +
   supplement_figure_theme()
 save_supplement_plot(
-  file.path(supplement_dir, "Figure_S3"),
+  file.path(supplement_dir, "Figure_S4"),
   width = 10, height = 4.5, draw = function() print(esr_plot)
 )
 
@@ -758,7 +758,7 @@ names(table_s1_columns) <- c(
   "75%"
 )
 
-## Figure S4: heterogeneity distributions and the corresponding summaries.
+## Figure S1: heterogeneity distributions and the corresponding summaries.
 heterogeneity_data <- base_half %>% distinct(cID, subfd, isq) %>%
   mutate(subfd = factor(subfd, subfield_levels))
 heterogeneity_summary <- heterogeneity_data %>%
@@ -772,83 +772,228 @@ heterogeneity_summary <- heterogeneity_data %>%
   arrange(subfd)
 openxlsx::write.xlsx(
   heterogeneity_summary %>% rename(Subfield = subfd),
-  file.path(derived_data_dir, "Figure_S4_heterogeneity_by_subfield.xlsx"),
+  file.path(derived_data_dir, "Figure_S1_heterogeneity_by_subfield.xlsx"),
   overwrite = TRUE
 )
 
-figure_s4_rows <- heterogeneity_summary %>%
+figure_s1_rows <- heterogeneity_summary %>%
   mutate(row = rev(seq_len(n())))
 
 ## Draw the table and ridgelines in one coordinate system. Keeping every visual
 ## element in the same panel makes the row centres identical by construction;
 ## separate table and plot grobs can acquire different header and cell heights.
 density_scale <- c(80, 99)
-figure_s4_densities <- heterogeneity_data %>%
+
+figure_s1_densities <- heterogeneity_data %>%
   filter(!is.na(isq)) %>%
   group_by(subfd) %>%
   group_modify(~ {
-    curve <- density(.x$isq, from = 0, to = 100, adjust = .8, n = 256)
+    curve <- density(
+      .x$isq,
+      from = 0,
+      to = 100,
+      adjust = 0.8,
+      n = 256
+    )
+    
     tibble(
-      x = scales::rescale(curve$x, to = density_scale, from = c(0, 100)),
+      x = scales::rescale(
+        curve$x,
+        to = density_scale,
+        from = c(0, 100)
+      ),
       height = curve$y / max(curve$y)
     )
   }) %>%
   ungroup() %>%
-  left_join(dplyr::select(figure_s4_rows, subfd, row), by = "subfd") %>%
-  mutate(y = row + .34 * height)
-
-column_positions <- c(Subfield = 1, `No. of meta-analyses` = 46,
-                      Median = 55, Mean = 63,
-                      Q25 = 70, Q75 = 77, Heterogeneity = 89.5)
-heterogeneity_plot <- ggplot() +
-  geom_hline(
-    yintercept = c(.5, seq(1.5, nrow(figure_s4_rows) + .5),
-                   nrow(figure_s4_rows) + 1.35),
-    colour = "#d0d0d0", linewidth = .45
-  ) +
-  geom_ribbon(
-    data = figure_s4_densities,
-    aes(x = x, ymin = row, ymax = y, group = subfd),
-    fill = "#66c2df", colour = "#b5b5b5", linewidth = .55
-  ) +
-  geom_text(
-    data = figure_s4_rows,
-    aes(x = column_positions[["Subfield"]], y = row, label = subfd),
-    hjust = 0, size = 3.6
-  ) +
-  geom_text(
-    data = figure_s4_rows,
-    aes(x = column_positions[["No. of meta-analyses"]], y = row,
-        label = `No. of meta-analyses`),
-    hjust = 1, size = 3.6
-  ) +
-  geom_text(data = figure_s4_rows,
-            aes(x = column_positions[["Median"]], y = row, label = sprintf("%.2f", Median)),
-            hjust = 1, size = 3.6) +
-  geom_text(data = figure_s4_rows,
-            aes(x = column_positions[["Mean"]], y = row, label = sprintf("%.2f", Mean)),
-            hjust = 1, size = 3.6) +
-  geom_text(data = figure_s4_rows,
-            aes(x = column_positions[["Q25"]], y = row, label = sprintf("%.2f", Q25)),
-            hjust = 1, size = 3.6) +
-  geom_text(data = figure_s4_rows,
-            aes(x = column_positions[["Q75"]], y = row, label = sprintf("%.2f", Q75)),
-            hjust = 1, size = 3.6) +
-  annotate("text", x = column_positions, y = nrow(figure_s4_rows) + 1,
-           label = names(column_positions),
-           hjust = c(0, rep(.5, length(column_positions) - 1)), size = 3.6) +
-  coord_cartesian(xlim = c(0, 100), ylim = c(.45, nrow(figure_s4_rows) + 1.35),
-                  expand = FALSE, clip = "off") +
-  supplement_figure_theme() +
-  theme(
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    panel.grid = element_blank(),
-    plot.margin = margin(6, 12, 6, 12, unit = "mm"),
-    plot.caption = element_text(hjust = .5, margin = margin(t = 12))
+  left_join(
+    dplyr::select(figure_s4_rows, subfd, row),
+    by = "subfd"
+  ) %>%
+  mutate(
+    y = row + 0.34 * height
   )
 
-save_supplement_plot(file.path(supplement_dir, "Figure_S4"),
+
+column_positions <- c(
+  Subfield = 1,
+  `No. of meta-analyses` = 40,
+  Median = 50,
+  Mean = 58,
+  Q25 = 66,
+  Q75 = 74,
+  Heterogeneity = mean(density_scale)
+)
+
+
+header_df <- tibble(
+  label = c(
+    "Subfield",
+    "No. of\nmeta-anal.",
+    "Median",
+    "Mean",
+    "Q25",
+    "Q75",
+    "Heterogeneity"
+  ),
+  x = unname(column_positions),
+  hjust = c(
+    0,
+    rep(0.5, 6)
+  )
+)
+
+
+heterogeneity_plot <- ggplot() +
+  
+  # horizontal table lines
+  geom_hline(
+    yintercept = c(
+      0.5,
+      seq(
+        1.5,
+        nrow(figure_s1_rows) + 0.5,
+        by = 1
+      ),
+      nrow(figure_s1_rows) + 1.35
+    ),
+    colour = "#d0d0d0",
+    linewidth = 0.45
+  ) +
+  
+  # heterogeneity distributions
+  geom_ribbon(
+    data = figure_s1_densities,
+    aes(
+      x = x,
+      ymin = row,
+      ymax = y,
+      group = subfd
+    ),
+    fill = "#66c2df",
+    colour = "#b5b5b5",
+    linewidth = 0.55
+  ) +
+  
+  # subfield names
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Subfield"]],
+      y = row,
+      label = subfd
+    ),
+    hjust = 0,
+    size = 3.6
+  ) +
+  
+  # number of meta-analyses
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["No. of meta-analyses"]],
+      y = row,
+      label = `No. of meta-analyses`
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+  
+  # median
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Median"]],
+      y = row,
+      label = sprintf("%.2f", Median)
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+  
+  # mean
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Mean"]],
+      y = row,
+      label = sprintf("%.2f", Mean)
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+  
+  # Q25
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Q25"]],
+      y = row,
+      label = sprintf("%.2f", Q25)
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+  
+  # Q75
+  geom_text(
+    data = figure_s1_rows,
+    aes(
+      x = column_positions[["Q75"]],
+      y = row,
+      label = sprintf("%.2f", Q75)
+    ),
+    hjust = 0.5,
+    size = 3.6
+  ) +
+  
+  # column headers
+  geom_text(
+    data = header_df,
+    aes(
+      x = x,
+      y = nrow(figure_s1_rows) + 1.18,
+      label = label,
+      hjust = hjust
+    ),
+    vjust = 1,
+    lineheight = 0.9,
+    size = 3.6
+  ) +
+  
+  coord_cartesian(
+    xlim = c(0, 100),
+    ylim = c(
+      0.45,
+      nrow(figure_s4_rows) + 1.35
+    ),
+    expand = FALSE,
+    clip = "off"
+  ) +
+  
+  theme_void() +
+  
+  theme(
+    panel.background = element_rect(
+      fill = "white",
+      colour = NA
+    ),
+    plot.background = element_rect(
+      fill = "white",
+      colour = NA
+    ),
+    panel.grid = element_blank(),
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    plot.margin = margin(
+      6, 12, 6, 12,
+      unit = "mm"
+    )
+  )
+
+save_supplement_plot(file.path(supplement_dir, "Figure_S1"),
               9, 5.25, function() print(heterogeneity_plot))
 
 ## Figures S5-S6: subfield counterfactual distributions with zero and 50%
@@ -1058,7 +1203,28 @@ save_diagnostic_group(nbMod2, 2, "categorical", 10)
 ## Table S9 is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
 table_s9_all_data <- load_multilevel_all_data()
-table_s9 <- table_s9_all_data %>% distinct(cID, etype, subfd) %>% count(etype, subfd) %>%
+table_s9 <- table_s9_all_data %>% distinct(cID, etype, subfd) %>% 
+  mutate(
+    etype = dplyr::recode(
+      etype,
+      "cohen's d"              = "Cohen's $d$",
+      "hedge's g"              = "Hedges's $g$",
+      "correlation"            = "Correlation coefficient ($r$)",
+      "fisher's z"             = "Fisher's $z$",
+      "lnRR"                   = "Log-response ratio (lnRR)",
+      "log-mean ratio"         = "Log-response ratio (lnRR)",
+      "logOR"                  = "Log-odds ratio (logOR)",
+      "logRR"                  = "Log-relative risk (logRR)",
+      "logHR"                  = "Log-hazard ratio (logHR)",
+      "mean"                   = "Raw mean or mean difference",
+      "mean difference"        = "Raw mean or mean difference",
+      "percentage change"      = "Percentage change",
+      "excess risk"            = "Excess risk",
+      "regression coefficient" = "Regression coefficient ($\\beta$)",
+      "ratio"                  = "Log-response ratio (lnRR)"
+    )
+  ) %>% 
+ count(etype, subfd) %>%
   complete(etype, subfd = subfield_levels, fill = list(n = 0)) %>%
   pivot_wider(names_from = subfd, values_from = n) %>% rename(`Effect size` = etype) %>%
   arrange(`Effect size`) %>% mutate(No. = row_number(), .before = 1)
