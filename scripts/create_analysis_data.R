@@ -133,6 +133,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
       context = paste(setup_label, estimator, outlier_variant)
     )
   myDat_counterfactual <- split_meta_analyses(counterfactual_data)
+  bootstrap_clusters <- counterfactual_meta_clusters(myDat_counterfactual)
   component_cache <- new.env(parent = emptyenv())
   get_components <- function(grid_name, grid) {
     if (!exists(grid_name, envir = component_cache, inherits = FALSE)) {
@@ -187,7 +188,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
     )
     z_ci_key <- counterfactual_cache_key(
       myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier,
-      ci = TRUE, cluster = unique(counterfactual_data$cID), iters = n_iterations
+      ci = TRUE, cluster = bootstrap_clusters, iters = n_iterations
     )
     save_counterfactual(z_plot_path, z_point_key, function() cf(
       myDat_counterfactual, grids$z_grid_plot, heterogeneity_multiplier,
@@ -195,7 +196,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
     ), progress_bar, progress_offset + 1)
     save_counterfactual(z_plot_ci_path, z_ci_key, function() cf.ci.cluster(
       myDat_counterfactual, grids$z_grid_plot, n_iterations,
-      unique(counterfactual_data$cID), heterogeneity_multiplier,
+      bootstrap_clusters, heterogeneity_multiplier,
       components = get_components("z", grids$z_grid_plot)
     ), progress_bar, progress_offset + 2)
   } else {
@@ -207,7 +208,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
   )
   p_ci_key <- counterfactual_cache_key(
     myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier,
-    ci = TRUE, cluster = unique(counterfactual_data$cID), iters = n_iterations
+    ci = TRUE, cluster = bootstrap_clusters, iters = n_iterations
   )
   save_counterfactual(p_tab_path, p_point_key, function() cf(
     myDat_counterfactual, grids$p_grid_tab, heterogeneity_multiplier,
@@ -215,7 +216,7 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
   ), progress_bar, progress_offset + 3)
   save_counterfactual(p_tab_ci_path, p_ci_key, function() cf.ci.cluster(
     myDat_counterfactual, grids$p_grid_tab, n_iterations,
-    unique(counterfactual_data$cID), heterogeneity_multiplier,
+    bootstrap_clusters, heterogeneity_multiplier,
     components = get_components("p", grids$p_grid_tab)
   ), progress_bar, progress_offset + 4)
 }
