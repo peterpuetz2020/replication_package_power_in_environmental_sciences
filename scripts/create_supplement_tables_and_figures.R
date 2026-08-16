@@ -873,21 +873,19 @@ make_power_table <- function(dat, meta_average_multiplier = 0.5) {
     mutate(across(`Median of medians`:SAPE, ~ sprintf("%.2f", .x)))
 }
 
-## Table S5: remove primary estimates that are not significant at five percent.
-table_s5 <- make_power_table(base_half %>% filter(abs(yi / sqrt(vi)) > 1.96))
-significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
-  filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
 ## Tables S2-S3: sensitivity analyses at one-quarter and the full meta-average.
 ## Both use the full sample; only the assumed effect differs.
 table_s2 <- make_power_table(base_half, 0.25)
 table_s3 <- make_power_table(base_half, 1)
 
 ## Table S4: remove complete meta-analyses whose pooled effect is not significant.
+significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
+  filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
 table_s4 <- make_power_table(base_half %>% filter(cID %in% significant_meta))
 
-## Table S10: share of meta-analyses with small-study effects by subfield.
+## Table S9: share of meta-analyses with small-study effects by subfield.
 small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
-table_s10_meta <- base_half %>%
+table_s9_meta <- base_half %>%
   dplyr::select(-any_of(c("small_study_effect_pval", "sse_yn"))) %>%
   left_join(small_study_effects, by = "cID") %>%
   group_by(cID) %>% summarise(
@@ -895,7 +893,7 @@ table_s10_meta <- base_half %>%
     small_study_effect = first(small_study_effect_pval) <= .05,
     .groups = "drop"
   )
-table_s10_detail <- table_s10_meta %>%
+table_s9_detail <- table_s9_meta %>%
   group_by(Subfield) %>%
   summarise(
     `No. of meta-analyses` = n_distinct(cID),
@@ -905,13 +903,13 @@ table_s10_detail <- table_s10_meta %>%
   mutate(Subfield = factor(Subfield, subfield_levels)) %>%
   arrange(Subfield) %>%
   mutate(Subfield = as.character(Subfield))
-table_s10 <- bind_rows(
+table_s9 <- bind_rows(
   tibble(
     Subfield = "All meta-analyses",
-    `No. of meta-analyses` = n_distinct(table_s10_meta$cID),
-    `Small-study effects (%)` = 100 * mean(table_s10_meta$small_study_effect, na.rm = TRUE)
+    `No. of meta-analyses` = n_distinct(table_s9_meta$cID),
+    `Small-study effects (%)` = 100 * mean(table_s9_meta$small_study_effect, na.rm = TRUE)
   ),
-  table_s10_detail
+  table_s9_detail
 ) %>%
   mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
 
@@ -1066,8 +1064,8 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   }
   bind_rows(result, summary_rows)
 }
-table_s7 <- format_model_table(nb_sensitivity_quarter)
-table_s8 <- format_model_table(nb_sensitivity_full)
+table_s6 <- format_model_table(nb_sensitivity_quarter)
+table_s7 <- format_model_table(nb_sensitivity_full)
 
 ols_formula <- esr_winsor ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric
 ols_fits <- map(c(0, .5), function(heterogeneity_multiplier) {
@@ -1086,7 +1084,7 @@ ols_fit <- list(
   models = flatten(map(ols_fits, "models")),
   robust = flatten(map(ols_fits, "robust"))
 )
-table_s6 <- format_model_table(ols_fit, TRUE)
+table_s5 <- format_model_table(ols_fit, TRUE)
 
 ## Figures S5-S8: separate continuous and categorical diagnostics for the two
 ## 50% genuine-heterogeneity negative-binomial specifications, matching the
@@ -1126,10 +1124,10 @@ save_diagnostic_group(nbMod3, 1, "categorical", 6)
 save_diagnostic_group(nbMod4, 2, "continuous", 7)
 save_diagnostic_group(nbMod4, 2, "categorical", 8)
 
-## Table S9 is descriptive and therefore uses all observations rather than an
+## Table S8 is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
-table_s9_all_data <- load_multilevel_all_data()
-table_s9 <- table_s9_all_data %>% distinct(cID, etype, subfd) %>%
+table_s8_all_data <- load_multilevel_all_data()
+table_s8 <- table_s8_all_data %>% distinct(cID, etype, subfd) %>%
   mutate(
     etype = dplyr::recode(
       etype,
@@ -1167,4 +1165,3 @@ write_word_table(table_s6, 6)
 write_word_table(table_s7, 7)
 write_word_table(table_s8, 8)
 write_word_table(table_s9, 9)
-write_word_table(table_s10, 10)
