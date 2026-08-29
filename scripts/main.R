@@ -1,6 +1,8 @@
 ## -------
 ## main.R
 ## -------
+## clean environment
+rm(list = ls())
 ## Orchestrate the complete analysis from the repository root. The two slow raw-
 ## data preparation stages are controlled by explicit switches and are disabled
 ## by default. Define either switch before sourcing main.R to override it.

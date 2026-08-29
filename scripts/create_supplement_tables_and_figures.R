@@ -379,11 +379,11 @@ figure_s1_densities <- heterogeneity_data %>%
 
 column_positions <- c(
   Subfield = 1,
-  `No. of meta-analyses` = 47,
-  Median = 59,
-  Mean = 68,
-  Q25 = 77,
-  Q75 = 86,
+  `No. of meta-analyses` = 48,
+  Median = 60,
+  Mean = 69,
+  Q25 = 78,
+  Q75 = 87,
   Heterogeneity = mean(density_scale)
 )
 
@@ -557,7 +557,7 @@ heterogeneity_plot <- ggplot() +
   )
 
 save_supplement_plot(file.path(supplement_dir, "Figure_S1"),
-              9, 5.25, function() print(heterogeneity_plot))
+              10.5, 5.25, function() print(heterogeneity_plot))
 
 ## Figures S2 and S3: Figure 1 sensitivity analyses.
 write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 2)
