@@ -287,16 +287,13 @@ make_figure_1_panel <- function(meta_average_multiplier, heterogeneity_multiplie
 }
 
 write_counterfactual_figure <- function(meta_multiplier, figure_number) {
-  figure_setups <- analysis_setups %>%
-    filter(
-      meta_average_multiplier == meta_multiplier,
-      heterogeneity_multiplier %in% c(0, 0.5)
-    ) %>%
-    arrange(heterogeneity_multiplier)
-
-  if (nrow(figure_setups) != 2) {
-    stop("Expected heterogeneity multipliers 0 and 0.5 for meta-average multiplier ", meta_multiplier, ".")
-  }
+  figure_setups <- tibble(
+    meta_average_multiplier = meta_multiplier,
+    heterogeneity_multiplier = c(0, 0.5)
+  ) %>%
+    mutate(setup_label = make_setup_label(
+      meta_average_multiplier, heterogeneity_multiplier
+    ))
   panels <- pmap(figure_setups, function(meta_average_multiplier,
                                          heterogeneity_multiplier,
                                          setup_label, ...) {
