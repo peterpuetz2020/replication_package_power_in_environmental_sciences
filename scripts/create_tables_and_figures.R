@@ -722,22 +722,22 @@ table_4_terms <- tibble::tribble(
   "Water Science and Technology", NA_character_, "subfWater Science and Technology"
 ) %>%
   dplyr::mutate(
-    `0% heterogeneity: Model 1 Estimate (SE)` = vapply(term_model_1, format_nb_term, character(1),
+    `0% genuine heterogeneity: Model 1 Estimate (SE)` = vapply(term_model_1, format_nb_term, character(1),
       robust_result = nbMod1.robu),
-    `0% heterogeneity: Model 2 Estimate (SE)` = vapply(term_model_2, format_nb_term, character(1),
+    `0% genuine heterogeneity: Model 2 Estimate (SE)` = vapply(term_model_2, format_nb_term, character(1),
       robust_result = nbMod2.robu),
-    `50% heterogeneity: Model 1 Estimate (SE)` = vapply(term_model_1, format_nb_term, character(1),
+    `50% genuine heterogeneity: Model 1 Estimate (SE)` = vapply(term_model_1, format_nb_term, character(1),
       robust_result = nbMod3.robu),
-    `50% heterogeneity: Model 2 Estimate (SE)` = vapply(term_model_2, format_nb_term, character(1),
+    `50% genuine heterogeneity: Model 2 Estimate (SE)` = vapply(term_model_2, format_nb_term, character(1),
       robust_result = nbMod4.robu)
   ) %>%
   dplyr::select(-term_model_1, -term_model_2) %>%
   dplyr::bind_rows(tibble::tibble(
     Variable = c("Effect size type", "AIC", "No. of meta-analyses"),
-    `0% heterogeneity: Model 1 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod1)), nobs(nbMod1)),
-    `0% heterogeneity: Model 2 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod2)), nobs(nbMod2)),
-    `50% heterogeneity: Model 1 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod3)), nobs(nbMod3)),
-    `50% heterogeneity: Model 2 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod4)), nobs(nbMod4))
+    `0% genuine heterogeneity: Model 1 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod1)), nobs(nbMod1)),
+    `0% genuine heterogeneity: Model 2 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod2)), nobs(nbMod2)),
+    `50% genuine heterogeneity: Model 1 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod3)), nobs(nbMod3)),
+    `50% genuine heterogeneity: Model 2 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod4)), nobs(nbMod4))
   ))
 
 table_4_document <- officer::read_docx()
