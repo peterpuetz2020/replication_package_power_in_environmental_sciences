@@ -342,6 +342,8 @@ figure_s1_rows <- heterogeneity_summary %>%
 ## element in the same panel makes the row centres identical by construction;
 ## separate table and plot grobs can acquire different header and cell heights.
 density_scale <- c(91, 111)
+figure_s1_xlim <- c(0, max(density_scale) + 1)
+density_height <- 0.34
 
 figure_s1_densities <- heterogeneity_data %>%
   filter(!is.na(isq)) %>%
@@ -370,7 +372,8 @@ figure_s1_densities <- heterogeneity_data %>%
     by = "subfd"
   ) %>%
   mutate(
-    y = row + 0.34 * height
+    density_baseline = row - density_height / 2,
+    density_top = density_baseline + density_height * height
   )
 
 
@@ -425,8 +428,8 @@ heterogeneity_plot <- ggplot() +
     data = figure_s1_densities,
     aes(
       x = x,
-      ymin = row,
-      ymax = y,
+      ymin = density_baseline,
+      ymax = density_top,
       group = subfd
     ),
     fill = "#66c2df",
@@ -521,7 +524,7 @@ heterogeneity_plot <- ggplot() +
   ) +
 
   coord_cartesian(
-    xlim = c(0, 100),
+    xlim = figure_s1_xlim,
     ylim = c(
       0.45,
       nrow(figure_s1_rows) + 1.35
