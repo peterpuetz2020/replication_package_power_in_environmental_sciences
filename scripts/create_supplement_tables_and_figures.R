@@ -1040,7 +1040,7 @@ format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
   }
   result <- tibble(Variable = names(labels))
   column_names <- paste0(
-    rep(c("0%", "50%"), each = 2), " heterogeneity: Model ",
+    rep(c("0%", "50%"), each = 2), " genuine heterogeneity: Model ",
     rep(1:2, 2), " Estimate (SE)"
   )
   for (i in seq_len(4)) {
