@@ -37,6 +37,8 @@ source(here::here("scripts", "analysis_setup.R"))
 estimator_input_dirs <- c(
   here::here("data", "derived_data", "pet_peese_rstandard"),
   here::here("data", "derived_data", "pet_peese_all_data"),
+  here::here("data", "derived_data", "fixed_effect"),
+  here::here("data", "derived_data", "fixed_effect_all_data"),
   here::here("data", "derived_data", "multilevel_random"),
   here::here("data", "derived_data", "multilevel_random_all_data")
 )

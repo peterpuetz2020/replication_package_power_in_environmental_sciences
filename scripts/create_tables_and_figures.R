@@ -131,6 +131,10 @@ load_estimator_data <- function(estimator, setup_label_value = setup_label,
       "data", "derived_data",
       if (outlier_variant == "all_data") "multilevel_random_all_data" else "multilevel_random"
     ),
+    fixed_effect = here(
+      "data", "derived_data",
+      if (outlier_variant == "all_data") "fixed_effect_all_data" else "fixed_effect"
+    ),
     stop("Unknown estimator: ", estimator)
   )
   estimator_files <- list.files(
@@ -547,6 +551,18 @@ table_2_parameters <- tidyr::crossing(
   analysis_setups,
   estimator = meta_analysis_estimators,
   outlier_variant = "outliers_removed"
+)
+## A fixed-effect counterfactual is meaningful only when the assumed share of
+## genuine heterogeneity is zero. Include it for every meta-average multiplier
+## in the Figure S4 inputs without changing the estimators used by other output.
+figure_s4_fixed_effect_parameters <- tidyr::crossing(
+  analysis_setups %>% filter(heterogeneity_multiplier == 0),
+  estimator = "fixed_effect",
+  outlier_variant = "outliers_removed"
+)
+table_2_parameters <- bind_rows(
+  table_2_parameters,
+  figure_s4_fixed_effect_parameters
 )
 table_2_results <- table_2_parameters %>%
   pmap(calculate_table_2)
