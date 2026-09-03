@@ -595,7 +595,8 @@ esr_plot_data <- all_esr_results %>%
     estimator = dplyr::recode(
       estimator,
       pet_peese = "PET-PEESE",
-      multilevel_random = "Random effects"
+      multilevel_random = "Random effects",
+      fixed_effect = "Fixed effects"
     )
   ) %>%
   rename(`Meta-average multiplier` = meta_average_multiplier)
