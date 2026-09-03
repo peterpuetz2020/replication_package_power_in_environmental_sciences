@@ -29,15 +29,10 @@ if (!exists("write_latex_table", mode = "function")) {
     }, character(1), USE.NAMES = FALSE)
   }
   write_latex_table <- function(x, path, alignment = NULL) {
-    if (is.null(alignment)) alignment <- paste0("l", strrep("c", ncol(x) - 1))
     rows <- apply(x, 1, function(row) {
       paste0(paste(latex_escape(row), collapse = " & "), " \\\\")
     })
-    writeLines(c(
-      paste0("\\begin{tabular}{", alignment, "}"), "\\hline",
-      paste0(paste(latex_escape(names(x)), collapse = " & "), " \\\\"),
-      "\\hline", rows, "\\hline", "\\end{tabular}"
-    ), path, useBytes = TRUE)
+    writeLines(rows, path, useBytes = TRUE)
   }
 }
 
