@@ -603,7 +603,7 @@ esr_plot_data <- all_esr_results %>%
       multilevel_random = "Random effects"
     )
   ) %>%
-  rename(`Meta average multiplier` = meta_average_multiplier)
+  rename(`Meta-average multiplier` = meta_average_multiplier)
 esr_plot <- ggplot(
   esr_plot_data,
   aes(heterogeneity_multiplier, estimate, color = estimator)
@@ -614,12 +614,12 @@ esr_plot <- ggplot(
     position = position_dodge(width = 0.06)
   ) +
   geom_point(position = position_dodge(width = 0.06)) +
-  facet_grid(. ~ `Meta average multiplier`, labeller = label_both) +
+  facet_grid(. ~ `Meta-average multiplier`, labeller = label_both) +
   scale_x_continuous(
     breaks = c(0, 0.25, 0.5, 0.75)
   ) +
   labs(
-    x = "Heterogeneity multiplier", y = expression(ESR[0.05]^sig),
+    x = "Share of genuine heterogeneity", y = expression(ESR[0.05]^sig),
     color = "Estimator"
   ) +
   supplement_figure_theme() +
