@@ -1,5 +1,6 @@
 ## Fit PET-PEESE, fixed-effect, and multilevel random-effects models with and
-## without outliers.
+## without outliers. Outliers are identified once, from the random-effects
+## model, so every estimator uses the same screened sample.
 
 library(metafor)
 library(clubSandwich)
@@ -15,7 +16,7 @@ if (!exists("recreate_meta_analysis_estimates")) {
   recreate_meta_analysis_estimates <- FALSE
 }
 minimum_primary_studies <- 5L
-meta_estimate_cache_version <- 2L
+meta_estimate_cache_version <- 3L
 if (!exists("new_progress_bar")) {
   new_progress_bar <- function(total, label) {
     message(label)
@@ -148,8 +149,8 @@ primary_study_count <- function(dat) {
   dplyr::n_distinct(dat$sID, na.rm = TRUE)
 }
 
-drop_meta_analysis <- function(dat, reason, pet_studies = NA_integer_,
-                               random_effect_studies = NA_integer_) {
+drop_meta_analysis <- function(dat, reason,
+                               screened_studies = NA_integer_) {
   c_id <- as.character(dat$cID[[1]])
 
   ## A rerun must not leave output files from an earlier, less restrictive run.
@@ -160,9 +161,7 @@ drop_meta_analysis <- function(dat, reason, pet_studies = NA_integer_,
   tibble(
     cID = c_id,
     exclusion_reason = reason,
-    n_primary_studies_pet_outlier_removed = as.integer(pet_studies),
-    n_primary_studies_random_effect_outlier_removed =
-      as.integer(random_effect_studies)
+    n_primary_studies_outlier_removed = as.integer(screened_studies)
   )
 }
 
@@ -331,29 +330,6 @@ fit_fixed_effects <- function(dat) {
   )
 }
 
-fit_fixed_effects_with_outlier_removal <- function(dat, cutoff = 3,
-                                                   screening_fit = NULL) {
-  if (is.null(screening_fit)) screening_fit <- fit_fixed_effects(dat)
-  standardized_residuals <- as.data.frame(
-    rstandard.rma.mv(screening_fit$model)
-  )$z
-  keep <- is.na(standardized_residuals) |
-    abs(standardized_residuals) <= cutoff
-  analysis_data <- dat[keep, , drop = FALSE]
-
-  if (primary_study_count(analysis_data) < minimum_primary_studies) {
-    return(list(data = analysis_data, result = NULL))
-  }
-  if (all(keep)) {
-    reused_fit <- screening_fit
-    reused_fit$model <- NULL
-    return(list(data = analysis_data, result = reused_fit))
-  }
-  final_fit <- fit_fixed_effects(analysis_data)
-  final_fit$model <- NULL
-  list(data = analysis_data, result = final_fit)
-}
-
 fit_random_effects_with_outlier_removal <- function(
     dat, cutoff = 3, screening_fit = NULL) {
   analysis_data <- dat
@@ -401,51 +377,38 @@ fit_one_meta_analysis <- function(dat) {
     ))
   }
 
-  ## Identify PET-PEESE outliers from the initial PET fit, as in the original
-  ## workflow, but decide estimator eligibility separately after removal.
-  outlier_model <- suppressWarnings(rma.mv(
-    yi, vi, mods = ~ 1 + sei,
-    random = random_effect_structure(dat),
-    method = "REML", test = "t", data = dat,
-    control = list(rel.tol = 1e-8)
-  ))
-  outlier_model_test <- coefficient_test(outlier_model, dat)
-  standardized_residuals <- as.data.frame(rstandard.rma.mv(outlier_model))$z
-  pet_outlier_removed_data <- dat[abs(standardized_residuals) < 3, , drop = FALSE]
-  pet_studies <- primary_study_count(pet_outlier_removed_data)
-
-  pet_peese_all_data <- fit_pet_peese(
-    dat, outlier_model, outlier_model_test
-  )
-  pet_peese_outlier_removed <- if (
-    nrow(pet_outlier_removed_data) == nrow(dat)
-  ) {
-    ## The PET screen retained every effect, so refitting the identical PET or
-    ## PEESE model would produce the same result at substantial extra cost.
-    pet_peese_all_data
-  } else if (pet_studies >= minimum_primary_studies) {
-    fit_pet_peese(pet_outlier_removed_data)
-  } else {
-    empty_meta_estimate("PET-PEESE not estimable after outlier removal")
-  }
-
   random_effect_all_data <- fit_random_effects(dat)
   random_effect_outlier_removed <- fit_random_effects_with_outlier_removal(
     dat, screening_fit = random_effect_all_data
   )
-  random_effect_studies <- primary_study_count(random_effect_outlier_removed$data)
-  egger <- if (random_effect_studies >= minimum_primary_studies) {
-    fit_egger(random_effect_outlier_removed$data)
-  } else {
-    list(slope = NA_real_, standard_error = NA_real_, p_value = NA_real_)
-  }
+  screened_data <- random_effect_outlier_removed$data
+  screened_studies <- primary_study_count(screened_data)
+  data_changed <- nrow(screened_data) != nrow(dat)
+
+  pet_peese_all_data <- fit_pet_peese(dat)
   fixed_effect_all_data <- fit_fixed_effects(dat)
-  fixed_effect_outlier_removed <- fit_fixed_effects_with_outlier_removal(
-    dat, screening_fit = fixed_effect_all_data
-  )
-  fixed_effect_studies <- primary_study_count(
-    fixed_effect_outlier_removed$data
-  )
+
+  if (screened_studies >= minimum_primary_studies) {
+    pet_peese_outlier_removed <- if (data_changed) {
+      fit_pet_peese(screened_data)
+    } else {
+      pet_peese_all_data
+    }
+    fixed_effect_outlier_removed <- if (data_changed) {
+      fit_fixed_effects(screened_data)
+    } else {
+      fixed_effect_all_data
+    }
+    egger <- fit_egger(screened_data)
+  } else {
+    pet_peese_outlier_removed <- empty_meta_estimate(
+      "PET-PEESE not estimable after outlier removal"
+    )
+    fixed_effect_outlier_removed <- empty_meta_estimate(
+      "Fixed effect not estimable after outlier removal"
+    )
+    egger <- list(slope = NA_real_, standard_error = NA_real_, p_value = NA_real_)
+  }
 
   results <- list(
     all_data = list(
@@ -458,25 +421,24 @@ fit_one_meta_analysis <- function(dat) {
     ),
     outlier_removed = list(
       pet_peese = pet_peese_outlier_removed,
-      pet_peese_data = pet_outlier_removed_data,
-      fixed_effect = if (fixed_effect_studies >= minimum_primary_studies) {
-        fixed_effect_outlier_removed$result
-      } else {
-        empty_meta_estimate("Fixed effect not estimable after outlier removal")
-      },
-      fixed_effect_data = fixed_effect_outlier_removed$data,
-      random_effect = if (random_effect_studies >= minimum_primary_studies) {
+      pet_peese_data = screened_data,
+      fixed_effect = fixed_effect_outlier_removed,
+      fixed_effect_data = screened_data,
+      random_effect = if (screened_studies >= minimum_primary_studies) {
         random_effect_outlier_removed$result
       } else {
         empty_meta_estimate("Random effects not estimable after outlier removal")
       },
-      random_effect_data = random_effect_outlier_removed$data
+      random_effect_data = screened_data
     )
   )
   results$all_data$random_effect$model <- NULL
   results$all_data$fixed_effect$model <- NULL
   if (!is.null(results$outlier_removed$random_effect$model)) {
     results$outlier_removed$random_effect$model <- NULL
+  }
+  if (!is.null(results$outlier_removed$fixed_effect$model)) {
+    results$outlier_removed$fixed_effect$model <- NULL
   }
 
   for (variant in names(results)) {
@@ -514,18 +476,10 @@ fit_one_meta_analysis <- function(dat) {
   tibble(
     cID = as.character(dat$cID[[1]]),
     exclusion_reason = NA_character_,
-    n_primary_studies_pet_outlier_removed = pet_studies,
-    n_primary_studies_random_effect_outlier_removed = random_effect_studies,
-    n_primary_studies_fixed_effect_outlier_removed = fixed_effect_studies,
+    n_primary_studies_outlier_removed = screened_studies,
     k_all_data = nrow(dat),
-    k_outlier_removed = nrow(pet_outlier_removed_data),
-    n_outliers_removed = nrow(dat) - nrow(pet_outlier_removed_data),
-    k_random_effect_outlier_removed = nrow(random_effect_outlier_removed$data),
-    n_random_effect_outliers_removed =
-      nrow(dat) - nrow(random_effect_outlier_removed$data),
-    k_fixed_effect_outlier_removed = nrow(fixed_effect_outlier_removed$data),
-    n_fixed_effect_outliers_removed =
-      nrow(dat) - nrow(fixed_effect_outlier_removed$data),
+    k_outlier_removed = nrow(screened_data),
+    n_outliers_removed = nrow(dat) - nrow(screened_data),
     egger_slope_outlier_removed = egger$slope,
     egger_slope_se_outlier_removed = egger$standard_error,
     egger_p_value_outlier_removed = egger$p_value,
@@ -650,8 +604,5 @@ report_outlier_removal <- function(estimator, removed_column) {
   ))
 }
 
-## Sourcing this fitting script should make the impact of each estimator's
-## distinct residual screen visible without requiring inspection of the CSV.
-report_outlier_removal("Random effects", "n_random_effect_outliers_removed")
-report_outlier_removal("PET-PEESE", "n_outliers_removed")
-report_outlier_removal("Fixed effects", "n_fixed_effect_outliers_removed")
+## The single random-effects screen supplies the data for every estimator.
+report_outlier_removal("Random-effects model", "n_outliers_removed")

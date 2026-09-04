@@ -36,7 +36,8 @@ source("scripts/main.R")
 
 1. optionally recreates the subfield classifications;
 2. fits fixed-effects, PET-PEESE and multilevel random-effects estimates when their derived
-   RDS inputs are missing;
+   RDS inputs are missing, using the random-effects model to screen outliers once and the
+   resulting common sample for all three estimators;
 3. creates setup-specific analysis data and counterfactual simulations;
 4. runs the regression analyses;
 5. writes the main and supplementary tables and figures.
