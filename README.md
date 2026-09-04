@@ -35,7 +35,7 @@ source("scripts/main.R")
 `main.R` performs the steps in dependency order:
 
 1. optionally recreates the subfield classifications;
-2. fits PET-PEESE and multilevel random-effects estimates when their derived
+2. fits fixed-effects, PET-PEESE and multilevel random-effects estimates when their derived
    RDS inputs are missing;
 3. creates setup-specific analysis data and counterfactual simulations;
 4. runs the regression analyses;
@@ -125,7 +125,7 @@ scripts/
   analysis_setup.R                        packages, settings, and shared setup
   runtime_settings.R                      handling of option defaults
   classification.R                        optional classification recreation
-  compute_meta_estimates.R                PET-PEESE and random-effects fitting
+  compute_meta_estimates.R                fixed-effects, PET-PEESE and random-effects fitting
   create_analysis_data.R                  setup-specific derived data
   run_exploratory_regressions.R           regression analyses
   create_tables_and_figures.R             main manuscript outputs
