@@ -19,8 +19,12 @@ source(here("scripts", "analysis_setup.R"))
 if (!exists("write_latex_table", mode = "function")) {
   latex_escape <- function(x) {
     replacements <- c(
-      "\\" = "\\textbackslash{}", "&" = "\\&", "%" = "\\%", "#" = "\\#",
-      "_" = "\\_", "$" = "\\$", "{" = "\\{", "}" = "\\}"
+      "&" = "\\&",
+      "%" = "\\%",
+      "#" = "\\#",
+      "_" = "\\_",
+      "{" = "\\{",
+      "}" = "\\}"
     )
     vapply(as.character(x), function(value) {
       characters <- strsplit(gsub("\n", " ", value, fixed = TRUE), "", fixed = TRUE)[[1]]
