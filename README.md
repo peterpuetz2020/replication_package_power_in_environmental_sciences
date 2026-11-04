@@ -161,28 +161,35 @@ meta-analysis methods.
 
 The default analysis evaluates **16 parameter combinations**: meta-average
 multipliers 0.25, 0.5, 0.75 and 1, crossed with four heterogeneity multipliers.
-Figure S4 includes all four meta-average values. Main Tables 1–3 and Figures
+Figure S5 includes all four meta-average values in a two-column, two-row layout. Main Tables 1–3 and Figures
 1–2 retain the manuscript's half-meta-average specification.
 
 | Supplement output | Contents |
 |---|---|
 | Table S1 | Excess significance by subfield |
-| Tables S2, S3, S5 | Power summaries at meta-average multipliers 0.25, 1, 0.75 |
-| Table S4 | Power after excluding non-significant meta-analyses |
+| Tables S2–S4 | Power summaries at meta-average multipliers 0.25, 0.75, 1 |
+| Table S5 | Power after excluding non-significant meta-analyses |
 | Table S6 | Counterfactual p-value distributions at multipliers 0.5 versus 1 |
 | Table S7 | Effect-size measures by subfield |
 | Table S8 | Small-study effects by subfield |
-| Figures S1–S4 | Heterogeneity, 0.25/full counterfactual sensitivities, and ESR comparisons |
-| Figure S5 | Counterfactual sensitivity at meta-average multiplier 0.75 |
+| Figure S1 | Heterogeneity distributions |
+| Figures S2–S4 | Counterfactual sensitivities at multipliers 0.25, 0.75, 1 |
+| Figure S5 | ESR comparisons for all four multipliers, arranged in two columns |
 
-Table S6 includes every one of Table 2's 13 p-value bins for each configured
-heterogeneity assumption. It reports both simulated probabilities and the
-**0.5-minus-1 probability difference**, with a 95% article-cluster bootstrap
-interval. Both counterfactuals use the same valid effects and matched bootstrap
-draws; intervals are calculated from paired differences, not from differences
-between interval endpoints. Entries are proportions, not percentages or
-comparisons with the observed distribution. Full-precision probabilities,
-differences, intervals and sample sizes are saved to
+Table S6 has exactly Table 2's layout: 13 p-value-bin rows, the two
+`ESR_0.05` measures (among all results and among significant results), and
+meta-analysis/test sample sizes, with genuine heterogeneity as columns.
+It retains the 0.5 counterfactual and replaces Table 2's empirical reference
+with the counterfactual at multiplier 1. Bin differences are therefore
+**reference (1) minus counterfactual (0.5)**. If `q_m` is the counterfactual
+probability of `p < 0.05` at multiplier `m`, the ESR rows are
+`ESR_all = q_1 - q_0.5` and `ESR_sig = (q_1 - q_0.5) / q_1`.
+
+Both distributions use identical valid effects and paired article-cluster
+bootstrap draws. Each significant-result ESR draw uses its own reference
+significant probability as denominator. The table reports estimates and
+95% percentile intervals, matching Table 2's formatting. Full-precision rows,
+including both counterfactual values and sample sizes, are saved to
 `data/derived_data/counterfactual_comparison_0p5_vs_1.csv`.
 
 Tables are written as DOCX and LaTeX, and figures as PDF and SVG. Use 1,000

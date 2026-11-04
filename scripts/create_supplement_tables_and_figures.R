@@ -557,41 +557,40 @@ heterogeneity_plot <- ggplot() +
 save_supplement_plot(file.path(supplement_dir, "Figure_S1"),
               10.5, 5.25, function() print(heterogeneity_plot))
 
-## Figures S2 and S3: Figure 1 sensitivity analyses.
+## Figures S2-S4: Figure 1 sensitivity analyses, ordered by multiplier.
 write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 2)
-write_counterfactual_figure(meta_multiplier = 1, figure_number = 3)
-## Figure S5: three-quarter meta-average sensitivity, matching Figure 1.
-write_counterfactual_figure(meta_multiplier = 0.75, figure_number = 5)
+write_counterfactual_figure(meta_multiplier = 0.75, figure_number = 3)
+write_counterfactual_figure(meta_multiplier = 1, figure_number = 4)
 
-## Figure S4: excess-significance estimates across all analysis setups. The
+## Figure S5: excess-significance estimates across all analysis setups. The
 ## estimates are calculated with Table 2 in create_tables_and_figures.R, while
 ## all supplementary output is deliberately written here.
 if (!exists("all_combination_results") || !exists("all_esr_results")) {
-  figure_s4_inputs_path <- here(
-    "data", "derived_data", "Figure_S4_inputs.rds"
+  figure_s5_inputs_path <- here(
+    "data", "derived_data", "Figure_S5_inputs.rds"
   )
-  if (!file.exists(figure_s4_inputs_path)) {
+  if (!file.exists(figure_s5_inputs_path)) {
     stop(
-      "Figure S4 inputs are unavailable. Run create_tables_and_figures.R first ",
-      "to create ", figure_s4_inputs_path, "."
+      "Figure S5 inputs are unavailable. Run create_tables_and_figures.R first ",
+      "to create ", figure_s5_inputs_path, "."
     )
   }
-  figure_s4_inputs <- readRDS(figure_s4_inputs_path)
-  required_figure_s4_inputs <- c(
+  figure_s5_inputs <- readRDS(figure_s5_inputs_path)
+  required_figure_s5_inputs <- c(
     "all_combination_results", "all_esr_results"
   )
-  if (!all(required_figure_s4_inputs %in% names(figure_s4_inputs))) {
+  if (!all(required_figure_s5_inputs %in% names(figure_s5_inputs))) {
     stop(
-      "Figure S4 input file is incomplete. Rerun create_tables_and_figures.R ",
-      "to recreate ", figure_s4_inputs_path, "."
+      "Figure S5 input file is incomplete. Rerun create_tables_and_figures.R ",
+      "to recreate ", figure_s5_inputs_path, "."
     )
   }
-  all_combination_results <- figure_s4_inputs$all_combination_results
-  all_esr_results <- figure_s4_inputs$all_esr_results
+  all_combination_results <- figure_s5_inputs$all_combination_results
+  all_esr_results <- figure_s5_inputs$all_esr_results
 }
 write.csv(
   all_combination_results,
-  file.path(derived_data_dir, "Figure_S4_numbers.csv"),
+  file.path(derived_data_dir, "Figure_S5_numbers.csv"),
   row.names = FALSE
 )
 esr_plot_data <- all_esr_results %>%
@@ -618,7 +617,7 @@ esr_plot <- ggplot(
     position = position_dodge(width = 0.06)
   ) +
   geom_point(position = position_dodge(width = 0.06)) +
-  facet_grid(. ~ `Meta-average multiplier`, labeller = label_both) +
+  facet_wrap(vars(`Meta-average multiplier`), ncol = 2, labeller = label_both) +
   scale_x_continuous(
     breaks = c(0, 0.25, 0.5, 0.75)
   ) +
@@ -636,9 +635,8 @@ esr_plot <- ggplot(
   supplement_figure_theme() +
   theme(legend.position = "bottom")
 save_supplement_plot(
-  file.path(supplement_dir, "Figure_S4"),
-  width = max(10, 2.8 * n_distinct(esr_plot_data$`Meta-average multiplier`)),
-  height = 4.5, draw = function() print(esr_plot)
+  file.path(supplement_dir, "Figure_S5"),
+  width = 10, height = 8, draw = function() print(esr_plot)
 )
 
 ## Tables and remaining figures follow the order of the supplementary material.
@@ -871,16 +869,16 @@ make_power_table <- function(dat, meta_average_multiplier = 0.5) {
     mutate(across(`Median of medians`:SAPE, ~ sprintf("%.2f", .x)))
 }
 
-## Tables S2, S3 and S5: power sensitivity at one-quarter, full and three-quarter meta-average.
-## Both use the full sample; only the assumed effect differs.
+## Tables S2-S4: power sensitivity at one-quarter, three-quarter and full meta-average.
+## All three use the full sample; only the assumed effect differs.
 table_s2 <- make_power_table(base_half, 0.25)
-table_s3 <- make_power_table(base_half, 1)
-table_s5 <- make_power_table(base_half, 0.75)
+table_s3 <- make_power_table(base_half, 0.75)
+table_s4 <- make_power_table(base_half, 1)
 
-## Table S4: remove complete meta-analyses whose pooled effect is not significant.
+## Table S5: remove complete meta-analyses whose pooled effect is not significant.
 significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
   filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
-table_s4 <- make_power_table(base_half %>% filter(cID %in% significant_meta))
+table_s5 <- make_power_table(base_half %>% filter(cID %in% significant_meta))
 
 ## Table S8: share of meta-analyses with small-study effects by subfield.
 small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
@@ -1021,9 +1019,13 @@ comparison_results <- map_dfr(
         )[[1]]
       )
     })
-    compare_counterfactual_bins(
-      scenarios[[1]]$counts, scenarios[[2]]$counts, nrow(common_data),
-      scenarios[[1]]$draws, scenarios[[2]]$draws
+    compare_counterfactual_table(
+      reference_counts = scenarios[[2]]$counts,
+      counterfactual_counts = scenarios[[1]]$counts,
+      n_effects = nrow(common_data),
+      reference_draws = scenarios[[2]]$draws,
+      counterfactual_draws = scenarios[[1]]$draws,
+      n_meta_analyses = n_distinct(common_data$cID)
     ) %>% mutate(
       heterogeneity_multiplier = heterogeneity,
       n_meta_analyses = n_distinct(common_data$cID),
@@ -1036,13 +1038,20 @@ write.csv(
   file.path(derived_data_dir, "counterfactual_comparison_0p5_vs_1.csv"),
   row.names = FALSE
 )
-table_s6 <- comparison_results %>% transmute(
-  `Genuine heterogeneity` = paste0(100 * heterogeneity_multiplier, "%"),
-  `p-value interval` = p_value_interval,
-  `0.5 x meta-average` = sprintf("%.3f", probability_0p5),
-  `1 x meta-average` = sprintf("%.3f", probability_1),
-  `Difference [95% CI]` = sprintf("%.3f [%.3f, %.3f]", difference, ci_lower, ci_upper)
-)
+table_s6 <- comparison_results %>%
+  mutate(
+    value = if_else(
+      is.na(ci_lower), as.character(estimate),
+      paste0(round(estimate, 3), " [", round(ci_lower, 3), ", ", round(ci_upper, 3), "]")
+    ),
+    measure = factor(measure, levels = table_2_display_measures()),
+    column = table_2_column_label(0.5, heterogeneity_multiplier)
+  ) %>%
+  dplyr::select(measure, column, value) %>%
+  pivot_wider(names_from = column, values_from = value) %>%
+  arrange(measure) %>%
+  mutate(measure = as.character(measure)) %>%
+  rename(`p-value interval` = measure)
 
 ## Table S7 is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
@@ -1077,17 +1086,21 @@ table_s7 <- table_s7_all_data %>% distinct(cID, etype, subfd) %>%
 ## place makes the filename-to-analysis mapping explicit and prevents a later
 ## analysis section from silently reusing a table number.
 write_subfield_esr_table(table_s1_columns, number = 1)
-write_word_table(table_s2, 2)
-write_word_table(table_s3, 3)
-write_word_table(table_s4, 4)
-write_word_table(table_s5, 5,
-  title = "Table S5. Statistical power at 0.75 x the meta-average")
+write_word_table(table_s2, 2,
+  title = "Table S2. Statistical power at 0.25 x the meta-average")
+write_word_table(table_s3, 3,
+  title = "Table S3. Statistical power at 0.75 x the meta-average")
+write_word_table(table_s4, 4,
+  title = "Table S4. Statistical power at 1 x the meta-average")
+write_word_table(table_s5, 5)
 write_word_table(
   table_s6, 6,
   title = "Table S6. Simulated counterfactual p-value distributions",
   note = paste(
-    "Multilevel random-effects estimates, outliers removed. Entries are probabilities.",
-    "Difference = probability at 0.5 x meta-average minus probability at 1 x meta-average.",
+    "Multilevel random-effects estimates, outliers removed. Same definitions and rows as Table 2,",
+    "replacing its empirical reference by the counterfactual at 1 x meta-average.",
+    "Difference = reference (1) minus counterfactual (0.5). ESR-all divides by all effects;",
+    "ESR-sig divides by the reference distribution's significant probability.",
     "For each heterogeneity assumption, both distributions use the same effects",
     "and paired article-cluster bootstrap draws for the 95% confidence interval."
   )

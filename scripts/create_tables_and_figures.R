@@ -542,15 +542,15 @@ table_2_parameters <- tidyr::crossing(
 )
 ## A fixed-effect counterfactual is meaningful only when the assumed share of
 ## genuine heterogeneity is zero. Include it for every meta-average multiplier
-## in the Figure S4 inputs without changing the estimators used by other output.
-figure_s4_fixed_effect_parameters <- tidyr::crossing(
+## in the Figure S5 inputs without changing the estimators used by other output.
+figure_s5_fixed_effect_parameters <- tidyr::crossing(
   analysis_setups %>% filter(heterogeneity_multiplier == 0),
   estimator = "fixed_effect",
   outlier_variant = "outliers_removed"
 )
 table_2_parameters <- bind_rows(
   table_2_parameters,
-  figure_s4_fixed_effect_parameters
+  figure_s5_fixed_effect_parameters
 )
 table_2_results <- table_2_parameters %>%
   pmap(calculate_table_2)
@@ -576,15 +576,15 @@ all_combination_results <- map2_dfr(
     ) %>% dplyr::select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1", "outlier_variant1")))
   }
 )
-figure_s4_inputs_path <- here(
-  "data", "derived_data", "Figure_S4_inputs.rds"
+figure_s5_inputs_path <- here(
+  "data", "derived_data", "Figure_S5_inputs.rds"
 )
 saveRDS(
   list(
     all_combination_results = all_combination_results,
     all_esr_results = all_esr_results
   ),
-  figure_s4_inputs_path
+  figure_s5_inputs_path
 )
 
 ## Calculate only the subfield counterfactuals needed for supplementary Table
@@ -632,16 +632,13 @@ table_2_columns <- map2(
     ))
 )
 table_2 <- reduce(table_2_columns, full_join, by = "measure") %>%
-  filter(!measure %in% c("ESR_{0.1}^{all}", "ESR_{0.1}^{sig}"))
+  filter(measure %in% table_2_display_measures())
 names(table_2) <- c(
   "p-value interval",
   map2_chr(
     table_2_indices$meta_average_multiplier,
     table_2_indices$heterogeneity_multiplier,
-    function(meta_multiplier, heterogeneity) paste0(
-      "(", meta_multiplier, " x meta-average; ",
-      heterogeneity * 100, "% genuine heterogeneity)\nDifference [95% CI]"
-    )
+    table_2_column_label
   )
 )
 table_2_document <- officer::read_docx()

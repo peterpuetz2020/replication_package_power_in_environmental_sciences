@@ -25,8 +25,8 @@ analytic_bins <- function(mu) {
 stopifnot(
   nrow(result) == 13L,
   identical(result$p_value_interval, p_value_bin_labels()),
-  max(abs(result$probability_0p5 - analytic_bins(.5))) < 1e-12,
-  max(abs(result$probability_1 - analytic_bins(1))) < 1e-12,
+  max(abs(result$reference_value - analytic_bins(.5))) < 1e-12,
+  max(abs(result$counterfactual_value - analytic_bins(1))) < 1e-12,
   abs(sum(result$difference)) < 1e-12,
   result$difference[1] > 0, result$difference[13] < 0,
   max(abs(result$ci_lower - result$difference)) < 1e-12,
@@ -48,4 +48,34 @@ stopifnot(max(abs(paired$ci_lower - shift)) < 1e-12,
 invalid <- try(compare_counterfactual_bins(c(1, 2), c(1, 2), 3,
                                           half_draws, full_draws), silent = TRUE)
 stopifnot(inherits(invalid, "try-error"))
-cat("PASS: analytic bin probabilities, tail direction, normalization and paired intervals\n")
+
+## A simulated full-effect reference replaces Table 2's empirical reference.
+tab <- compare_counterfactual_table(
+  cf(full, grid, 0), cf(half, grid, 0), nrow(dat), full_draws, half_draws, 3L
+)
+ref_sig <- pnorm(-qnorm(.975), mean = 1) + pnorm(qnorm(.975), mean = 1, lower.tail = FALSE)
+half_sig <- pnorm(-qnorm(.975), mean = .5) + pnorm(qnorm(.975), mean = .5, lower.tail = FALSE)
+stopifnot(identical(tab$measure, table_2_display_measures()),
+          abs(tab$estimate[14] - (ref_sig - half_sig)) < 1e-12,
+          abs(tab$estimate[15] - (ref_sig - half_sig) / ref_sig) < 1e-12,
+          identical(tail(tab$estimate, 2), c(3, nrow(dat))))
+zero <- compare_counterfactual_table(
+  cf(half, grid, 0), cf(half, grid, 0), nrow(dat), half_draws, half_draws, 3L
+)
+stopifnot(all(zero$estimate[1:15] == 0), all(zero$ci_lower[1:15] == 0),
+          all(zero$ci_upper[1:15] == 0))
+
+## Significant-result ESR divides by each reference draw's significant mass.
+reference <- counterfactual <- matrix(0, 4, 13)
+reference[, 13] <- c(.2, .4, .6, .8)
+counterfactual[, 13] <- c(.05, .15, .35, .65)
+reference[, 1] <- 1 - reference[, 13]
+counterfactual[, 1] <- 1 - counterfactual[, 13]
+ratio <- compare_counterfactual_table(
+  c(50, rep(0, 11), 50), c(75, rep(0, 11), 25), 100,
+  reference, counterfactual, 3L
+)
+stopifnot(abs(ratio$estimate[15] - .5) < 1e-12,
+          abs(ratio$ci_lower[15] - .2046875) < 1e-12,
+          abs(ratio$ci_upper[15] - .740625) < 1e-12)
+cat("PASS: analytic bins, Table 2 row order, ESR denominators and paired intervals\n")

@@ -18,36 +18,98 @@ p_value_bin_labels <- function() {
     "0.001 < p < 0.01", "p < 0.001")
 }
 
+table_2_display_measures <- function() {
+  c(p_value_bin_labels(), "ESR_{0.05}^{all}", "ESR_{0.05}^{sig}",
+    "No. of meta-analysis", "No. of tests")
+}
+
+table_2_column_label <- function(meta_multiplier, heterogeneity) {
+  paste0("(", meta_multiplier, " x meta-average; ", heterogeneity * 100,
+         "% genuine heterogeneity)\nDifference [95% CI]")
+}
+
 ## Both counterfactuals must use the same sample, article clusters and bootstrap
 ## iteration IDs. Subtract matched draws, rather than separate CI endpoints.
-compare_counterfactual_bins <- function(half_counts, full_counts, n_effects,
-                                        half_draws, full_draws) {
+compare_counterfactual_bins <- function(reference_counts, counterfactual_counts, n_effects,
+                                        reference_draws, counterfactual_draws) {
   n_bins <- length(p_value_bin_labels())
   if (length(n_effects) != 1L || !is.finite(n_effects) || n_effects <= 0 ||
-      length(half_counts) != n_bins || length(full_counts) != n_bins ||
-      !is.matrix(half_draws) || !is.matrix(full_draws) ||
-      !identical(dim(half_draws), dim(full_draws)) ||
-      ncol(half_draws) != n_bins || nrow(half_draws) < 1L) {
+      length(reference_counts) != n_bins || length(counterfactual_counts) != n_bins ||
+      !is.matrix(reference_draws) || !is.matrix(counterfactual_draws) ||
+      !identical(dim(reference_draws), dim(counterfactual_draws)) ||
+      ncol(reference_draws) != n_bins || nrow(reference_draws) < 1L) {
     stop("Counterfactual comparison requires matching counts and paired bootstrap draws.")
   }
-  if (any(!is.finite(c(half_counts, full_counts, half_draws, full_draws))) ||
-      abs(sum(half_counts) - n_effects) > 1e-8 * n_effects ||
-      abs(sum(full_counts) - n_effects) > 1e-8 * n_effects ||
-      any(abs(rowSums(half_draws) - 1) > 1e-8) ||
-      any(abs(rowSums(full_draws) - 1) > 1e-8)) {
+  if (any(!is.finite(c(reference_counts, counterfactual_counts, reference_draws, counterfactual_draws))) ||
+      abs(sum(reference_counts) - n_effects) > 1e-8 * n_effects ||
+      abs(sum(counterfactual_counts) - n_effects) > 1e-8 * n_effects ||
+      any(abs(rowSums(reference_draws) - 1) > 1e-8) ||
+      any(abs(rowSums(counterfactual_draws) - 1) > 1e-8)) {
     stop("Counterfactual probabilities must be finite and sum to one.")
   }
-  difference_draws <- half_draws - full_draws
+  difference_draws <- reference_draws - counterfactual_draws
   intervals <- apply(difference_draws, 2, quantile,
                      probs = c(0.025, 0.975), na.rm = TRUE)
   data.frame(
     p_value_interval = p_value_bin_labels(),
-    probability_0p5 = as.numeric(half_counts) / n_effects,
-    probability_1 = as.numeric(full_counts) / n_effects,
-    difference = as.numeric(half_counts - full_counts) / n_effects,
+    reference_value = as.numeric(reference_counts) / n_effects,
+    counterfactual_value = as.numeric(counterfactual_counts) / n_effects,
+    difference = as.numeric(reference_counts - counterfactual_counts) / n_effects,
     ci_lower = intervals[1, ], ci_upper = intervals[2, ],
     row.names = NULL
   )
+}
+
+## Table 2's empirical-reference formula, with a simulated reference instead.
+## Significant-result ESR uses the reference distribution's significant mass
+## as denominator, including in each paired bootstrap replication.
+compare_counterfactual_table <- function(reference_counts, counterfactual_counts,
+                                         n_effects, reference_draws,
+                                         counterfactual_draws, n_meta_analyses) {
+  bins <- compare_counterfactual_bins(
+    reference_counts, counterfactual_counts, n_effects,
+    reference_draws, counterfactual_draws
+  )
+  result <- data.frame(
+    measure = bins$p_value_interval,
+    reference_value = bins$reference_value,
+    counterfactual_value = bins$counterfactual_value,
+    estimate = bins$difference,
+    ci_lower = bins$ci_lower, ci_upper = bins$ci_upper
+  )
+  for (level in list(c(10L, "0.1"), c(11L, "0.05"))) {
+    idx <- as.integer(level[[1]]):13L
+    reference_mass <- sum(reference_counts[idx]) / n_effects
+    counterfactual_mass <- sum(counterfactual_counts[idx]) / n_effects
+    reference_boot <- rowSums(reference_draws[, idx, drop = FALSE])
+    counterfactual_boot <- rowSums(counterfactual_draws[, idx, drop = FALSE])
+    if (reference_mass <= 0 || any(reference_boot <= 0)) {
+      stop("Significant-result ESR requires positive reference probability.")
+    }
+    for (denominator in c("all", "sig")) {
+      scale <- if (denominator == "all") 1 else reference_mass
+      boot_scale <- if (denominator == "all") 1 else reference_boot
+      interval <- quantile((reference_boot - counterfactual_boot) / boot_scale,
+                           probs = c(.025, .975), na.rm = TRUE)
+      result <- rbind(result, data.frame(
+        measure = paste0("ESR_{", level[[2]], "}^{", denominator, "}"),
+        reference_value = reference_mass / scale,
+        counterfactual_value = counterfactual_mass / scale,
+        estimate = (reference_mass - counterfactual_mass) / scale,
+        ci_lower = interval[[1]], ci_upper = interval[[2]]
+      ))
+    }
+  }
+  for (sample_size in c("No. of meta-analysis", "No. of tests")) {
+    value <- if (sample_size == "No. of tests") n_effects else n_meta_analyses
+    result <- rbind(result, data.frame(
+      measure = sample_size, reference_value = value, counterfactual_value = value,
+      estimate = value, ci_lower = NA_real_, ci_upper = NA_real_
+    ))
+  }
+  result <- result[match(table_2_display_measures(), result$measure), ]
+  rownames(result) <- NULL
+  result
 }
 
 ## Return one article-level cluster identifier for every meta-analysis in the
