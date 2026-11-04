@@ -5,6 +5,51 @@
 
 counterfactual_cache_version <- 3L
 
+counterfactual_p_grid <- function() {
+  cutoffs <- c(.001, .01, .05, .1, .2, .3, .4, .5, .6, .7, .8, .9)
+  c(-Inf, qnorm(cutoffs / 2), 0, qnorm(rev(cutoffs) / 2, lower.tail = FALSE), Inf)
+}
+
+## Shared row order for Table 2 and counterfactual-distribution comparisons.
+p_value_bin_labels <- function() {
+  c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0.7",
+    "0.5 < p < 0.6", "0.4 < p < 0.5", "0.3 < p < 0.4", "0.2 < p < 0.3",
+    "0.1 < p < 0.2", "0.05 < p < 0.1", "0.01 < p < 0.05",
+    "0.001 < p < 0.01", "p < 0.001")
+}
+
+## Both counterfactuals must use the same sample, article clusters and bootstrap
+## iteration IDs. Subtract matched draws, rather than separate CI endpoints.
+compare_counterfactual_bins <- function(half_counts, full_counts, n_effects,
+                                        half_draws, full_draws) {
+  n_bins <- length(p_value_bin_labels())
+  if (length(n_effects) != 1L || !is.finite(n_effects) || n_effects <= 0 ||
+      length(half_counts) != n_bins || length(full_counts) != n_bins ||
+      !is.matrix(half_draws) || !is.matrix(full_draws) ||
+      !identical(dim(half_draws), dim(full_draws)) ||
+      ncol(half_draws) != n_bins || nrow(half_draws) < 1L) {
+    stop("Counterfactual comparison requires matching counts and paired bootstrap draws.")
+  }
+  if (any(!is.finite(c(half_counts, full_counts, half_draws, full_draws))) ||
+      abs(sum(half_counts) - n_effects) > 1e-8 * n_effects ||
+      abs(sum(full_counts) - n_effects) > 1e-8 * n_effects ||
+      any(abs(rowSums(half_draws) - 1) > 1e-8) ||
+      any(abs(rowSums(full_draws) - 1) > 1e-8)) {
+    stop("Counterfactual probabilities must be finite and sum to one.")
+  }
+  difference_draws <- half_draws - full_draws
+  intervals <- apply(difference_draws, 2, quantile,
+                     probs = c(0.025, 0.975), na.rm = TRUE)
+  data.frame(
+    p_value_interval = p_value_bin_labels(),
+    probability_0p5 = as.numeric(half_counts) / n_effects,
+    probability_1 = as.numeric(full_counts) / n_effects,
+    difference = as.numeric(half_counts - full_counts) / n_effects,
+    ci_lower = intervals[1, ], ci_upper = intervals[2, ],
+    row.names = NULL
+  )
+}
+
 ## Return one article-level cluster identifier for every meta-analysis in the
 ## split counterfactual data. Several meta-analyses (cID) can come from the same
 ## article (metaID), so bootstrapping cID would incorrectly treat them as
@@ -175,7 +220,11 @@ cf.ci.cluster <- function(dat, z.grid, iters, cluster,
 
   unique_clusters <- unique(cluster)
   meta_cluster_index <- match(cluster, unique_clusters)
-  bootstrap_results <- foreach(dd = iteration_ids) %dopar% {
+  ## Each draw has its own seed, so prescheduling changes only communication
+  ## overhead, not bootstrap samples or result ordering.
+  bootstrap_results <- foreach(
+    dd = iteration_ids, .options.snow = list(preschedule = TRUE)
+  ) %dopar% {
     set.seed(dd + 12)
     sampled_clusters <- sample(unique_clusters, replace = TRUE)
     cluster_counts <- tabulate(

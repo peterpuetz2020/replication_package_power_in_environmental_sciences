@@ -2,8 +2,7 @@
 ## create_supplement_tables_and_figures.R
 ## ---------------------------------------------------------
 ## Recreate all supplementary tables and figures from the analysis outputs. The
-## fitted negative-binomial models used for the supplementary tables are produced by
-## run_exploratory_regressions.R.
+## supplementary analyses reuse the fitted meta-estimates and counterfactual caches.
 
 library(tidyverse)
 library(foreach)
@@ -154,7 +153,7 @@ cf_ci_with_progress <- function(dat, grid, cluster, heterogeneity_multiplier, la
   )
   iteration_batches <- split(
     seq_len(n_iterations),
-    ceiling(seq_len(n_iterations) / max(1, n_cores))
+    ceiling(seq_len(n_iterations) / (50L * max(1, n_cores)))
   )
   progress_bar <- new_progress_bar(
     n_iterations,
@@ -298,7 +297,10 @@ write_counterfactual_figure <- function(meta_multiplier, figure_number) {
                                          setup_label, ...) {
     make_figure_1_panel(meta_average_multiplier, heterogeneity_multiplier, setup_label)
   })
-  combined <- arrangeGrob(grobs = panels, ncol = 1)
+  combined <- arrangeGrob(
+    grobs = panels, ncol = 1,
+    top = paste0("Meta-average multiplier: ", meta_multiplier)
+  )
   save_supplement_plot(
     file.path(supplement_dir, paste0("Figure_S", figure_number)),
     width = 10, height = 10,
@@ -558,6 +560,8 @@ save_supplement_plot(file.path(supplement_dir, "Figure_S1"),
 ## Figures S2 and S3: Figure 1 sensitivity analyses.
 write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 2)
 write_counterfactual_figure(meta_multiplier = 1, figure_number = 3)
+## Figure S5: three-quarter meta-average sensitivity, matching Figure 1.
+write_counterfactual_figure(meta_multiplier = 0.75, figure_number = 5)
 
 ## Figure S4: excess-significance estimates across all analysis setups. The
 ## estimates are calculated with Table 2 in create_tables_and_figures.R, while
@@ -633,7 +637,8 @@ esr_plot <- ggplot(
   theme(legend.position = "bottom")
 save_supplement_plot(
   file.path(supplement_dir, "Figure_S4"),
-  width = 10, height = 4.5, draw = function() print(esr_plot)
+  width = max(10, 2.8 * n_distinct(esr_plot_data$`Meta-average multiplier`)),
+  height = 4.5, draw = function() print(esr_plot)
 )
 
 ## Tables and remaining figures follow the order of the supplementary material.
@@ -641,11 +646,13 @@ save_supplement_plot(
 library(officer)
 
 
-write_word_table <- function(x, number, alignment = NULL) {
+write_word_table <- function(x, number, alignment = NULL, title = NULL, note = NULL) {
   if (is.null(alignment)) alignment <- c("left", rep("center", ncol(x) - 1))
   doc <- officer::read_docx()
+  if (!is.null(title)) doc <- officer::body_add_par(doc, title, style = "heading 1")
   doc <- officer::body_add_table(doc, x, style = NULL, header = TRUE,
     alignment = alignment, align_table = "center")
+  if (!is.null(note)) doc <- officer::body_add_par(doc, note)
   print(doc, target = file.path(supplement_dir, paste0("Table_S", number, ".docx")))
   write_latex_table(x, file.path(supplement_dir, paste0("Table_S", number, ".tex")))
 }
@@ -864,19 +871,20 @@ make_power_table <- function(dat, meta_average_multiplier = 0.5) {
     mutate(across(`Median of medians`:SAPE, ~ sprintf("%.2f", .x)))
 }
 
-## Tables S2-S3: sensitivity analyses at one-quarter and the full meta-average.
+## Tables S2, S3 and S5: power sensitivity at one-quarter, full and three-quarter meta-average.
 ## Both use the full sample; only the assumed effect differs.
 table_s2 <- make_power_table(base_half, 0.25)
 table_s3 <- make_power_table(base_half, 1)
+table_s5 <- make_power_table(base_half, 0.75)
 
 ## Table S4: remove complete meta-analyses whose pooled effect is not significant.
 significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
   filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
 table_s4 <- make_power_table(base_half %>% filter(cID %in% significant_meta))
 
-## Table S9: share of meta-analyses with small-study effects by subfield.
+## Table S8: share of meta-analyses with small-study effects by subfield.
 small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
-table_s9_meta <- base_half %>%
+table_s8_meta <- base_half %>%
   dplyr::select(-any_of(c("small_study_effect_pval", "sse_yn"))) %>%
   left_join(small_study_effects, by = "cID") %>%
   group_by(cID) %>% summarise(
@@ -884,7 +892,7 @@ table_s9_meta <- base_half %>%
     small_study_effect = first(small_study_effect_pval) <= .05,
     .groups = "drop"
   )
-table_s9_detail <- table_s9_meta %>%
+table_s8_detail <- table_s8_meta %>%
   group_by(Subfield) %>%
   summarise(
     `No. of meta-analyses` = n_distinct(cID),
@@ -894,13 +902,13 @@ table_s9_detail <- table_s9_meta %>%
   mutate(Subfield = factor(Subfield, subfield_levels)) %>%
   arrange(Subfield) %>%
   mutate(Subfield = as.character(Subfield))
-table_s9 <- bind_rows(
+table_s8 <- bind_rows(
   tibble(
     Subfield = "All meta-analyses",
-    `No. of meta-analyses` = n_distinct(table_s9_meta$cID),
-    `Small-study effects (%)` = 100 * mean(table_s9_meta$small_study_effect, na.rm = TRUE)
+    `No. of meta-analyses` = n_distinct(table_s8_meta$cID),
+    `Small-study effects (%)` = 100 * mean(table_s8_meta$small_study_effect, na.rm = TRUE)
   ),
-  table_s9_detail
+  table_s8_detail
 ) %>%
   mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
 
@@ -908,7 +916,7 @@ table_s9 <- bind_rows(
 ## and four degrees of genuine heterogeneity. Unlike Table 2, omit all p-value
 ## interval rows and retain only ESR_0.05^sig and the two sample-size rows.
 subfield_esr_path <- here(
-  "data", "derived_data", "Table_S6_subfield_inputs.rds"
+  "data", "derived_data", "Table_S1_subfield_inputs.rds"
 )
 if (!file.exists(subfield_esr_path)) {
   stop("Subfield ESR inputs are unavailable. Run create_tables_and_figures.R first.")
@@ -983,142 +991,63 @@ names(table_s1_columns) <- c(
   "75%"
 )
 
-## Regression table formatting for Tables S6-S8. The negative-binomial fits
-## consumed by Tables S7-S8 are created in run_exploratory_regressions.R.
-significance_stars <- function(p_value) {
-  ifelse(p_value < .01, "***", ifelse(p_value < .05, "**",
-    ifelse(p_value < .10, "*", "")))
-}
-regression_labels <- c(
-  "Intercept" = "(Intercept)",
-  "Median power" = "med_perc",
-  "Experimental research design? (yes)" = "design_mergedyes",
-  "Followed reporting guidelines? (yes)" = "guidyes",
-  "Protocol registered? (yes)" = "preryes",
-  "Log number of independent studies" = "lognps",
-  "Log journal impact factor" = "logjif",
-  "Publication year" = "pyear"
+## Table S6: compare two simulated counterfactual distributions directly.
+## Use identical effects and article clusters for both multipliers. cf.ci.cluster
+## seeds draws by iteration ID, so matched rows are paired article bootstraps.
+comparison_results <- map_dfr(
+  sort(unique(analysis_setups$heterogeneity_multiplier)),
+  function(heterogeneity) {
+    common_data <- filter_counterfactual_data(
+      base_half, heterogeneity, context = "Table S6 counterfactual comparison"
+    )
+    scenarios <- lapply(c(0.5, 1), function(multiplier) {
+      dat <- common_data %>% mutate(GE = multiplier * GE)
+      split_data <- split(dat, dat$cID)
+      clusters <- counterfactual_meta_clusters(split_data)
+      suffix <- paste(
+        make_setup_label(multiplier, heterogeneity),
+        "multilevel_random", "outliers_removed", sep = "_"
+      )
+      grid <- counterfactual_p_grid()
+      list(
+        counts = get_counterfactual(
+          file.path(derived_data_dir, paste0("p_tab_", suffix, ".rds")),
+          split_data, grid, heterogeneity_multiplier = heterogeneity
+        ),
+        draws = get_counterfactual(
+          file.path(derived_data_dir, paste0("p_tab_ci_", suffix, ".rds")),
+          split_data, grid, ci = TRUE, cluster = clusters,
+          heterogeneity_multiplier = heterogeneity
+        )[[1]]
+      )
+    })
+    compare_counterfactual_bins(
+      scenarios[[1]]$counts, scenarios[[2]]$counts, nrow(common_data),
+      scenarios[[1]]$draws, scenarios[[2]]$draws
+    ) %>% mutate(
+      heterogeneity_multiplier = heterogeneity,
+      n_meta_analyses = n_distinct(common_data$cID),
+      n_effects = nrow(common_data), .before = 1
+    )
+  }
 )
-format_model_table <- function(fit, include_adjusted_r2 = FALSE) {
-  ## Force the fitted-model bundle before doing any validation. In particular,
-  ## this makes the function safe to step through with debug()/debugonce()
-  ## without repeatedly restarting evaluation of the lazy `fit` promise.
-  models <- fit[["models"]]
-  robust_tables <- fit[["robust"]]
-  labels <- c(regression_labels,
-    setNames(paste0("subf", subfield_levels[-1]), subfield_levels[-1]))
-  if (length(models) != 4 || length(robust_tables) != 4) {
-    stop("Expected four fitted models and four robust coefficient tables.")
-  }
-  format_coefficient <- function(coefficient_table, term) {
-    coefficient_table <- as.matrix(coefficient_table)
-    if (is.null(rownames(coefficient_table)) ||
-        !term %in% rownames(coefficient_table)) {
-      return("")
-    }
-    if (ncol(coefficient_table) < 4) {
-      stop("Robust coefficient tables must contain estimate, SE, statistic, and p-value columns.")
-    }
-    estimate <- unname(coefficient_table[term, 1])
-    standard_error <- unname(coefficient_table[term, 2])
-    p_value <- unname(coefficient_table[term, 4])
-    sprintf(
-      "%.3f%s (%.3f)", estimate, significance_stars(p_value), standard_error
-    )
-  }
-  result <- tibble(Variable = names(labels))
-  column_names <- paste0(
-    rep(c("0%", "50%"), each = 2), " genuine heterogeneity: Model ",
-    rep(1:2, 2), " Estimate (SE)"
-  )
-  for (i in seq_len(4)) {
-    result[[column_names[[i]]]] <- vapply(
-      unname(labels),
-      function(term) format_coefficient(robust_tables[[i]], term),
-      character(1),
-      USE.NAMES = FALSE
-    )
-  }
-  statistic <- if (include_adjusted_r2) "Adjusted R-squared" else "AIC"
-  summary_rows <- tibble(Variable = c(
-    "Effect size type", statistic, "No. of meta-analyses"
-  ))
-  for (i in seq_len(4)) {
-    fit_statistic <- if (include_adjusted_r2) {
-      summary(models[[i]])$adj.r.squared
-    } else {
-      stats::AIC(models[[i]])
-    }
-    summary_rows[[column_names[[i]]]] <- c(
-      "Yes", sprintf("%.3f", fit_statistic), stats::nobs(models[[i]])
-    )
-  }
-  bind_rows(result, summary_rows)
-}
-table_s6 <- format_model_table(nb_sensitivity_quarter)
-table_s7 <- format_model_table(nb_sensitivity_full)
-
-ols_formula <- esr_winsor ~ med_perc + design_merged + guid + prer + lognps + logjif + pyear + metric
-ols_fits <- map(c(0, .5), function(heterogeneity_multiplier) {
-  ols_data <- build_regression_data(.5, heterogeneity_multiplier) %>%
-    mutate(esr_winsor = pmin(
-      pmax(esr.sig, quantile(esr.sig, .05)), quantile(esr.sig, .95)
-    ))
-  models <- list(
-    lm(ols_formula, ols_data),
-    lm(update(ols_formula, . ~ . + subf), ols_data)
-  )
-  list(models = models, robust = map(models,
-    ~ lmtest::coeftest(.x, vcov. = sandwich::vcovCL(.x, cluster = ols_data$metaID))))
-})
-ols_fit <- list(
-  models = flatten(map(ols_fits, "models")),
-  robust = flatten(map(ols_fits, "robust"))
+write.csv(
+  comparison_results,
+  file.path(derived_data_dir, "counterfactual_comparison_0p5_vs_1.csv"),
+  row.names = FALSE
 )
-table_s5 <- format_model_table(ols_fit, TRUE)
+table_s6 <- comparison_results %>% transmute(
+  `Genuine heterogeneity` = paste0(100 * heterogeneity_multiplier, "%"),
+  `p-value interval` = p_value_interval,
+  `0.5 x meta-average` = sprintf("%.3f", probability_0p5),
+  `1 x meta-average` = sprintf("%.3f", probability_1),
+  `Difference [95% CI]` = sprintf("%.3f [%.3f, %.3f]", difference, ci_lower, ci_upper)
+)
 
-## Figures S5-S8: separate continuous and categorical diagnostics for the two
-## 50% genuine-heterogeneity negative-binomial specifications, matching the
-## requested four-figure layout.
-save_diagnostic_group <- function(model, model_number, kind, figure_number) {
-  diagnostic_subfield_levels <- c(
-    "Health, Toxicology and Mutagenesis", "Ecology",
-    "Environmental Chemistry", "Environmental Engineering",
-    "Management, Monitoring, Policy and Law",
-    "Nature and Landscape Conservation", "Water Science and Technology"
-  )
-  dat <- final_nb_heterogeneity_0p5 %>%
-    mutate(
-      residual = residuals(model),
-      fitted_value = fitted(model),
-      subf = factor(subf, levels = diagnostic_subfield_levels, labels = 0:6)
-    )
-  vars <- if (kind == "continuous") c("fitted_value", "med_perc", "lognps", "logjif", "pyear") else c("design_merged", "guid", "prer", "subf")
-  diagnostic_labels <- c(
-    "fitted_value" = "Fitted value",
-    setNames(
-      sub(" \\(yes\\)$", "", names(regression_labels)),
-      sub("yes$", "", unname(regression_labels))
-    ),
-    "subf" = "Subfield"
-  )
-  plots <- map(vars, function(v) {
-    if (is.numeric(dat[[v]])) ggplot(dat, aes(.data[[v]], residual)) + geom_point(colour = "skyblue3", shape = 1) + geom_hline(yintercept = 0, colour = "red") + labs(x = diagnostic_labels[[v]]) + supplement_figure_theme()
-    else ggplot(dat, aes(.data[[v]], residual)) + geom_boxplot() + geom_hline(yintercept = 0, colour = "red") + labs(x = diagnostic_labels[[v]]) + supplement_figure_theme()
-  })
-  grob <- arrangeGrob(grobs = plots, ncol = 2)
-  save_supplement_plot(file.path(supplement_dir, paste0("Figure_S", figure_number)),
-    11, ifelse(kind == "continuous", 10, 7), function() grid::grid.draw(grob))
-}
-save_diagnostic_group(nbMod3, 1, "continuous", 5)
-save_diagnostic_group(nbMod3, 1, "categorical", 6)
-save_diagnostic_group(nbMod4, 2, "continuous", 7)
-save_diagnostic_group(nbMod4, 2, "categorical", 8)
-
-## Table S8 is descriptive and therefore uses all observations rather than an
+## Table S7 is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
-table_s8_all_data <- load_multilevel_all_data()
-table_s8 <- table_s8_all_data %>% distinct(cID, etype, subfd) %>%
+table_s7_all_data <- load_multilevel_all_data()
+table_s7 <- table_s7_all_data %>% distinct(cID, etype, subfd) %>%
   mutate(
     etype = dplyr::recode(
       etype,
@@ -1151,8 +1080,17 @@ write_subfield_esr_table(table_s1_columns, number = 1)
 write_word_table(table_s2, 2)
 write_word_table(table_s3, 3)
 write_word_table(table_s4, 4)
-write_word_table(table_s5, 5)
-write_word_table(table_s6, 6)
+write_word_table(table_s5, 5,
+  title = "Table S5. Statistical power at 0.75 x the meta-average")
+write_word_table(
+  table_s6, 6,
+  title = "Table S6. Simulated counterfactual p-value distributions",
+  note = paste(
+    "Multilevel random-effects estimates, outliers removed. Entries are probabilities.",
+    "Difference = probability at 0.5 x meta-average minus probability at 1 x meta-average.",
+    "For each heterogeneity assumption, both distributions use the same effects",
+    "and paired article-cluster bootstrap draws for the 95% confidence interval."
+  )
+)
 write_word_table(table_s7, 7)
 write_word_table(table_s8, 8)
-write_word_table(table_s9, 9)

@@ -38,8 +38,7 @@ source("scripts/main.R")
 2. fits fixed-effects, PET-PEESE and multilevel random-effects estimates when their derived
    RDS inputs are missing;
 3. creates setup-specific analysis data and counterfactual simulations;
-4. runs the regression analyses;
-5. writes the main and supplementary tables and figures.
+4. writes the main and supplementary tables and figures.
 
 The supplied meta-estimate RDS files make refitting optional. To rerun that
 long stage, set `run_meta_analysis_fitting <- TRUE`; completed meta-analyses are
@@ -67,7 +66,6 @@ order:
 source("scripts/classification.R")                    # optional
 source("scripts/compute_meta_estimates.R")            # model fitting
 source("scripts/create_analysis_data.R")              # derived analysis data
-source("scripts/run_exploratory_regressions.R")       # regression models
 source("scripts/create_tables_and_figures.R")         # main outputs
 source("scripts/create_supplement_tables_and_figures.R") # supplement
 ```
@@ -84,7 +82,7 @@ Define options before sourcing `scripts/main.R` or
 |---|---:|---|
 | `n_cores` | `6` | Parallel workers. Leave at least one CPU core free. |
 | `n_iterations` | `1000` | Bootstrap iterations for confidence intervals. |
-| `meta_average_multiplier` | `c(0.25, 0.5, 1)` | Multipliers applied to the meta-analytic average in power calculations. |
+| `meta_average_multiplier` | `c(0.25, 0.5, 0.75, 1)` | Multipliers applied to the meta-analytic average in power calculations. |
 | `heterogeneity_multiplier` | `c(0, 0.25, 0.5, 0.75)` | Multipliers applied to between-effect heterogeneity in counterfactual calculations. |
 | `run_classification` | `FALSE` | Recreate the classification CSV files. |
 | `run_meta_analysis_fitting` | `FALSE` | Run model fitting even when estimator inputs exist. |
@@ -127,7 +125,6 @@ scripts/
   classification.R                        optional classification recreation
   compute_meta_estimates.R                fixed-effects, PET-PEESE and random-effects fitting
   create_analysis_data.R                  setup-specific derived data
-  run_exploratory_regressions.R           regression analyses
   create_tables_and_figures.R             main manuscript outputs
   create_supplement_tables_and_figures.R  supplementary outputs
   functions.R                             shared analysis functions
@@ -147,10 +144,57 @@ other derived files are ignored and recreated as needed.
 Main outputs are written to `results/main/` and Supporting Information outputs
 to `results/supplement/`. Tables are produced in editable manuscript formats
 (including DOCX, TeX, or XLSX as applicable), and figures are rendered as
-scalable PDF and SVG files. Generated PDFs are excluded from version control but
-are recreated by the scripts.
+scalable PDF and SVG files. PDF, DOCX and XLSX manuscript outputs are versioned;
+SVG and LaTeX files are ignored by Git and recreated by the scripts.
 
 Setup-specific intermediate filenames contain their multiplier choices, for
 example `meta_0p5_heterogeneity_0p25`. Cache keys include the data, grid,
 settings, bootstrap clusters, and iteration count, so incompatible cached
 counterfactual results are rebuilt automatically.
+
+## Current output numbering
+
+The exploratory negative-binomial/OLS regressions, their input workbooks,
+main Table 4, and their supplementary tables and diagnostic figures have been
+removed. PET-PEESE and Egger small-study-effect tests remain part of the
+meta-analysis methods.
+
+The default analysis evaluates **16 parameter combinations**: meta-average
+multipliers 0.25, 0.5, 0.75 and 1, crossed with four heterogeneity multipliers.
+Figure S4 includes all four meta-average values. Main Tables 1–3 and Figures
+1–2 retain the manuscript's half-meta-average specification.
+
+| Supplement output | Contents |
+|---|---|
+| Table S1 | Excess significance by subfield |
+| Tables S2, S3, S5 | Power summaries at meta-average multipliers 0.25, 1, 0.75 |
+| Table S4 | Power after excluding non-significant meta-analyses |
+| Table S6 | Counterfactual p-value distributions at multipliers 0.5 versus 1 |
+| Table S7 | Effect-size measures by subfield |
+| Table S8 | Small-study effects by subfield |
+| Figures S1–S4 | Heterogeneity, 0.25/full counterfactual sensitivities, and ESR comparisons |
+| Figure S5 | Counterfactual sensitivity at meta-average multiplier 0.75 |
+
+Table S6 includes every one of Table 2's 13 p-value bins for each configured
+heterogeneity assumption. It reports both simulated probabilities and the
+**0.5-minus-1 probability difference**, with a 95% article-cluster bootstrap
+interval. Both counterfactuals use the same valid effects and matched bootstrap
+draws; intervals are calculated from paired differences, not from differences
+between interval endpoints. Entries are proportions, not percentages or
+comparisons with the observed distribution. Full-precision probabilities,
+differences, intervals and sample sizes are saved to
+`data/derived_data/counterfactual_comparison_0p5_vs_1.csv`.
+
+Tables are written as DOCX and LaTeX, and figures as PDF and SVG. Use 1,000
+bootstrap iterations for final manuscript outputs. A quick numerical check is:
+
+```sh
+Rscript tests/test_counterfactual_comparison.R
+```
+
+`tests/test_bootstrap_parallel.R` checks that sequential, parallel and batched
+execution preserve the same bootstrap draws. After a default analysis run,
+`tests/test_analysis_outputs.R` checks the 16-setup output inventory and verifies
+Table S6's intervals against the paired counterfactual caches.
+This output check defaults to 1,000 iterations; pass an exploratory run's
+iteration count as its first argument when checking a smaller run.

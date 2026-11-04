@@ -4,8 +4,6 @@
 library(metafor); library(clubSandwich)
 library(tidyverse); library(xtable)
 library(foreach); library(doParallel); library(readxl); library(openxlsx)
-library(MASS); library(car); library(lmtest); library(sandwich)
-library(stargazer)
 library(gridExtra); library(ggeasy)
 library(orchaRd)
 library(scales); library(here)
@@ -63,7 +61,7 @@ if (length(n_iterations) != 1L || is.na(n_iterations) ||
 }
 n_iterations <- as.integer(n_iterations)
 if (!exists("meta_average_multiplier")) {
-  meta_average_multiplier <- c(0.25, 0.5, 1)
+  meta_average_multiplier <- c(0.25, 0.5, 0.75, 1)
 }
 if (!exists("heterogeneity_multiplier")) {
   heterogeneity_multiplier <- c(0, 0.25, 0.5, 0.75)

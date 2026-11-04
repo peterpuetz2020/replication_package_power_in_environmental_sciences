@@ -202,23 +202,7 @@ split_meta_analyses <- function(dat, add_sape = FALSE) {
 
 make_grids <- function() {
   list(
-    p_grid_tab = c(
-      -Inf,
-      qnorm(0.001 / 2, lower.tail = TRUE), qnorm(0.01 / 2, lower.tail = TRUE),
-      qnorm(0.05 / 2, lower.tail = TRUE), qnorm(0.1 / 2, lower.tail = TRUE),
-      qnorm(0.2 / 2, lower.tail = TRUE), qnorm(0.3 / 2, lower.tail = TRUE),
-      qnorm(0.4 / 2, lower.tail = TRUE), qnorm(0.5 / 2, lower.tail = TRUE),
-      qnorm(0.6 / 2, lower.tail = TRUE), qnorm(0.7 / 2, lower.tail = TRUE),
-      qnorm(0.8 / 2, lower.tail = TRUE), qnorm(0.9 / 2, lower.tail = TRUE),
-      0,
-      qnorm(0.9 / 2, lower.tail = FALSE), qnorm(0.8 / 2, lower.tail = FALSE),
-      qnorm(0.7 / 2, lower.tail = FALSE), qnorm(0.6 / 2, lower.tail = FALSE),
-      qnorm(0.5 / 2, lower.tail = FALSE), qnorm(0.4 / 2, lower.tail = FALSE),
-      qnorm(0.3 / 2, lower.tail = FALSE), qnorm(0.2 / 2, lower.tail = FALSE),
-      qnorm(0.1 / 2, lower.tail = FALSE), qnorm(0.05 / 2, lower.tail = FALSE),
-      qnorm(0.01 / 2, lower.tail = FALSE), qnorm(0.001 / 2, lower.tail = FALSE),
-      Inf
-    ),
+    p_grid_tab = counterfactual_p_grid(),
     p_grid_tab2 = c(
       0,
       qnorm(0.9 / 2, lower.tail = FALSE), qnorm(0.8 / 2, lower.tail = FALSE),
@@ -247,7 +231,7 @@ cf_ci_with_progress <- function(dat, grid, cluster, heterogeneity_multiplier, la
   )
   iteration_batches <- split(
     seq_len(n_iterations),
-    ceiling(seq_len(n_iterations) / max(1, n_cores))
+    ceiling(seq_len(n_iterations) / (50L * max(1, n_cores)))
   )
   progress_bar <- new_progress_bar(
     n_iterations,
@@ -538,7 +522,7 @@ calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
     p.table <- rbind(p.table, c(point, paste("[", q[1], ", ", q[2], "]", sep = "")))
   }
   p.table <- rbind(p.table, c(length(myDat), 0), c(N, 0))
-  rownames(p.table) <- c("0.9 < p", "0.8 < p < 0.9", "0.7 < p < 0.8", "0.6 < p < 0.7", "0.5 < p < 0.6", "0.4 < p < 0.5", "0.3 < p < 0.4", "0.2 < p < 0.3", "0.1 < p < 0.2", "0.05 < p < 0.1", "0.01 < p < 0.05", "0.001 < p < 0.01", "p < 0.001", "ESR_{0.1}^{all}", "ESR_{0.05}^{all}", "ESR_{0.1}^{sig}", "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests")
+  rownames(p.table) <- c(p_value_bin_labels(), "ESR_{0.1}^{all}", "ESR_{0.05}^{all}", "ESR_{0.1}^{sig}", "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests")
   summary_rows <- c("ESR_{0.05}^{all}", "ESR_{0.05}^{sig}", "No. of meta-analysis", "No. of tests")
   list(
     detailed = as.data.frame(p.table) %>% rownames_to_column("measure"),
@@ -604,7 +588,7 @@ saveRDS(
 )
 
 ## Calculate only the subfield counterfactuals needed for supplementary Table
-## S6: half the meta-average, the four heterogeneity specifications, and the
+## S1: half the meta-average, the four heterogeneity specifications, and the
 ## primary multilevel random-effects estimator. These use distinct cache names,
 ## so no full-sample counterfactual can be reused.
 subfield_levels <- c(
@@ -630,7 +614,7 @@ subfield_esr_results <- map2_dfr(
 )
 saveRDS(
   subfield_esr_results,
-  here("data", "derived_data", "Table_S6_subfield_inputs.rds")
+  here("data", "derived_data", "Table_S1_subfield_inputs.rds")
 )
 table_2_indices <- table_2_parameters %>%
   mutate(result_index = row_number()) %>%
@@ -696,87 +680,6 @@ analysis_setups %>%
   filter(setup_label == "meta_0p5_heterogeneity_0") %>%
   mutate(estimator = "multilevel_random") %>%
   pwalk(write_table_3)
-
-## -------------------------------
-## Table 4
-## -------------------------------
-## run_exploratory_regressions.R creates these model and robust-inference
-## objects. Keeping presentation here makes the numbering and output conventions
-## consistent with the other manuscript tables.
-required_nb_objects <- c(
-  "nbMod1", "nbMod2", "nbMod3", "nbMod4",
-  "nbMod1.robu", "nbMod2.robu", "nbMod3.robu", "nbMod4.robu"
-)
-if (!all(vapply(required_nb_objects, exists, logical(1), inherits = TRUE))) {
-  stop("Run scripts/run_exploratory_regressions.R before creating Table 4.")
-}
-
-significance_stars <- function(p_value) {
-  ifelse(p_value < 0.01, "***", ifelse(p_value < 0.05, "**",
-    ifelse(p_value < 0.1, "*", "")))
-}
-
-format_nb_term <- function(robust_result, term) {
-  if (is.na(term) || !term %in% rownames(robust_result)) return("")
-  sprintf(
-    "%.3f%s (%.3f)", robust_result[term, 1],
-    significance_stars(robust_result[term, 4]), robust_result[term, 2]
-  )
-}
-
-table_4_terms <- tibble::tribble(
-  ~Variable, ~term_model_1, ~term_model_2,
-  "Intercept", "(Intercept)", "(Intercept)",
-  "Median power", "med_perc", "med_perc",
-  "Experimental research design? (yes)", "design_mergedyes", "design_mergedyes",
-  "Followed reporting guidelines? (yes)", "guidyes", "guidyes",
-  "Protocol registered? (yes)", "preryes", "preryes",
-  "Log number of independent studies", "lognps", "lognps",
-  "Log journal impact factor", "logjif", "logjif",
-  "Publication year", "pyear", "pyear",
-  "Environmental Chemistry", NA_character_, "subfEnvironmental Chemistry",
-  "Environmental Engineering", NA_character_, "subfEnvironmental Engineering",
-  "Health, Toxicology and Mutagenesis", NA_character_, "subfHealth, Toxicology and Mutagenesis",
-  "Management, Monitoring, Policy and Law", NA_character_, "subfManagement, Monitoring, Policy and Law",
-  "Nature and Landscape Conservation", NA_character_, "subfNature and Landscape Conservation",
-  "Water Science and Technology", NA_character_, "subfWater Science and Technology"
-) %>%
-  dplyr::mutate(
-    `0% genuine heterogeneity: Model 1 Estimate (SE)` = vapply(term_model_1, format_nb_term, character(1),
-      robust_result = nbMod1.robu),
-    `0% genuine heterogeneity: Model 2 Estimate (SE)` = vapply(term_model_2, format_nb_term, character(1),
-      robust_result = nbMod2.robu),
-    `50% genuine heterogeneity: Model 1 Estimate (SE)` = vapply(term_model_1, format_nb_term, character(1),
-      robust_result = nbMod3.robu),
-    `50% genuine heterogeneity: Model 2 Estimate (SE)` = vapply(term_model_2, format_nb_term, character(1),
-      robust_result = nbMod4.robu)
-  ) %>%
-  dplyr::select(-term_model_1, -term_model_2) %>%
-  dplyr::bind_rows(tibble::tibble(
-    Variable = c("Effect size type", "AIC", "No. of meta-analyses"),
-    `0% genuine heterogeneity: Model 1 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod1)), nobs(nbMod1)),
-    `0% genuine heterogeneity: Model 2 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod2)), nobs(nbMod2)),
-    `50% genuine heterogeneity: Model 1 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod3)), nobs(nbMod3)),
-    `50% genuine heterogeneity: Model 2 Estimate (SE)` = c("Yes", sprintf("%.1f", AIC(nbMod4)), nobs(nbMod4))
-  ))
-
-table_4_document <- officer::read_docx()
-table_4_document <- officer::body_add_par(
-  table_4_document,
-  "Table 4. Negative binomial regression of excess significant results",
-  style = "heading 1"
-)
-table_4_document <- officer::body_add_table(
-  table_4_document, table_4_terms, style = NULL, header = TRUE,
-  alignment = c("left", rep("center", 4)), align_table = "center"
-)
-table_4_document <- officer::body_add_par(
-  table_4_document,
-  "Note. The meta-average multiplier is 0.5. Cluster-robust standard errors in parentheses. * p < .10; ** p < .05; *** p < .01. Ecology is the reference subfield.",
-  style = NULL
-)
-print(table_4_document, target = here("results", "main", "Table_4.docx"))
-write_latex_table(table_4_terms, here("results", "main", "Table_4.tex"))
 
 ## -------------------------------
 ## Figure 2
