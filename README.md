@@ -210,7 +210,9 @@ iteration count as its first argument when checking a smaller run.
 
 Run `Rscript scripts/discontinuity_tests.R` to test the observed distribution
 near two-sided p = 0.05 using calipers and the Kranz–Pütz (2022) rounding-omission
-method. The script reads reported `yi`/`sei` precision from the workbook entries,
-reports article-clustered inference, and writes separate diagnostics under
+method. The script reads reported `yi`/`vi` precision from the workbook entries,
+propagates variance rounding through `sqrt(vi)`, and applies an explicitly
+labelled variance-based extension of the omission rule. It reports
+article-clustered inference and writes separate diagnostics under
 `results/discontinuity_tests/`. It is independent of `scripts/main.R`.
 See [the method, precision conventions and input options](docs/discontinuity_tests.md).

@@ -22,7 +22,7 @@ stopifnot(caliper_test(10, "a", c, .1)$n_window == 0,
 ## Trailing zeros are real reporting information, not floating-point digits.
 d <- data.frame(yi = c(.08, .08, .074, .072), sei = c(.04, .04, .037, .036),
                 metaID = c("a", "b", "c", "d"), md = c(2, 3, 3, 3), sd = c(2, 3, 3, 3))
-prepared <- prepare_discontinuity_data(d, subgroup_col = NULL,
+prepared <- prepare_discontinuity_data(d, subgroup_col = NULL, precision_basis = "se",
   estimate_digits_col = "md", se_digits_col = "sd")
 stopifnot(identical(prepared$se_significand, c(4, 40, 37, 36)),
           identical(prepared$kp_keep_reported, c(FALSE, TRUE, TRUE, FALSE)),
@@ -30,18 +30,49 @@ stopifnot(identical(prepared$se_significand, c(4, 40, 37, 36)),
           prepared$rounding_z_lower[4] < c,
           abs(prepared$rounding_z_lower[2] - .0795 / .0405) < 1e-12,
           abs(prepared$rounding_z_upper[2] - .0805 / .0395) < 1e-12)
-unknown <- prepare_discontinuity_data(d, subgroup_col = NULL)
+unknown <- prepare_discontinuity_data(d, subgroup_col = NULL, precision_basis = "se")
 stopifnot(!any(unknown$kp_keep_reported),
           !unknown$kp_keep_sensitivity[2],
           identical(inferred_decimal_places(c(.012, .04, 100, 1310)), c(3, 2, 0, 0)))
 bad <- d; bad$md[1] <- 1
-stopifnot(inherits(try(prepare_discontinuity_data(bad, subgroup_col = NULL,
+stopifnot(inherits(try(prepare_discontinuity_data(bad, subgroup_col = NULL, precision_basis = "se",
   estimate_digits_col = "md", se_digits_col = "sd"), silent = TRUE), "try-error"))
 bad <- d; bad$sei[1] <- 1e-16
-stopifnot(inherits(try(prepare_discontinuity_data(bad, subgroup_col = NULL,
+stopifnot(inherits(try(prepare_discontinuity_data(bad, subgroup_col = NULL, precision_basis = "se",
   estimate_digits_col = "md", se_digits_col = "sd"), silent = TRUE), "try-error"))
 bad <- d; bad$sei[1:2] <- c(0, NA)
+stopifnot(sum(!prepare_discontinuity_data(bad, subgroup_col = NULL, precision_basis = "se")$valid) == 2)
+
+## Reported variance precision propagates through sqrt, without assigning the
+## variance's decimal count to the computed SE or trusting digits in sei.
+vdata <- data.frame(yi = c(.4, .4, .084, .088), vi = c(.04, .04, .0018, .0019),
+  sei = 999, metaID = 1:4, md = c(1, 3, 3, 3), vd = c(2, 4, 4, 4))
+vprepared <- prepare_discontinuity_data(vdata, subgroup_col = NULL,
+  estimate_digits_col = "md", variance_digits_col = "vd")
+stopifnot(identical(vprepared$variance_significand, c(4, 400, 18, 19)),
+  identical(vprepared$kp_keep_reported, c(FALSE, TRUE, FALSE, TRUE)),
+  identical(vprepared$standard_error, sqrt(vdata$vi)),
+  all(is.na(vprepared$se_decimals)), all(is.na(vprepared$se_significand)),
+  all(vprepared$precision_source == "reported_variance_precision"),
+  abs(vprepared$rounding_se_lower[1] - sqrt(.035)) < 1e-14,
+  abs(vprepared$rounding_se_upper[1] - sqrt(.045)) < 1e-14,
+  abs(vprepared$rounding_z_lower[1] - .35/sqrt(.045)) < 1e-14,
+  abs(vprepared$rounding_z_upper[1] - .45/sqrt(.035)) < 1e-14,
+  abs(vprepared$equivalent_se_precision_score[1] - .2/(2*(.2-sqrt(.035)))) < 1e-12)
+# Verify the computed z bounds enclose an independently enumerated rounding grid.
+grid <- expand.grid(mu = seq(.35, .45, length.out = 51),
+                    variance = seq(.035, .045, length.out = 51))
+ratios <- abs(grid$mu)/sqrt(grid$variance)
+stopifnot(abs(min(ratios) - vprepared$rounding_z_lower[1]) < 1e-14,
+          abs(max(ratios) - vprepared$rounding_z_upper[1]) < 1e-14)
+precise <- variance_precision_bounds(.04, 18)
+stopifnot(is.finite(precise$equivalent_se_precision_score),
+          abs(precise$equivalent_se_precision_score/8e16 - 1) < 1e-14)
+bad <- vdata; bad$vi[1:2] <- c(0, NA)
 stopifnot(sum(!prepare_discontinuity_data(bad, subgroup_col = NULL)$valid) == 2)
+bad <- vdata; bad$vd[3] <- 3
+stopifnot(inherits(try(prepare_discontinuity_data(bad, subgroup_col = NULL,
+  variance_digits_col = "vd"), silent = TRUE), "try-error"))
 
 ## t statistics need their df; normal calibration must reproduce the same p.
 tdata <- data.frame(t_value = qt(.975, c(5, 10, 100)), df = c(5, 10, 100), metaID = 1:3)
@@ -70,7 +101,7 @@ stopifnot(detected$share_above == .8, detected$cluster_p_greater < .001)
 folder <- tempfile("discontinuity-output-")
 res <- run_discontinuity_tests(d, output_dir = folder, half_widths = c(.1, .2),
   audit_dir = file.path(folder, "audit"),
-  subgroup_col = NULL, estimate_digits_col = "md", se_digits_col = "sd")
+  subgroup_col = NULL, estimate_digits_col = "md", se_digits_col = "sd", precision_basis = "se")
 stopifnot(nrow(res$tests) == 4L,
           all(file.exists(file.path(folder, c("caliper_tests.csv", "precision_coverage.csv",
                                              "rounding_risks.csv", "METHODS.txt")))))
@@ -93,9 +124,27 @@ stopifnot(identical(entries$sei$decimals, c(4, 3)),
           entries$sei$source[2] == "excel_fixed_decimal_format")
 folder <- tempfile("xlsx-discontinuity-")
 xlsx <- run_discontinuity_tests(path, output_dir = folder,
-  audit_dir = file.path(folder, "audit"), subgroup_col = NULL, half_widths = .1)
+  audit_dir = file.path(folder, "audit"), subgroup_col = NULL, half_widths = .1, precision_basis = "se")
 stopifnot(all(xlsx$audit$kp_keep_reported),
           identical(xlsx$audit$reported_se_entry, c("0.0400", "0.040")),
           identical(xlsx$audit$se_significand, c(400, 40)))
 unlink(c(path, folder), recursive = TRUE)
-cat("PASS: exact counts, clustered dependence, rounding omission/bounds, t calibration and planted jump\n")
+
+## Default workbook mode must use reported vi zeros and ignore the sei column.
+wb <- openxlsx::createWorkbook()
+openxlsx::addWorksheet(wb, "Reported variances")
+openxlsx::writeData(wb, 1, data.frame(yi = c("0.4000", "0.4000"),
+  vi = c("0.04", "0.0400"), sei = c(999, 999), metaID = 1:2))
+path <- tempfile(fileext = ".xlsx")
+folder <- tempfile("variance-xlsx-")
+openxlsx::saveWorkbook(wb, path)
+vres <- run_discontinuity_tests(path, output_dir = folder,
+  audit_dir = file.path(folder, "audit"), subgroup_col = NULL, half_widths = .1)
+stopifnot(identical(vres$audit$variance_decimals, c(2, 4)),
+          identical(vres$audit$reported_variance_entry, c("0.04", "0.0400")),
+          identical(vres$audit$kp_keep_reported, c(FALSE, TRUE)),
+          identical(vres$audit$standard_error, c(.2, .2)),
+          all(vres$audit$stored_workbook_se == 999),
+          identical(vres$tests$method, c("unadjusted", "kp_reported_variance_precision")))
+unlink(c(path, folder), recursive = TRUE)
+cat("PASS: binomial/clustered inference, SE and variance precision, exact transformed bounds, t calibration and planted jump\n")

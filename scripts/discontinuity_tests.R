@@ -1,8 +1,8 @@
 ## Standalone empirical p = 0.05 diagnostics; not sourced by main.R.
 ## Kranz & Puetz (2022), AER 112(9):3124-3136, doi:10.1257/aer.20210121.
-## Implements their primary omission rule: retain coefficient/SE reports with
-## reported-SE significand >= 37. Reporting precision must not be confused with
-## floating-point precision in a workbook of transformed effect sizes.
+## Default: propagate reported vi precision through sqrt(vi), then apply a
+## variance-based extension of their SE-significand >= 37 omission rule.
+## precision_basis = "se" retains the original rule for directly reported SEs.
 ## Author replication: peterpuetz2020/replication_repo_methods_matter_comment,
 ## commit 7220ff41dcf6b9c7648171c6d864c7871669841e, make_new_data.R / deround_bch.R.
 
@@ -150,22 +150,49 @@ equivalent_z <- function(statistic, df = NULL) {
         lower.tail = FALSE, log.p = TRUE)
 }
 
+## A variance reported to d decimals represents v +/- 0.5 * 10^(-d).
+## Propagate that interval exactly, rather than treating the digits of sqrt(v)
+## as reported SE precision. Rationalized differences avoid cancellation when
+## the variance is very precisely reported. The equivalent symmetric SE step
+## is twice the larger one-sided SE uncertainty; its precision score generalizes
+## SE / reported_SE_step but is NOT a reported integer SE significand.
+variance_precision_bounds <- function(variance, decimals) {
+  step <- 10^(-decimals)
+  se <- suppressWarnings(sqrt(variance))
+  variance_lower <- pmax(0, variance - .5 * step)
+  variance_upper <- variance + .5 * step
+  se_lower <- suppressWarnings(sqrt(variance_lower))
+  se_upper <- suppressWarnings(sqrt(variance_upper))
+  lower_error <- ifelse(variance_lower > 0, .5 * step / (se + se_lower), se)
+  upper_error <- .5 * step / (se_upper + se)
+  equivalent_step <- 2 * pmax(lower_error, upper_error)
+  data.frame(variance_lower = variance_lower, variance_upper = variance_upper,
+    se_lower = se_lower, se_upper = se_upper,
+    equivalent_se_step = equivalent_step,
+    equivalent_se_precision_score = se / equivalent_step)
+}
+
 prepare_discontinuity_data <- function(data, estimate_col = "yi", se_col = "sei",
                                        variance_col = "vi", statistic_col = NULL,
                                        df_col = NULL, cluster_col = "metaID",
                                        subgroup_col = "subfield",
-                                       estimate_digits_col = NULL, se_digits_col = NULL) {
+                                       estimate_digits_col = NULL, se_digits_col = NULL,
+                                       variance_digits_col = NULL,
+                                       precision_basis = c("variance", "se")) {
+  precision_basis <- match.arg(precision_basis)
   n <- nrow(data)
   if (!n) stop("Input data are empty.")
   pair <- is.null(statistic_col)
+  variance_based <- pair && precision_basis == "variance"
   estimate <- if (pair) numeric_column(data, estimate_col) else rep(NA_real_, n)
-  if (pair && !is.null(se_col)) {
-    se <- numeric_column(data, se_col)
-    se_source <- paste0("column:", se_col)
-  } else if (pair) {
+  variance <- rep(NA_real_, n)
+  if (variance_based || (pair && is.null(se_col))) {
     variance <- numeric_column(data, variance_col)
     se <- suppressWarnings(sqrt(variance))
     se_source <- paste0("derived_sqrt:", variance_col)
+  } else if (pair) {
+    se <- numeric_column(data, se_col)
+    se_source <- paste0("column:", se_col)
   } else {
     se <- rep(NA_real_, n)
     se_source <- "not_applicable_direct_statistic"
@@ -178,6 +205,10 @@ prepare_discontinuity_data <- function(data, estimate_col = "yi", se_col = "sei"
     bad <- !is.finite(se) | se <= 0
     reason[bad] <- "nonpositive_or_nonfinite_se"
     valid <- valid & !bad & is.finite(estimate)
+    if (variance_based) {
+      bad_variance <- !is.finite(variance) | variance <= 0
+      reason[bad_variance] <- "nonpositive_or_nonfinite_variance"
+    }
   }
   if (!is.null(df)) {
     bad <- !is.finite(df) | df <= 0
@@ -192,25 +223,34 @@ prepare_discontinuity_data <- function(data, estimate_col = "yi", se_col = "sei"
   cluster <- get_text(cluster_col, NA_character_)
   subgroup <- get_text(subgroup_col, NA_character_)
   md <- if (pair) numeric_column(data, estimate_digits_col) else rep(NA_real_, n)
-  sd <- if (pair) numeric_column(data, se_digits_col) else rep(NA_real_, n)
+  sd <- if (pair && !variance_based) numeric_column(data, se_digits_col) else rep(NA_real_, n)
+  vd <- if (variance_based) numeric_column(data, variance_digits_col) else rep(NA_real_, n)
   if (any(is.finite(estimate) & is.finite(md) & !valid_precision(estimate, md)) ||
-      any(is.finite(se) & is.finite(sd) & !valid_precision(se, sd))) {
-    stop("Supplied reporting precision is inconsistent with the stored estimate/SE.")
+      any(is.finite(se) & is.finite(sd) & !valid_precision(se, sd)) ||
+      any(is.finite(variance) & is.finite(vd) & !valid_precision(variance, vd))) {
+    stop("Supplied reporting precision is inconsistent with the stored estimate/SE/variance.")
   }
-  known <- pair & is.finite(sd)
-  inferred_sd <- inferred_md <- rep(NA_real_, n)
+  known <- pair & is.finite(if (variance_based) vd else sd)
+  inferred_sd <- inferred_md <- inferred_vd <- rep(NA_real_, n)
   if (pair) {
-    inferred_sd[!known] <- inferred_decimal_places(se[!known])
+    if (variance_based) {
+      inferred_vd[!known] <- inferred_decimal_places(variance[!known])
+    } else inferred_sd[!known] <- inferred_decimal_places(se[!known])
     unknown_md <- !is.finite(md)
     inferred_md[unknown_md] <- inferred_decimal_places(estimate[unknown_md])
   }
   use_sd <- ifelse(known, sd, inferred_sd)
+  use_vd <- ifelse(known, vd, inferred_vd)
   use_md <- ifelse(is.finite(md), md, inferred_md)
   significand <- round(se / 10^(-use_sd))
-  ## Bounds for |estimate / SE| under independent half-unit rounding errors.
+  variance_significand <- round(variance / 10^(-use_vd))
+  variance_bounds <- variance_precision_bounds(variance, use_vd)
+  se_lower <- if (variance_based) variance_bounds$se_lower else se - .5 * 10^(-use_sd)
+  se_upper <- if (variance_based) variance_bounds$se_upper else se + .5 * 10^(-use_sd)
+  omission_score <- if (variance_based) variance_bounds$equivalent_se_precision_score else significand
+  ## Bounds for |estimate / SE| using the coefficient's own reported resolution.
   lower <- pmax(0, abs(estimate) - .5 * 10^(-use_md)) /
-    (se + .5 * 10^(-use_sd))
-  se_lower <- se - .5 * 10^(-use_sd)
+    se_upper
   upper <- ifelse(se_lower <= 0, Inf,
                   (abs(estimate) + .5 * 10^(-use_md)) / se_lower)
   z <- equivalent_z(statistic, df)
@@ -220,19 +260,28 @@ prepare_discontinuity_data <- function(data, estimate_col = "yi", se_col = "sei"
   reason[reason == "included" & !valid] <- "nonfinite_equivalent_z"
   data.frame(
     row_id = seq_len(n), estimate = estimate, standard_error = se,
+    variance = variance, variance_decimals = use_vd,
     raw_statistic = statistic, abs_z = z,
     p_two_sided = 2 * pnorm(z, lower.tail = FALSE),
     df = if (is.null(df)) rep(NA_real_, n) else df,
     reference = if (is.null(df)) "standard_normal_approximation" else "student_t_to_equivalent_z",
     cluster = cluster, subgroup = subgroup, valid = valid, exclusion_reason = reason,
     paired_input = pair, se_source = se_source,
+    precision_basis = if (pair) precision_basis else "direct_statistic",
     estimate_decimals = use_md, se_decimals = use_sd,
-    common_decimal_precision = pair & use_md == use_sd,
+    common_decimal_precision = if (variance_based) rep(NA, n) else pair & use_md == use_sd,
     precision_source = ifelse(!pair, "not_applicable_direct_statistic",
-                              ifelse(known, "reported_se_precision", "inferred_digits_sensitivity")),
+      ifelse(known, if (variance_based) "reported_variance_precision" else "reported_se_precision",
+             "inferred_digits_sensitivity")),
     se_significand = significand,
-    kp_keep_reported = !pair | (known & significand >= 37),
-    kp_keep_sensitivity = !pair | (!is.na(significand) & significand >= 37),
+    variance_significand = variance_significand,
+    equivalent_se_precision_score = variance_bounds$equivalent_se_precision_score,
+    omission_precision_score = omission_score,
+    rounding_se_lower = se_lower, rounding_se_upper = se_upper,
+    rounding_variance_lower = variance_bounds$variance_lower,
+    rounding_variance_upper = variance_bounds$variance_upper,
+    kp_keep_reported = !pair | (known & omission_score >= 37),
+    kp_keep_sensitivity = !pair | (!is.na(omission_score) & omission_score >= 37),
     rounding_z_lower = lower, rounding_z_upper = upper,
     rounding_interval_precision = ifelse(!pair, "unavailable",
       ifelse(is.finite(md) & known, "reported", "inferred_sensitivity")),
@@ -308,8 +357,13 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
                                      estimate_col = "yi", se_col = "sei", variance_col = "vi",
                                      statistic_col = NULL, df_col = NULL, cluster_col = "metaID",
                                      estimate_digits_col = NULL, se_digits_col = NULL,
+                                     variance_digits_col = NULL,
+                                     precision_basis = c("variance", "se"),
                                      use_workbook_entries = TRUE,
                                      ...) {
+  precision_basis <- match.arg(precision_basis)
+  variance_based <- is.null(statistic_col) && precision_basis == "variance"
+  precision_col <- if (variance_based) variance_col else se_col
   data <- if (is.data.frame(input)) input else if (grepl("\\.csv$", input, ignore.case = TRUE)) {
     read.csv(input, stringsAsFactors = FALSE, colClasses = "character", check.names = FALSE)
   } else {
@@ -321,27 +375,38 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
   }
   entries <- NULL
   if (!is.data.frame(input) && grepl("\\.xlsx$", input, ignore.case = TRUE) &&
-      use_workbook_entries && is.null(statistic_col) && !is.null(se_col) &&
-      is.null(estimate_digits_col) && is.null(se_digits_col)) {
-    entries <- excel_reporting_entries(input, c(estimate_col, se_col), nrow(data))
+      use_workbook_entries && is.null(statistic_col) && !is.null(precision_col) &&
+      is.null(estimate_digits_col) &&
+      is.null(if (variance_based) variance_digits_col else se_digits_col)) {
+    entries <- excel_reporting_entries(input, c(estimate_col, precision_col), nrow(data))
     stored_estimate <- numeric_column(data, estimate_col)
-    stored_se <- numeric_column(data, se_col)
+    stored_precision_value <- numeric_column(data, precision_col)
+    stored_se <- if (!is.null(se_col) && se_col %in% names(data)) numeric_column(data, se_col) else NULL
     data[[estimate_col]] <- entries[[estimate_col]]$entry
-    data[[se_col]] <- entries[[se_col]]$entry
+    data[[precision_col]] <- entries[[precision_col]]$entry
     data$.estimate_decimals <- entries[[estimate_col]]$decimals
-    data$.se_decimals <- entries[[se_col]]$decimals
-    estimate_digits_col <- ".estimate_decimals"; se_digits_col <- ".se_decimals"
+    data$.precision_decimals <- entries[[precision_col]]$decimals
+    estimate_digits_col <- ".estimate_decimals"
+    if (variance_based) variance_digits_col <- ".precision_decimals" else se_digits_col <- ".precision_decimals"
   }
   d <- prepare_discontinuity_data(data, subgroup_col = subgroup_col,
     estimate_col = estimate_col, se_col = se_col, variance_col = variance_col,
     statistic_col = statistic_col, df_col = df_col, cluster_col = cluster_col,
-    estimate_digits_col = estimate_digits_col, se_digits_col = se_digits_col, ...)
+    estimate_digits_col = estimate_digits_col, se_digits_col = se_digits_col,
+    variance_digits_col = variance_digits_col, precision_basis = precision_basis, ...)
   if (!is.null(entries)) {
     d$estimate_precision_source <- entries[[estimate_col]]$source
-    d$se_precision_source <- entries[[se_col]]$source
     d$reported_estimate_entry <- entries[[estimate_col]]$entry
-    d$reported_se_entry <- entries[[se_col]]$entry
-    d$stored_workbook_estimate <- stored_estimate; d$stored_workbook_se <- stored_se
+    if (variance_based) {
+      d$variance_precision_source <- entries[[variance_col]]$source
+      d$reported_variance_entry <- entries[[variance_col]]$entry
+      d$stored_workbook_variance <- stored_precision_value
+    } else {
+      d$se_precision_source <- entries[[se_col]]$source
+      d$reported_se_entry <- entries[[se_col]]$entry
+    }
+    d$stored_workbook_estimate <- stored_estimate
+    if (!is.null(stored_se)) d$stored_workbook_se <- stored_se
   }
   valid <- d[d$valid, , drop = FALSE]
   if (!nrow(valid)) stop("No valid observations remain; see input estimates, SEs and df.")
@@ -351,9 +416,12 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     function(x) !is.na(d$subgroup) & d$subgroup == x
   ))
   if (length(levels)) names(groups)[-1] <- paste0(subgroup_col, ": ", levels)
-  modes <- c("unadjusted", "kp_reported_precision",
-             if (infer_precision && any(valid$paired_input & valid$precision_source != "reported_se_precision"))
-               "kp_inferred_digits_sensitivity")
+  reported_source <- if (variance_based) "reported_variance_precision" else "reported_se_precision"
+  reported_mode <- if (variance_based) "kp_reported_variance_precision" else "kp_reported_precision"
+  sensitivity_mode <- if (variance_based) "kp_inferred_variance_digits_sensitivity" else "kp_inferred_digits_sensitivity"
+  omission_rule <- if (variance_based) "variance_propagated_SE_precision_score>=37" else "reported_SE_significand>=37"
+  modes <- c("unadjusted", reported_mode,
+             if (infer_precision && any(valid$paired_input & valid$precision_source != reported_source)) sensitivity_mode)
   results <- list(); coverage <- list(); risks <- list()
   for (group in names(groups)) {
     rows <- groups[[group]]
@@ -362,27 +430,34 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
       group = group, n_input = sum(rows), n_valid = nrow(base),
       n_excluded_invalid = sum(rows & !d$valid),
       n_known_se_precision = sum(base$precision_source == "reported_se_precision"),
-      n_unknown_pair_precision = sum(base$paired_input & base$precision_source != "reported_se_precision"),
-      n_common_reported_decimals = sum(base$common_decimal_precision &
+      n_known_variance_precision = sum(base$precision_source == "reported_variance_precision"),
+      n_unknown_pair_precision = sum(base$paired_input & base$precision_source != reported_source),
+      n_common_reported_decimals = if (variance_based) NA_integer_ else sum(base$common_decimal_precision &
         base$rounding_interval_precision == "reported", na.rm = TRUE),
       n_direct_statistics = sum(!base$paired_input),
       n_retained_kp_reported = sum(base$kp_keep_reported),
       n_retained_kp_sensitivity = sum(base$kp_keep_sensitivity)
     )
     for (mode in modes) {
-      keep <- switch(mode, unadjusted = rep(TRUE, nrow(base)),
-                     kp_reported_precision = base$kp_keep_reported,
-                     kp_inferred_digits_sensitivity = base$kp_keep_sensitivity)
+      keep <- if (mode == "unadjusted") rep(TRUE, nrow(base)) else if (mode == reported_mode) {
+        base$kp_keep_reported
+      } else base$kp_keep_sensitivity
       selected <- base[keep, , drop = FALSE]
       for (h in half_widths) {
         result <- caliper_test(selected$abs_z,
           if (is.null(cluster_col)) NULL else selected$cluster, cutoff, h)
         result$group <- group; result$method <- mode
+        result$precision_basis <- if (is.null(statistic_col)) precision_basis else "direct_statistic"
+        result$omission_rule <- if (mode == "unadjusted") "none" else omission_rule
         result$n_retained <- nrow(selected)
         result$n_omitted_or_unknown <- nrow(base) - nrow(selected)
         result$precision_status <- if (mode == "unadjusted") "not_required" else if (!nrow(selected)) {
-          "unavailable_no_reported_precision"
-        } else if (mode == "kp_inferred_digits_sensitivity") "assumed_not_verified" else "known_precision_or_direct_statistic"
+          if (any(base$precision_source == reported_source)) "all_observations_omitted_by_precision_rule" else {
+            "unavailable_no_reported_precision"
+          }
+        } else if (mode == sensitivity_mode) "assumed_not_verified" else if (variance_based) {
+          "reported_variance_precision_extension"
+        } else "known_precision_or_direct_statistic"
         results[[length(results) + 1L]] <- result
         known <- is.finite(selected$rounding_z_lower) & !is.na(selected$rounding_z_upper)
         lo <- selected$rounding_z_lower[known]; hi <- selected$rounding_z_upper[known]
@@ -415,10 +490,15 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
   tryCatch({
     par(mfrow = c(2, 2))
     window <- valid$abs_z[abs(valid$abs_z - cutoff) <= max(half_widths)]
+    histogram_breaks <- seq(cutoff - max(half_widths), cutoff + max(half_widths), length.out = 81)
+    histogram_ylim <- if (length(window)) {
+      c(0, max(hist(window, breaks = histogram_breaks, plot = FALSE)$counts) * 1.05)
+    } else c(0, 1)
     if (length(window)) {
-      hist(window, breaks = seq(cutoff - max(half_widths), cutoff + max(half_widths), length.out = 81),
+      hist(window, breaks = histogram_breaks, ylim = histogram_ylim,
            main = paste0("Empirical |z| near p = ", signif(2 * pnorm(cutoff, lower.tail = FALSE), 3)),
            xlab = "|z| (equivalent z for t inputs)")
+      mtext(paste0("n = ", length(window)), side = 3, line = .3, cex = .8)
       abline(v = cutoff, col = "red", lwd = 2)
     } else plot.new()
     pooled <- results[results$group == "All" & results$method == "unadjusted", ]
@@ -436,18 +516,28 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
            xlab = "log10(SE)", ylab = "log10(|estimate|)", main = "Joint estimate / SE distribution")
       abline(a = log10(cutoff), b = 1, col = "red", lwd = 2)
     } else plot.new()
-    sensitivity <- "kp_inferred_digits_sensitivity" %in% modes
+    sensitivity <- sensitivity_mode %in% modes
     retained <- if (sensitivity) valid$kp_keep_sensitivity else valid$kp_keep_reported
     window <- valid$abs_z[retained & abs(valid$abs_z - cutoff) <= max(half_widths)]
     if (length(window)) {
-      hist(window, breaks = seq(cutoff - max(half_widths), cutoff + max(half_widths), length.out = 81),
-           main = if (sensitivity) "Omission: inferred-digit SENSITIVITY" else "Omission: workbook/reported precision",
-           xlab = "|z| after SE-significand >= 37 rule")
+      hist(window, breaks = histogram_breaks, ylim = histogram_ylim,
+           main = if (sensitivity) "Omission: inferred-digit SENSITIVITY" else if (variance_based) {
+             "Omission: reported variance precision"
+           } else "Omission: reported SE precision",
+           xlab = if (variance_based) "|z| after variance-based precision rule" else "|z| after SE-significand >= 37 rule")
+      mtext(paste0("n = ", length(window)), side = 3, line = .3, cex = .8)
       abline(v = cutoff, col = "red", lwd = 2)
     } else plot.new()
   }, finally = dev.off())
   writeLines(c(
-    "Kranz & Puetz (2022), doi:10.1257/aer.20210121; primary omission rule: SE significand >= 37.",
+    "Kranz & Puetz (2022), doi:10.1257/aer.20210121; published omission rule: reported SE significand >= 37.",
+    if (variance_based) c(
+      "THIS RUN EXTENDS THE RULE TO REPORTED VARIANCES; it does not apply the published SE rule literally.",
+      paste0("Precision comes from ", variance_col, "; SE = sqrt(", variance_col, "); digits of a computed sqrt are not treated as reported precision."),
+      "For a variance v reported to d decimals, Delta_v = 10^(-d), v_L = max(0, v-Delta_v/2), v_U = v+Delta_v/2.",
+      "SE bounds are sqrt(v_L) and sqrt(v_U). Equivalent SE step = 2*max(sqrt(v)-sqrt(v_L), sqrt(v_U)-sqrt(v)).",
+      "The variance-based omission retains sqrt(v)/equivalent_SE_step >= 37; this score is not a reported integer SE significand."
+    ) else "THIS RUN USES REPORTED SE PRECISION; no variance-to-SE extension is applied.",
     "Original, empirical observations only; no counterfactual simulations or model outlier screening.",
     paste0("Cutoff = ", format(cutoff, digits = 16), "; two-sided normal p = ", 2 * pnorm(cutoff, lower.tail = FALSE), "."),
     "Window includes both endpoints; exact cutoff ties count as above, following the author replication.",
@@ -456,10 +546,10 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     "Default clusters are meta-analysis articles (metaID); unrelated articles may still share primary studies.",
     "Holm adjustment is applied across all tested rows separately for each p-value column.",
     "Finite-width symmetry is stronger than density continuity: a rejection is not proof of publication bias.",
-    "For MasterData.xlsx, yi and sei are treated as reported entries, as specified by the data owner.",
+    paste0("Reporting precision basis: ", if (is.null(statistic_col)) precision_basis else "direct_statistic", ". Coefficient resolution uses its own reported entries."),
     "Excel precision uses original string/numeric XML entries or simple explicit number formats; formulas with General format have unknown precision.",
     "Excel General formatting cannot recover trailing zeros already lost when a number was stored.",
-    "The paper's Lemma 1 assumes common coefficient/SE decimal places; the audit flags differing precisions and computes individual rounding bounds.",
+    "The paper's Lemma 1 assumes common coefficient/SE decimal places; the variance extension is not that setting. Individual coefficient and SE bounds are audited.",
     "Interpreting the omission adjustment requires that reporting coarseness is not systematically related to the unrounded z distribution.",
     "Inferred digits are ONLY a sensitivity assumption; trailing zeros and original rounding cannot be recovered.",
     "The omission rule reduces rounding problems but does not guarantee every retained observation is correctly classified.",

@@ -1,74 +1,74 @@
 "group","method","half_width","n_with_rounding_bounds","n_bounds_inferred","n_potential_significance_switch","n_uncertain_window_membership"
-"All","unadjusted",0.05,64810,0,1415,1516
-"All","unadjusted",0.075,64810,0,1415,1558
-"All","unadjusted",0.1,64810,0,1415,1572
-"All","unadjusted",0.2,64810,0,1415,1635
-"All","unadjusted",0.3,64810,0,1415,1717
-"All","unadjusted",0.4,64810,0,1415,1772
-"All","unadjusted",0.5,64810,0,1415,1823
-"All","kp_reported_precision",0.05,61839,0,1011,1088
-"All","kp_reported_precision",0.075,61839,0,1011,1110
-"All","kp_reported_precision",0.1,61839,0,1011,1111
-"All","kp_reported_precision",0.2,61839,0,1011,1132
-"All","kp_reported_precision",0.3,61839,0,1011,1188
-"All","kp_reported_precision",0.4,61839,0,1011,1212
-"All","kp_reported_precision",0.5,61839,0,1011,1239
-"subfield: Ecology","unadjusted",0.05,20254,0,507,557
-"subfield: Ecology","unadjusted",0.075,20254,0,507,566
-"subfield: Ecology","unadjusted",0.1,20254,0,507,577
-"subfield: Ecology","unadjusted",0.2,20254,0,507,611
-"subfield: Ecology","unadjusted",0.3,20254,0,507,629
-"subfield: Ecology","unadjusted",0.4,20254,0,507,663
-"subfield: Ecology","unadjusted",0.5,20254,0,507,675
-"subfield: Ecology","kp_reported_precision",0.05,19193,0,358,402
-"subfield: Ecology","kp_reported_precision",0.075,19193,0,358,407
-"subfield: Ecology","kp_reported_precision",0.1,19193,0,358,415
-"subfield: Ecology","kp_reported_precision",0.2,19193,0,358,434
-"subfield: Ecology","kp_reported_precision",0.3,19193,0,358,452
-"subfield: Ecology","kp_reported_precision",0.4,19193,0,358,472
-"subfield: Ecology","kp_reported_precision",0.5,19193,0,358,485
-"subfield: Environmental Chemistry","unadjusted",0.05,8652,0,190,206
-"subfield: Environmental Chemistry","unadjusted",0.075,8652,0,190,218
-"subfield: Environmental Chemistry","unadjusted",0.1,8652,0,190,223
-"subfield: Environmental Chemistry","unadjusted",0.2,8652,0,190,231
-"subfield: Environmental Chemistry","unadjusted",0.3,8652,0,190,251
-"subfield: Environmental Chemistry","unadjusted",0.4,8652,0,190,265
-"subfield: Environmental Chemistry","unadjusted",0.5,8652,0,190,279
-"subfield: Environmental Chemistry","kp_reported_precision",0.05,8044,0,58,65
-"subfield: Environmental Chemistry","kp_reported_precision",0.075,8044,0,58,67
-"subfield: Environmental Chemistry","kp_reported_precision",0.1,8044,0,58,66
-"subfield: Environmental Chemistry","kp_reported_precision",0.2,8044,0,58,69
-"subfield: Environmental Chemistry","kp_reported_precision",0.3,8044,0,58,71
-"subfield: Environmental Chemistry","kp_reported_precision",0.4,8044,0,58,72
-"subfield: Environmental Chemistry","kp_reported_precision",0.5,8044,0,58,67
-"subfield: Environmental Engineering","unadjusted",0.05,12545,0,85,85
-"subfield: Environmental Engineering","unadjusted",0.075,12545,0,85,85
-"subfield: Environmental Engineering","unadjusted",0.1,12545,0,85,85
-"subfield: Environmental Engineering","unadjusted",0.2,12545,0,85,88
-"subfield: Environmental Engineering","unadjusted",0.3,12545,0,85,83
-"subfield: Environmental Engineering","unadjusted",0.4,12545,0,85,87
-"subfield: Environmental Engineering","unadjusted",0.5,12545,0,85,85
-"subfield: Environmental Engineering","kp_reported_precision",0.05,12545,0,85,85
-"subfield: Environmental Engineering","kp_reported_precision",0.075,12545,0,85,85
-"subfield: Environmental Engineering","kp_reported_precision",0.1,12545,0,85,85
-"subfield: Environmental Engineering","kp_reported_precision",0.2,12545,0,85,88
-"subfield: Environmental Engineering","kp_reported_precision",0.3,12545,0,85,83
-"subfield: Environmental Engineering","kp_reported_precision",0.4,12545,0,85,87
-"subfield: Environmental Engineering","kp_reported_precision",0.5,12545,0,85,85
-"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.05,8513,0,340,353
-"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.075,8513,0,340,358
-"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.1,8513,0,340,351
-"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.2,8513,0,340,366
-"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.3,8513,0,340,384
-"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.4,8513,0,340,375
-"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.5,8513,0,340,381
-"subfield: Health, Toxicology and Mutagenesis","kp_reported_precision",0.05,8397,0,324,334
-"subfield: Health, Toxicology and Mutagenesis","kp_reported_precision",0.075,8397,0,324,339
-"subfield: Health, Toxicology and Mutagenesis","kp_reported_precision",0.1,8397,0,324,333
-"subfield: Health, Toxicology and Mutagenesis","kp_reported_precision",0.2,8397,0,324,346
-"subfield: Health, Toxicology and Mutagenesis","kp_reported_precision",0.3,8397,0,324,361
-"subfield: Health, Toxicology and Mutagenesis","kp_reported_precision",0.4,8397,0,324,355
-"subfield: Health, Toxicology and Mutagenesis","kp_reported_precision",0.5,8397,0,324,360
+"All","unadjusted",0.05,64810,0,1566,1748
+"All","unadjusted",0.075,64810,0,1566,1827
+"All","unadjusted",0.1,64810,0,1566,1860
+"All","unadjusted",0.2,64810,0,1566,1938
+"All","unadjusted",0.3,64810,0,1566,2076
+"All","unadjusted",0.4,64810,0,1566,2131
+"All","unadjusted",0.5,64810,0,1566,2197
+"All","kp_reported_variance_precision",0.05,55546,0,824,913
+"All","kp_reported_variance_precision",0.075,55546,0,824,958
+"All","kp_reported_variance_precision",0.1,55546,0,824,945
+"All","kp_reported_variance_precision",0.2,55546,0,824,961
+"All","kp_reported_variance_precision",0.3,55546,0,824,1019
+"All","kp_reported_variance_precision",0.4,55546,0,824,1036
+"All","kp_reported_variance_precision",0.5,55546,0,824,1074
+"subfield: Ecology","unadjusted",0.05,20254,0,647,745
+"subfield: Ecology","unadjusted",0.075,20254,0,647,787
+"subfield: Ecology","unadjusted",0.1,20254,0,647,815
+"subfield: Ecology","unadjusted",0.2,20254,0,647,882
+"subfield: Ecology","unadjusted",0.3,20254,0,647,926
+"subfield: Ecology","unadjusted",0.4,20254,0,647,942
+"subfield: Ecology","unadjusted",0.5,20254,0,647,971
+"subfield: Ecology","kp_reported_variance_precision",0.05,16716,0,363,407
+"subfield: Ecology","kp_reported_variance_precision",0.075,16716,0,363,426
+"subfield: Ecology","kp_reported_variance_precision",0.1,16716,0,363,435
+"subfield: Ecology","kp_reported_variance_precision",0.2,16716,0,363,443
+"subfield: Ecology","kp_reported_variance_precision",0.3,16716,0,363,453
+"subfield: Ecology","kp_reported_variance_precision",0.4,16716,0,363,474
+"subfield: Ecology","kp_reported_variance_precision",0.5,16716,0,363,493
+"subfield: Environmental Chemistry","unadjusted",0.05,8652,0,158,182
+"subfield: Environmental Chemistry","unadjusted",0.075,8652,0,158,183
+"subfield: Environmental Chemistry","unadjusted",0.1,8652,0,158,190
+"subfield: Environmental Chemistry","unadjusted",0.2,8652,0,158,223
+"subfield: Environmental Chemistry","unadjusted",0.3,8652,0,158,235
+"subfield: Environmental Chemistry","unadjusted",0.4,8652,0,158,239
+"subfield: Environmental Chemistry","unadjusted",0.5,8652,0,158,253
+"subfield: Environmental Chemistry","kp_reported_variance_precision",0.05,7303,0,51,56
+"subfield: Environmental Chemistry","kp_reported_variance_precision",0.075,7303,0,51,55
+"subfield: Environmental Chemistry","kp_reported_variance_precision",0.1,7303,0,51,53
+"subfield: Environmental Chemistry","kp_reported_variance_precision",0.2,7303,0,51,60
+"subfield: Environmental Chemistry","kp_reported_variance_precision",0.3,7303,0,51,61
+"subfield: Environmental Chemistry","kp_reported_variance_precision",0.4,7303,0,51,60
+"subfield: Environmental Chemistry","kp_reported_variance_precision",0.5,7303,0,51,59
+"subfield: Environmental Engineering","unadjusted",0.05,12545,0,115,115
+"subfield: Environmental Engineering","unadjusted",0.075,12545,0,115,115
+"subfield: Environmental Engineering","unadjusted",0.1,12545,0,115,125
+"subfield: Environmental Engineering","unadjusted",0.2,12545,0,115,98
+"subfield: Environmental Engineering","unadjusted",0.3,12545,0,115,123
+"subfield: Environmental Engineering","unadjusted",0.4,12545,0,115,165
+"subfield: Environmental Engineering","unadjusted",0.5,12545,0,115,162
+"subfield: Environmental Engineering","kp_reported_variance_precision",0.05,11515,0,57,57
+"subfield: Environmental Engineering","kp_reported_variance_precision",0.075,11515,0,57,57
+"subfield: Environmental Engineering","kp_reported_variance_precision",0.1,11515,0,57,57
+"subfield: Environmental Engineering","kp_reported_variance_precision",0.2,11515,0,57,60
+"subfield: Environmental Engineering","kp_reported_variance_precision",0.3,11515,0,57,55
+"subfield: Environmental Engineering","kp_reported_variance_precision",0.4,11515,0,57,59
+"subfield: Environmental Engineering","kp_reported_variance_precision",0.5,11515,0,57,58
+"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.05,8513,0,338,351
+"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.075,8513,0,338,359
+"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.1,8513,0,338,352
+"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.2,8513,0,338,361
+"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.3,8513,0,338,376
+"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.4,8513,0,338,370
+"subfield: Health, Toxicology and Mutagenesis","unadjusted",0.5,8513,0,338,376
+"subfield: Health, Toxicology and Mutagenesis","kp_reported_variance_precision",0.05,8002,0,163,175
+"subfield: Health, Toxicology and Mutagenesis","kp_reported_variance_precision",0.075,8002,0,163,183
+"subfield: Health, Toxicology and Mutagenesis","kp_reported_variance_precision",0.1,8002,0,163,176
+"subfield: Health, Toxicology and Mutagenesis","kp_reported_variance_precision",0.2,8002,0,163,187
+"subfield: Health, Toxicology and Mutagenesis","kp_reported_variance_precision",0.3,8002,0,163,202
+"subfield: Health, Toxicology and Mutagenesis","kp_reported_variance_precision",0.4,8002,0,163,196
+"subfield: Health, Toxicology and Mutagenesis","kp_reported_variance_precision",0.5,8002,0,163,203
 "subfield: Management, Monitoring, Policy and Law","unadjusted",0.05,818,0,5,5
 "subfield: Management, Monitoring, Policy and Law","unadjusted",0.075,818,0,5,5
 "subfield: Management, Monitoring, Policy and Law","unadjusted",0.1,818,0,5,5
@@ -76,38 +76,38 @@
 "subfield: Management, Monitoring, Policy and Law","unadjusted",0.3,818,0,5,5
 "subfield: Management, Monitoring, Policy and Law","unadjusted",0.4,818,0,5,5
 "subfield: Management, Monitoring, Policy and Law","unadjusted",0.5,818,0,5,5
-"subfield: Management, Monitoring, Policy and Law","kp_reported_precision",0.05,818,0,5,5
-"subfield: Management, Monitoring, Policy and Law","kp_reported_precision",0.075,818,0,5,5
-"subfield: Management, Monitoring, Policy and Law","kp_reported_precision",0.1,818,0,5,5
-"subfield: Management, Monitoring, Policy and Law","kp_reported_precision",0.2,818,0,5,5
-"subfield: Management, Monitoring, Policy and Law","kp_reported_precision",0.3,818,0,5,5
-"subfield: Management, Monitoring, Policy and Law","kp_reported_precision",0.4,818,0,5,5
-"subfield: Management, Monitoring, Policy and Law","kp_reported_precision",0.5,818,0,5,5
-"subfield: Nature and Landscape Conservation","unadjusted",0.05,13219,0,263,284
-"subfield: Nature and Landscape Conservation","unadjusted",0.075,13219,0,263,296
-"subfield: Nature and Landscape Conservation","unadjusted",0.1,13219,0,263,300
-"subfield: Nature and Landscape Conservation","unadjusted",0.2,13219,0,263,303
-"subfield: Nature and Landscape Conservation","unadjusted",0.3,13219,0,263,332
-"subfield: Nature and Landscape Conservation","unadjusted",0.4,13219,0,263,346
-"subfield: Nature and Landscape Conservation","unadjusted",0.5,13219,0,263,366
-"subfield: Nature and Landscape Conservation","kp_reported_precision",0.05,12130,0,165,180
-"subfield: Nature and Landscape Conservation","kp_reported_precision",0.075,12130,0,165,186
-"subfield: Nature and Landscape Conservation","kp_reported_precision",0.1,12130,0,165,186
-"subfield: Nature and Landscape Conservation","kp_reported_precision",0.2,12130,0,165,171
-"subfield: Nature and Landscape Conservation","kp_reported_precision",0.3,12130,0,165,197
-"subfield: Nature and Landscape Conservation","kp_reported_precision",0.4,12130,0,165,204
-"subfield: Nature and Landscape Conservation","kp_reported_precision",0.5,12130,0,165,219
-"subfield: Water Science and Technology","unadjusted",0.05,809,0,25,26
-"subfield: Water Science and Technology","unadjusted",0.075,809,0,25,30
-"subfield: Water Science and Technology","unadjusted",0.1,809,0,25,31
-"subfield: Water Science and Technology","unadjusted",0.2,809,0,25,31
-"subfield: Water Science and Technology","unadjusted",0.3,809,0,25,33
-"subfield: Water Science and Technology","unadjusted",0.4,809,0,25,31
-"subfield: Water Science and Technology","unadjusted",0.5,809,0,25,32
-"subfield: Water Science and Technology","kp_reported_precision",0.05,712,0,16,17
-"subfield: Water Science and Technology","kp_reported_precision",0.075,712,0,16,21
-"subfield: Water Science and Technology","kp_reported_precision",0.1,712,0,16,21
-"subfield: Water Science and Technology","kp_reported_precision",0.2,712,0,16,19
-"subfield: Water Science and Technology","kp_reported_precision",0.3,712,0,16,19
-"subfield: Water Science and Technology","kp_reported_precision",0.4,712,0,16,17
-"subfield: Water Science and Technology","kp_reported_precision",0.5,712,0,16,18
+"subfield: Management, Monitoring, Policy and Law","kp_reported_variance_precision",0.05,817,0,4,4
+"subfield: Management, Monitoring, Policy and Law","kp_reported_variance_precision",0.075,817,0,4,4
+"subfield: Management, Monitoring, Policy and Law","kp_reported_variance_precision",0.1,817,0,4,4
+"subfield: Management, Monitoring, Policy and Law","kp_reported_variance_precision",0.2,817,0,4,4
+"subfield: Management, Monitoring, Policy and Law","kp_reported_variance_precision",0.3,817,0,4,4
+"subfield: Management, Monitoring, Policy and Law","kp_reported_variance_precision",0.4,817,0,4,4
+"subfield: Management, Monitoring, Policy and Law","kp_reported_variance_precision",0.5,817,0,4,4
+"subfield: Nature and Landscape Conservation","unadjusted",0.05,13219,0,282,327
+"subfield: Nature and Landscape Conservation","unadjusted",0.075,13219,0,282,351
+"subfield: Nature and Landscape Conservation","unadjusted",0.1,13219,0,282,346
+"subfield: Nature and Landscape Conservation","unadjusted",0.2,13219,0,282,342
+"subfield: Nature and Landscape Conservation","unadjusted",0.3,13219,0,282,383
+"subfield: Nature and Landscape Conservation","unadjusted",0.4,13219,0,282,386
+"subfield: Nature and Landscape Conservation","unadjusted",0.5,13219,0,282,408
+"subfield: Nature and Landscape Conservation","kp_reported_variance_precision",0.05,10447,0,169,195
+"subfield: Nature and Landscape Conservation","kp_reported_variance_precision",0.075,10447,0,169,211
+"subfield: Nature and Landscape Conservation","kp_reported_variance_precision",0.1,10447,0,169,198
+"subfield: Nature and Landscape Conservation","kp_reported_variance_precision",0.2,10447,0,169,186
+"subfield: Nature and Landscape Conservation","kp_reported_variance_precision",0.3,10447,0,169,221
+"subfield: Nature and Landscape Conservation","kp_reported_variance_precision",0.4,10447,0,169,224
+"subfield: Nature and Landscape Conservation","kp_reported_variance_precision",0.5,10447,0,169,238
+"subfield: Water Science and Technology","unadjusted",0.05,809,0,21,23
+"subfield: Water Science and Technology","unadjusted",0.075,809,0,21,27
+"subfield: Water Science and Technology","unadjusted",0.1,809,0,21,27
+"subfield: Water Science and Technology","unadjusted",0.2,809,0,21,27
+"subfield: Water Science and Technology","unadjusted",0.3,809,0,21,28
+"subfield: Water Science and Technology","unadjusted",0.4,809,0,21,24
+"subfield: Water Science and Technology","unadjusted",0.5,809,0,21,22
+"subfield: Water Science and Technology","kp_reported_variance_precision",0.05,746,0,17,19
+"subfield: Water Science and Technology","kp_reported_variance_precision",0.075,746,0,17,22
+"subfield: Water Science and Technology","kp_reported_variance_precision",0.1,746,0,17,22
+"subfield: Water Science and Technology","kp_reported_variance_precision",0.2,746,0,17,21
+"subfield: Water Science and Technology","kp_reported_variance_precision",0.3,746,0,17,23
+"subfield: Water Science and Technology","kp_reported_variance_precision",0.4,746,0,17,19
+"subfield: Water Science and Technology","kp_reported_variance_precision",0.5,746,0,17,19

@@ -1,9 +1,9 @@
-"group","n_input","n_valid","n_excluded_invalid","n_known_se_precision","n_unknown_pair_precision","n_common_reported_decimals","n_direct_statistics","n_retained_kp_reported","n_retained_kp_sensitivity"
-"All",64810,64810,0,64810,0,7286,0,61839,61839
-"subfield: Ecology",20254,20254,0,20254,0,649,0,19193,19193
-"subfield: Environmental Chemistry",8652,8652,0,8652,0,725,0,8044,8044
-"subfield: Environmental Engineering",12545,12545,0,12545,0,3446,0,12545,12545
-"subfield: Health, Toxicology and Mutagenesis",8513,8513,0,8513,0,1500,0,8397,8397
-"subfield: Management, Monitoring, Policy and Law",818,818,0,818,0,258,0,818,818
-"subfield: Nature and Landscape Conservation",13219,13219,0,13219,0,527,0,12130,12130
-"subfield: Water Science and Technology",809,809,0,809,0,181,0,712,712
+"group","n_input","n_valid","n_excluded_invalid","n_known_se_precision","n_known_variance_precision","n_unknown_pair_precision","n_common_reported_decimals","n_direct_statistics","n_retained_kp_reported","n_retained_kp_sensitivity"
+"All",64810,64810,0,0,64810,0,NA,0,55546,55546
+"subfield: Ecology",20254,20254,0,0,20254,0,NA,0,16716,16716
+"subfield: Environmental Chemistry",8652,8652,0,0,8652,0,NA,0,7303,7303
+"subfield: Environmental Engineering",12545,12545,0,0,12545,0,NA,0,11515,11515
+"subfield: Health, Toxicology and Mutagenesis",8513,8513,0,0,8513,0,NA,0,8002,8002
+"subfield: Management, Monitoring, Policy and Law",818,818,0,0,818,0,NA,0,817,817
+"subfield: Nature and Landscape Conservation",13219,13219,0,0,13219,0,NA,0,10447,10447
+"subfield: Water Science and Technology",809,809,0,0,809,0,NA,0,746,746
