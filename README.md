@@ -205,3 +205,12 @@ execution preserve the same bootstrap draws. After a default analysis run,
 Table S6's intervals against the paired counterfactual caches.
 This output check defaults to 1,000 iterations; pass an exploratory run's
 iteration count as its first argument when checking a smaller run.
+
+## Separate empirical discontinuity tests
+
+Run `Rscript scripts/discontinuity_tests.R` to test the observed distribution
+near two-sided p = 0.05 using calipers and the Kranz–Pütz (2022) rounding-omission
+method. The script reads reported `yi`/`sei` precision from the workbook entries,
+reports article-clustered inference, and writes separate diagnostics under
+`results/discontinuity_tests/`. It is independent of `scripts/main.R`.
+See [the method, precision conventions and input options](docs/discontinuity_tests.md).
