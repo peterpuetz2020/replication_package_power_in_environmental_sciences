@@ -18,6 +18,7 @@ stopifnot(abs(repeated$cluster_se - test$cluster_se) < 1e-12,
 stopifnot(caliper_test(10, "a", c, .1)$n_window == 0,
           is.na(caliper_test(c, "a", c, .1)$cluster_p_greater),
           caliper_test(c, "a", c, .1)$n_at_cutoff == 1)
+stopifnot(caliper_test(c(1.76, 2.16), cutoff = 1.96, half_width = .2)$n_window == 2)
 
 ## Trailing zeros are real reporting information, not floating-point digits.
 d <- data.frame(yi = c(.08, .08, .074, .072), sei = c(.04, .04, .037, .036),
@@ -48,7 +49,7 @@ stopifnot(sum(!prepare_discontinuity_data(bad, subgroup_col = NULL, precision_ba
 vdata <- data.frame(yi = c(.4, .4, .084, .088), vi = c(.04, .04, .0018, .0019),
   sei = 999, metaID = 1:4, md = c(1, 3, 3, 3), vd = c(2, 4, 4, 4))
 vprepared <- prepare_discontinuity_data(vdata, subgroup_col = NULL,
-  estimate_digits_col = "md", variance_digits_col = "vd")
+  estimate_digits_col = "md", variance_digits_col = "vd", precision_basis = "variance")
 stopifnot(identical(vprepared$variance_significand, c(4, 400, 18, 19)),
   identical(vprepared$kp_keep_reported, c(FALSE, TRUE, FALSE, TRUE)),
   identical(vprepared$standard_error, sqrt(vdata$vi)),
@@ -69,10 +70,25 @@ precise <- variance_precision_bounds(.04, 18)
 stopifnot(is.finite(precise$equivalent_se_precision_score),
           abs(precise$equivalent_se_precision_score/8e16 - 1) < 1e-14)
 bad <- vdata; bad$vi[1:2] <- c(0, NA)
-stopifnot(sum(!prepare_discontinuity_data(bad, subgroup_col = NULL)$valid) == 2)
+stopifnot(sum(!prepare_discontinuity_data(bad, subgroup_col = NULL, precision_basis = "variance")$valid) == 2)
 bad <- vdata; bad$vd[3] <- 3
 stopifnot(inherits(try(prepare_discontinuity_data(bad, subgroup_col = NULL,
-  variance_digits_col = "vd"), silent = TRUE), "try-error"))
+  variance_digits_col = "vd", precision_basis = "variance"), silent = TRUE), "try-error"))
+
+## The minimum is selected separately for each row, even when the stored
+## variance has more digits than that selected resolution. Do not round it.
+mdata <- data.frame(yi = c(.088, .088, .4), vi = c(.0019, .0019, .04),
+  sei = c(.04, .0436, .2), metaID = 1:3, vd = c(4, 8, 2), sd = c(2, 4, 4), md = 4)
+minimum <- prepare_discontinuity_data(mdata, subgroup_col = NULL,
+  estimate_digits_col = "md", variance_digits_col = "vd", se_digits_col = "sd")
+stopifnot(identical(minimum$variance_decimals, c(2, 4, 2)),
+  identical(minimum$reported_variance_decimals, mdata$vd),
+  identical(minimum$reported_se_decimals, mdata$sd),
+  identical(minimum$variance, mdata$vi),
+  identical(minimum$standard_error, sqrt(mdata$vi)),
+  identical(minimum$kp_keep_reported, c(FALSE, TRUE, FALSE)),
+  minimum$rounding_se_lower[1] == 0,
+  abs(minimum$rounding_se_upper[1] - sqrt(.0069)) < 1e-14)
 
 ## t statistics need their df; normal calibration must reproduce the same p.
 tdata <- data.frame(t_value = qt(.975, c(5, 10, 100)), df = c(5, 10, 100), metaID = 1:3)
@@ -137,23 +153,25 @@ stopifnot(all(xlsx$audit$kp_keep_reported),
           identical(xlsx$audit$se_significand, c(400, 40)))
 unlink(c(path, folder), recursive = TRUE)
 
-## Default workbook mode must use reported vi zeros and ignore the sei column.
+## Default workbook mode must recover vi/sei zeros and use their row-wise min.
 wb <- openxlsx::createWorkbook()
 openxlsx::addWorksheet(wb, "Reported variances")
-openxlsx::writeData(wb, 1, data.frame(yi = c("0.4000", "0.4000"),
-  vi = c("0.04", "0.0400"), sei = c(999, 999), metaID = 1:2))
+openxlsx::writeData(wb, 1, data.frame(yi = c("0.0880", "0.0880", "0.4000"),
+  vi = c("0.0019", "0.00190000", "0.04"),
+  sei = c("0.04", "0.0436", "0.2000"), metaID = 1:3))
 path <- tempfile(fileext = ".xlsx")
 folder <- tempfile("variance-xlsx-")
 openxlsx::saveWorkbook(wb, path)
 vres <- run_discontinuity_tests(path, output_dir = folder,
   audit_dir = file.path(folder, "audit"), subgroup_col = NULL)
-stopifnot(identical(vres$audit$variance_decimals, c(2, 4)),
-          identical(vres$audit$reported_variance_entry, c("0.04", "0.0400")),
-          identical(vres$audit$kp_keep_reported, c(FALSE, TRUE)),
-          identical(vres$audit$standard_error, c(.2, .2)),
-          all(vres$audit$stored_workbook_se == 999),
-          identical(unique(vres$tests$method), c("unadjusted", "kp_reported_variance_precision")),
-          identical(sort(unique(vres$tests$half_width)), c(.05, .075, .1, .2)),
-          nrow(vres$tests) == 8L)
+stopifnot(identical(vres$audit$variance_decimals, c(2, 4, 2)),
+          identical(vres$audit$reported_variance_entry, c("0.0019", "0.00190000", "0.04")),
+          identical(vres$audit$reported_se_entry, c("0.04", "0.0436", "0.2000")),
+          identical(vres$audit$kp_keep_reported, c(FALSE, TRUE, FALSE)),
+          identical(vres$audit$standard_error, sqrt(mdata$vi)),
+          identical(unique(vres$tests$method), c("unadjusted", "kp_reported_min_variance_se_precision")),
+          identical(sort(unique(vres$tests$half_width)), c(.05, .1, .15, .2)),
+          nrow(vres$tests) == 8L,
+          file.exists(file.path(folder, "empirical_discontinuity_diagnostics.svg")))
 unlink(c(path, folder), recursive = TRUE)
 cat("PASS: binomial/clustered inference, SE and variance precision, exact transformed bounds, t calibration and planted jump\n")

@@ -7,20 +7,22 @@ Rscript scripts/discontinuity_tests.R
 ```
 
 This uses **all observed rows** of `data/MasterData.xlsx`, with `yi` as the
-coefficient and **`vi` as the reported variance and precision source**. The SE
-is computed as `sqrt(vi)`; the digits of `sei` do not determine precision.
+coefficient and **`vi` as the reported variance**. By default, the variance
+rounding resolution uses the smaller of the reported decimal counts in `vi`
+and `sei`, separately for each observation. The SE point value is computed
+as `sqrt(vi)`.
 It does not use counterfactual
 distributions, fitted meta-means, or the model-based outlier screen.
 
 ## Tests and estimands
 
 The null value is zero. The default statistic is `abs(yi / sqrt(vi))`, with cutoff
-`qnorm(0.975)` for a two-sided normal-approximation p-value of 0.05. Caliper
-half-widths are 0.05, 0.075, 0.1 and 0.2 in **z units**. The runner rejects
+`1.96`, the paper's rounded normal threshold for a two-sided p-value of approximately 0.05. Caliper
+half-widths are 0.05, 0.1, 0.15 and 0.2 in **z units**. The runner rejects
 half-widths larger than 0.2.
 Window endpoints are included, and exact cutoff ties count as above, matching
-the author replication's binomial/randomization procedure. `cutoff = 1.96`
-can be supplied to reproduce the paper's rounded normal cutoff literally.
+the author replication's binomial/randomization procedure. Supply
+`cutoff = qnorm(0.975)` if an exactly calibrated normal p = 0.05 cutoff is needed.
 
 For each caliper, the script reports the fraction above the cutoff, one-sided
 and two-sided exact binomial tests against 0.5, and binomial confidence
@@ -50,11 +52,12 @@ whereas `0.0400` reported to four decimal places has significand 400.
 
 The **default extends that rule to reported variances**, as requested by the
 data owner. A decimal place in a variance is not a decimal place in an SE, so
-the code does not copy the number of `vi` decimals to `sqrt(vi)` or round the
-SE to that many decimals. For a variance `v` reported to `d_v` decimal places:
+the code does not copy the selected decimal count to `sqrt(vi)` or round the
+SE to that many decimals. The user's requested conservative precision rule is:
 
 ```text
-Delta_v = 10^(-d_v)
+d = min(reported decimals of vi, reported decimals of sei)
+Delta_v = 10^(-d)
 v_L = max(0, v - Delta_v/2)       v_U = v + Delta_v/2
 SE_L = sqrt(v_L)                SE_U = sqrt(v_U)
 SE = sqrt(v)
@@ -62,22 +65,31 @@ Delta_SE_equiv = 2 * max(SE - SE_L, SE_U - SE)
 s_equiv = SE / Delta_SE_equiv
 ```
 
+The stored variance and coefficient values are not rounded to this selected
+resolution. When `sei` has fewer decimals, the selected resolution describes
+a wider uncertainty interval around the stored variance, not its original
+rounding grid. Both original decimal counts and the selected minimum are
+recorded in the audit. Both must be known for reported-precision mode; missing
+metadata can only enter the separately labelled inferred-digit sensitivity.
+
 The variance-based omission retains `s_equiv >= 37`. `Delta_SE_equiv` is a
 conservative symmetric SE rounding step enclosing the exact transformed
 variance interval. This preserves the relative-SE-precision interpretation of
 the original criterion, but **is an extension, not the paper's literal
 reported-SE-significand rule**. The score is not an integer reported SE
-significand. If `k = v / Delta_v` is the variance significand, then
-`s_equiv = k * (1 + sqrt(1 - 1/(2*k)))` for positive reported grid values,
-approximately `2*k`. This formula also explains why simply applying the
-threshold 37 to the variance significand would be a different filter.
+significand. If `k = v / Delta_v` is at least 0.5, then
+`s_equiv = k * (1 + sqrt(1 - 1/(2*k)))`, approximately `2*k` at high
+precision. With the minimum-decimal rule, `k` need not be an integer; the
+audit records it as `variance_resolution_ratio`. The reported variance's own
+integer significand is recorded separately.
 
 For example, variance `0.04` reported to two decimals implies an SE interval
 `[sqrt(0.035), sqrt(0.045)]`, giving `s_equiv` about 7.74 and omission.
 Variance `0.0400` reported to four decimals gives a score about 799.75 and
-retention. The computed SE is 0.2 in both cases.
+retention, provided `sei` has at least the corresponding number of decimals.
+The computed SE is 0.2 in both cases.
 
-The default reads the workbook's `yi` and `vi` entries in their original XML
+The default reads the workbook's `yi`, `vi` and `sei` entries in their original XML
 spellings, preserves string-cell trailing zeros, and recognizes simple fixed
 decimal and scientific number formats. Explicit display rounding is reflected
 in the values being tested. Formula cells with General format and unsupported
@@ -113,7 +125,9 @@ at 15 significant digits, with trailing fractional zeros removed, gives the
 precision. It is labelled **unverified sensitivity**,
 not pooled with the reported-precision correction, and is not generated when
 all valid rows have known precision. Disable it with `infer_precision = FALSE`.
-The default corrected results are labelled `kp_reported_variance_precision`.
+The default corrected results are labelled `kp_reported_min_variance_se_precision`.
+Use `precision_basis = "variance"` for the earlier variance-only precision rule
+and its label `kp_reported_variance_precision`.
 For directly reported SE inputs, `precision_basis = "se"` restores the original
 rule and the labels `kp_reported_precision` /
 `kp_inferred_digits_sensitivity`.
@@ -135,11 +149,13 @@ Source the file to access functions without automatically running an analysis:
 ```r
 source("scripts/discontinuity_tests.R")
 
-# A data frame with original coefficient/variance strings, preserving zeros.
+# A data frame with original coefficient/variance/SE strings, preserving zeros.
 d$coefficient_decimals <- reported_decimal_places(d$coefficient_as_reported)
 d$variance_decimals <- reported_decimal_places(d$variance_as_reported)
+d$se_decimals <- reported_decimal_places(d$se_as_reported)
 run_discontinuity_tests(
   d, estimate_col = "coefficient_as_reported", variance_col = "variance_as_reported",
+  se_col = "se_as_reported", se_digits_col = "se_decimals",
   estimate_digits_col = "coefficient_decimals", variance_digits_col = "variance_decimals",
   cluster_col = "article_id", subgroup_col = NULL, infer_precision = FALSE
 )
@@ -165,8 +181,9 @@ be described as a **normal approximation**, not as an exact t test. No df is
 invented from the number of studies.
 
 Explicit precision columns override automatic workbook extraction. In default
-variance mode, `variance_col` and `variance_digits_col` control precision, and
-`se_col` is not used to compute the test statistic. In SE mode, `se_col` and
+minimum-decimal mode (`precision_basis = "min_variance_se"`), `variance_col` /
+`variance_digits_col` and `se_col` / `se_digits_col` supply the two reported
+decimal counts. `se_col` is not used to compute the point statistic. In SE mode, `se_col` and
 `se_digits_col` control precision. `use_workbook_entries = FALSE` disables
 automatic workbook-entry extraction.
 
@@ -180,6 +197,7 @@ automatic workbook-entry extraction.
 - `rounding_risks.xlsx`: classification/window-membership risk counts;
 - `empirical_discontinuity_diagnostics.pdf`: a two-column comparison of full
   and omission-filtered empirical samples, as described below;
+- `empirical_discontinuity_diagnostics.svg`: the same ggplot figure in SVG format;
 - `METHODS.txt`: conventions and limitations for interpreting the run.
 
 Each XLSX file has a `Results` sheet containing numeric results and a `Notes`
@@ -189,7 +207,7 @@ when their XLSX replacements are written. The default run returns **64 test
 rows**: 8 groups (pooled plus 7 subfields), 2 methods and 4 widths. Holm
 adjustments are recalculated for these 64 rows separately per p-value column.
 
-The diagnostic figure has empirical histograms on the left and caliper-share
+The ggplot diagnostic figure has empirical histograms on the left and caliper-share
 plots on the right. The upper row uses all valid observations; the lower row
 uses the Kranz–Puetz omission sample, meaning the filtered observations from
 `MasterData.xlsx`, not the economics dataset in the authors' original paper.
@@ -200,10 +218,13 @@ Both caliper panels use **y limits 0.35–0.70**. Their error bars are **pointwi
 95% article-clustered Student-t intervals**, based on `metaID`, the sandwich
 variance correction `G/(G-1)` and `t(G-1)` quantiles. They are not the exact
 binomial intervals also saved in the workbook, and are not simultaneous or
-Holm-adjusted intervals. Each panel identifies its input sample and total N;
-the count within each caliper is available in `n_window` in the workbook.
-The histograms use the range within 0.2 z units of the cutoff by default, with
-shared bins and vertical scales and their own local sample sizes.
+Holm-adjusted intervals. Each panel identifies its input sample, and
+each caliper's own `n_window` is printed in parentheses just below its half-width
+on the x-axis. Workbook-name and total-N subtitle lines are omitted. The
+histograms filter the data to **1.96 +/- 0.2 = [1.76, 2.16]** by default and
+use exactly those x limits without padding. They have shared bins and vertical
+scales and show their own local sample sizes. The default tests use the same
+literal 1.96 threshold, so the largest caliper and histogram include the same observations.
 
 The row-level audit is saved to the ignored
 `data/derived_data/discontinuity_tests/observation_audit.rds`. Alternative output
@@ -217,11 +238,13 @@ Tests cover hand-calculated binomial and clustered inference, duplicated
 observations within clusters, unavailable/degenerate cases, SE significands,
 propagated variance bounds and their agreement with an independent rounding
 grid, stable precision scores at high precision, preserved Excel trailing zeros
-and display precision, ignoring `sei` in variance mode, Student-t calibration,
+and display precision, selecting the minimum of `vi`/`sei` decimals per row,
+keeping point values unchanged, ignoring `sei` point values in variance mode, Student-t calibration,
 and a planted discontinuity.
 
-The default workbook run includes 64,810 valid observations and retains 55,546
-under the variance-based extension. The underlying one-sided binomial procedure
+The default workbook run includes 64,810 valid observations. Retention counts
+under the minimum-decimal variance extension are saved in the coverage workbook.
+The underlying one-sided binomial procedure
 was also checked against
 the pinned author implementation for every caliper width on both full and
 original-SE-omission samples at the paper's literal cutoff of 1.96. The original

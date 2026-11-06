@@ -18,3 +18,4 @@ data/derived_data/*
 # or tex files, but do not commit or move them through Git.
 results/**/*.svg
 results/**/*.tex
+!results/discontinuity_tests/empirical_discontinuity_diagnostics.svg

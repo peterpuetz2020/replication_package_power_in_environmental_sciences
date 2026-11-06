@@ -1,6 +1,7 @@
 ## Standalone empirical p = 0.05 diagnostics; not sourced by main.R.
 ## Kranz & Puetz (2022), AER 112(9):3124-3136, doi:10.1257/aer.20210121.
-## Default: propagate reported vi precision through sqrt(vi), then apply a
+## Default: use min(reported vi decimals, reported sei decimals) as the
+## variance rounding resolution, propagate through sqrt(vi), then apply a
 ## variance-based extension of their SE-significand >= 37 omission rule.
 ## precision_basis = "se" retains the original rule for directly reported SEs.
 ## Author replication: peterpuetz2020/replication_repo_methods_matter_comment,
@@ -178,12 +179,13 @@ prepare_discontinuity_data <- function(data, estimate_col = "yi", se_col = "sei"
                                        subgroup_col = "subfield",
                                        estimate_digits_col = NULL, se_digits_col = NULL,
                                        variance_digits_col = NULL,
-                                       precision_basis = c("variance", "se")) {
+                                       precision_basis = c("min_variance_se", "variance", "se")) {
   precision_basis <- match.arg(precision_basis)
   n <- nrow(data)
   if (!n) stop("Input data are empty.")
   pair <- is.null(statistic_col)
-  variance_based <- pair && precision_basis == "variance"
+  variance_based <- pair && precision_basis != "se"
+  minimum_based <- pair && precision_basis == "min_variance_se"
   estimate <- if (pair) numeric_column(data, estimate_col) else rep(NA_real_, n)
   variance <- rep(NA_real_, n)
   if (variance_based || (pair && is.null(se_col))) {
@@ -223,27 +225,35 @@ prepare_discontinuity_data <- function(data, estimate_col = "yi", se_col = "sei"
   cluster <- get_text(cluster_col, NA_character_)
   subgroup <- get_text(subgroup_col, NA_character_)
   md <- if (pair) numeric_column(data, estimate_digits_col) else rep(NA_real_, n)
-  sd <- if (pair && !variance_based) numeric_column(data, se_digits_col) else rep(NA_real_, n)
+  sd <- if (pair && (!variance_based || minimum_based)) numeric_column(data, se_digits_col) else rep(NA_real_, n)
   vd <- if (variance_based) numeric_column(data, variance_digits_col) else rep(NA_real_, n)
+  reported_se <- if (minimum_based) numeric_column(data, se_col) else se
   if (any(is.finite(estimate) & is.finite(md) & !valid_precision(estimate, md)) ||
-      any(is.finite(se) & is.finite(sd) & !valid_precision(se, sd)) ||
+      any(is.finite(reported_se) & is.finite(sd) & !valid_precision(reported_se, sd)) ||
       any(is.finite(variance) & is.finite(vd) & !valid_precision(variance, vd))) {
     stop("Supplied reporting precision is inconsistent with the stored estimate/SE/variance.")
   }
   known <- pair & is.finite(if (variance_based) vd else sd)
+  if (minimum_based) known <- known & is.finite(sd)
   inferred_sd <- inferred_md <- inferred_vd <- rep(NA_real_, n)
   if (pair) {
     if (variance_based) {
-      inferred_vd[!known] <- inferred_decimal_places(variance[!known])
+      unknown_vd <- !is.finite(vd)
+      inferred_vd[unknown_vd] <- inferred_decimal_places(variance[unknown_vd])
+      if (minimum_based) {
+        unknown_sd <- !is.finite(sd)
+        inferred_sd[unknown_sd] <- inferred_decimal_places(reported_se[unknown_sd])
+      }
     } else inferred_sd[!known] <- inferred_decimal_places(se[!known])
     unknown_md <- !is.finite(md)
     inferred_md[unknown_md] <- inferred_decimal_places(estimate[unknown_md])
   }
-  use_sd <- ifelse(known, sd, inferred_sd)
-  use_vd <- ifelse(known, vd, inferred_vd)
+  use_sd <- ifelse(is.finite(sd), sd, inferred_sd)
+  original_vd <- ifelse(is.finite(vd), vd, inferred_vd)
+  use_vd <- if (minimum_based) pmin(original_vd, use_sd) else original_vd
   use_md <- ifelse(is.finite(md), md, inferred_md)
-  significand <- round(se / 10^(-use_sd))
-  variance_significand <- round(variance / 10^(-use_vd))
+  significand <- if (variance_based) rep(NA_real_, n) else round(se / 10^(-use_sd))
+  variance_significand <- round(variance / 10^(-original_vd))
   variance_bounds <- variance_precision_bounds(variance, use_vd)
   se_lower <- if (variance_based) variance_bounds$se_lower else se - .5 * 10^(-use_sd)
   se_upper <- if (variance_based) variance_bounds$se_upper else se + .5 * 10^(-use_sd)
@@ -261,6 +271,8 @@ prepare_discontinuity_data <- function(data, estimate_col = "yi", se_col = "sei"
   data.frame(
     row_id = seq_len(n), estimate = estimate, standard_error = se,
     variance = variance, variance_decimals = use_vd,
+    reported_variance_decimals = vd, reported_se_decimals = sd,
+    variance_resolution_ratio = variance / 10^(-use_vd),
     raw_statistic = statistic, abs_z = z,
     p_two_sided = 2 * pnorm(z, lower.tail = FALSE),
     df = if (is.null(df)) rep(NA_real_, n) else df,
@@ -268,10 +280,10 @@ prepare_discontinuity_data <- function(data, estimate_col = "yi", se_col = "sei"
     cluster = cluster, subgroup = subgroup, valid = valid, exclusion_reason = reason,
     paired_input = pair, se_source = se_source,
     precision_basis = if (pair) precision_basis else "direct_statistic",
-    estimate_decimals = use_md, se_decimals = use_sd,
+    estimate_decimals = use_md, se_decimals = if (variance_based) NA_real_ else use_sd,
     common_decimal_precision = if (variance_based) rep(NA, n) else pair & use_md == use_sd,
     precision_source = ifelse(!pair, "not_applicable_direct_statistic",
-      ifelse(known, if (variance_based) "reported_variance_precision" else "reported_se_precision",
+      ifelse(known, if (minimum_based) "reported_min_variance_se_precision" else if (variance_based) "reported_variance_precision" else "reported_se_precision",
              "inferred_digits_sensitivity")),
     se_significand = significand,
     variance_significand = variance_significand,
@@ -294,7 +306,7 @@ caliper_test <- function(z, cluster = NULL, cutoff = qnorm(.975), half_width = .
       length(half_width) != 1L || !is.finite(half_width) ||
       half_width <= 0 || half_width >= cutoff) stop("Invalid cutoff or caliper half-width.")
   if (!is.null(cluster) && length(cluster) != length(z)) stop("Cluster length mismatch.")
-  inside <- is.finite(z) & abs(z - cutoff) <= half_width
+  inside <- is.finite(z) & z >= cutoff - half_width & z <= cutoff + half_width
   y <- as.numeric(z[inside] >= cutoff)
   n <- length(y)
   n_above <- sum(y)
@@ -351,19 +363,20 @@ caliper_test <- function(z, cluster = NULL, cutoff = qnorm(.975), half_width = .
 run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
                                      output_dir = "results/discontinuity_tests",
                                      audit_dir = "data/derived_data/discontinuity_tests",
-                                     half_widths = c(.05, .075, .1, .2),
-                                     cutoff = qnorm(.975), infer_precision = TRUE,
+                                     half_widths = c(.05, .1, .15, .2),
+                                     cutoff = 1.96, infer_precision = TRUE,
                                      subgroup_col = "subfield",
                                      estimate_col = "yi", se_col = "sei", variance_col = "vi",
                                      statistic_col = NULL, df_col = NULL, cluster_col = "metaID",
                                      estimate_digits_col = NULL, se_digits_col = NULL,
                                      variance_digits_col = NULL,
-                                     precision_basis = c("variance", "se"),
+                                     precision_basis = c("min_variance_se", "variance", "se"),
                                      use_workbook_entries = TRUE,
                                      ...) {
   precision_basis <- match.arg(precision_basis)
   if (!requireNamespace("openxlsx", quietly = TRUE)) stop("Install/restore openxlsx first.")
-  variance_based <- is.null(statistic_col) && precision_basis == "variance"
+  variance_based <- is.null(statistic_col) && precision_basis != "se"
+  minimum_based <- is.null(statistic_col) && precision_basis == "min_variance_se"
   precision_col <- if (variance_based) variance_col else se_col
   data <- if (is.data.frame(input)) input else if (grepl("\\.csv$", input, ignore.case = TRUE)) {
     read.csv(input, stringsAsFactors = FALSE, colClasses = "character", check.names = FALSE)
@@ -379,8 +392,10 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
   if (!is.data.frame(input) && grepl("\\.xlsx$", input, ignore.case = TRUE) &&
       use_workbook_entries && is.null(statistic_col) && !is.null(precision_col) &&
       is.null(estimate_digits_col) &&
-      is.null(if (variance_based) variance_digits_col else se_digits_col)) {
-    entries <- excel_reporting_entries(input, c(estimate_col, precision_col), nrow(data))
+      is.null(if (variance_based) variance_digits_col else se_digits_col) &&
+      (!minimum_based || is.null(se_digits_col))) {
+    entries <- excel_reporting_entries(input, unique(c(estimate_col, precision_col,
+      if (minimum_based) se_col)), nrow(data))
     stored_estimate <- numeric_column(data, estimate_col)
     stored_precision_value <- numeric_column(data, precision_col)
     stored_se <- if (!is.null(se_col) && se_col %in% names(data)) numeric_column(data, se_col) else NULL
@@ -390,6 +405,11 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     data$.precision_decimals <- entries[[precision_col]]$decimals
     estimate_digits_col <- ".estimate_decimals"
     if (variance_based) variance_digits_col <- ".precision_decimals" else se_digits_col <- ".precision_decimals"
+    if (minimum_based) {
+      data[[se_col]] <- entries[[se_col]]$entry
+      data$.se_decimals <- entries[[se_col]]$decimals
+      se_digits_col <- ".se_decimals"
+    }
   }
   d <- prepare_discontinuity_data(data, subgroup_col = subgroup_col,
     estimate_col = estimate_col, se_col = se_col, variance_col = variance_col,
@@ -403,6 +423,10 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
       d$variance_precision_source <- entries[[variance_col]]$source
       d$reported_variance_entry <- entries[[variance_col]]$entry
       d$stored_workbook_variance <- stored_precision_value
+      if (minimum_based) {
+        d$se_precision_source <- entries[[se_col]]$source
+        d$reported_se_entry <- entries[[se_col]]$entry
+      }
     } else {
       d$se_precision_source <- entries[[se_col]]$source
       d$reported_se_entry <- entries[[se_col]]$entry
@@ -418,10 +442,10 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     function(x) !is.na(d$subgroup) & d$subgroup == x
   ))
   if (length(levels)) names(groups)[-1] <- paste0(subgroup_col, ": ", levels)
-  reported_source <- if (variance_based) "reported_variance_precision" else "reported_se_precision"
-  reported_mode <- if (variance_based) "kp_reported_variance_precision" else "kp_reported_precision"
+  reported_source <- if (minimum_based) "reported_min_variance_se_precision" else if (variance_based) "reported_variance_precision" else "reported_se_precision"
+  reported_mode <- if (minimum_based) "kp_reported_min_variance_se_precision" else if (variance_based) "kp_reported_variance_precision" else "kp_reported_precision"
   sensitivity_mode <- if (variance_based) "kp_inferred_variance_digits_sensitivity" else "kp_inferred_digits_sensitivity"
-  omission_rule <- if (variance_based) "variance_propagated_SE_precision_score>=37" else "reported_SE_significand>=37"
+  omission_rule <- if (minimum_based) "variance_propagated_SE_precision_score>=37;d=min(d_vi,d_sei)" else if (variance_based) "variance_propagated_SE_precision_score>=37" else "reported_SE_significand>=37"
   modes <- c("unadjusted", reported_mode,
              if (infer_precision && any(valid$paired_input & valid$precision_source != reported_source)) sensitivity_mode)
   results <- list(); coverage <- list(); risks <- list()
@@ -431,8 +455,9 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     coverage[[group]] <- data.frame(
       group = group, n_input = sum(rows), n_valid = nrow(base),
       n_excluded_invalid = sum(rows & !d$valid),
-      n_known_se_precision = sum(base$precision_source == "reported_se_precision"),
-      n_known_variance_precision = sum(base$precision_source == "reported_variance_precision"),
+      n_known_se_precision = sum(is.finite(base$reported_se_decimals)),
+      n_known_variance_precision = sum(is.finite(base$reported_variance_decimals)),
+      n_known_min_variance_se_precision = sum(base$precision_source == "reported_min_variance_se_precision"),
       n_unknown_pair_precision = sum(base$paired_input & base$precision_source != reported_source),
       n_common_reported_decimals = if (variance_based) NA_integer_ else sum(base$common_decimal_precision &
         base$rounding_interval_precision == "reported", na.rm = TRUE),
@@ -487,6 +512,7 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     paste0("Input data: ", if (is.data.frame(input)) "supplied data frame" else input),
     paste0("Caliper half-widths in equivalent z units: ", paste(half_widths, collapse = ", ")),
     paste0("Precision basis: ", if (is.null(statistic_col)) precision_basis else "direct_statistic"),
+    if (minimum_based) "Variance resolution uses d = min(reported vi decimals, reported sei decimals) per observation; point estimates are not rounded to the selected resolution.",
     paste0("Omission criterion: ", omission_rule,
            if (variance_based) " (variance-based extension of Kranz-Puetz, not the literal published SE rule)." else "."),
     paste0("Cluster identifier: ", if (is.null(cluster_col)) "none" else cluster_col),
@@ -506,63 +532,86 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
   unlink(file.path(output_dir, c("caliper_tests.csv", "precision_coverage.csv", "rounding_risks.csv")))
   dir.create(audit_dir, recursive = TRUE, showWarnings = FALSE)
   saveRDS(d, file.path(audit_dir, "observation_audit.rds"))
-  pdf(file.path(output_dir, "empirical_discontinuity_diagnostics.pdf"), width = 10, height = 8)
-  tryCatch({
-    par(mfrow = c(2, 2), mar = c(4.2, 4.2, 5.5, 1.5))
-    source_label <- if (is.data.frame(input)) "Supplied data" else basename(input)
-    draw_calipers <- function(method, panel_title, sample_label, n_total) {
-      pooled <- results[results$group == "All" & results$method == method, ]
-      plot(pooled$half_width, pooled$share_above, ylim = c(.35, .7), yaxs = "i", type = "b",
-           pch = 16, xaxt = "n", xlab = "Caliper half-width (z units)", ylab = "Share above cutoff")
-      axis(1, at = sort(unique(pooled$half_width)), labels = sort(unique(pooled$half_width)))
-      title(main = panel_title, line = 3.6, cex.main = 1.05)
-      mtext(paste0(source_label, "; ", sample_label, "; N = ", format(n_total, big.mark = ",")),
-            side = 3, line = 2, cex = .7)
-      ci <- is.finite(pooled$cluster_ci_lower) & is.finite(pooled$cluster_ci_upper)
-      mtext(if (!any(ci)) "Cluster CIs unavailable" else if (identical(cluster_col, "metaID")) {
-        "95% pointwise article-clustered t CIs"
-      } else paste0("95% pointwise t CIs; clustered by ", cluster_col),
-            side = 3, line = .6, cex = .75)
-      if (any(ci)) arrows(pooled$half_width[ci], pooled$cluster_ci_lower[ci],
-                         pooled$half_width[ci], pooled$cluster_ci_upper[ci],
-                         angle = 90, code = 3, length = .04)
-      abline(h = .5, col = "red", lty = 2)
-    }
-    window <- valid$abs_z[abs(valid$abs_z - cutoff) <= max(half_widths)]
-    histogram_breaks <- seq(cutoff - max(half_widths), cutoff + max(half_widths), length.out = 81)
-    histogram_ylim <- if (length(window)) {
-      c(0, max(hist(window, breaks = histogram_breaks, plot = FALSE)$counts) * 1.05)
-    } else c(0, 1)
-    if (length(window)) {
-      hist(window, breaks = histogram_breaks, ylim = histogram_ylim,
-           main = paste0("Empirical |z| near p = ", signif(2 * pnorm(cutoff, lower.tail = FALSE), 3)),
-           xlab = "|z| (equivalent z for t inputs)")
-      mtext(paste0("n = ", length(window)), side = 3, line = .3, cex = .8)
-      abline(v = cutoff, col = "red", lwd = 2)
-    } else plot.new()
-    draw_calipers("unadjusted", "Calipers: full empirical sample", "all valid estimates", nrow(valid))
-    sensitivity <- sensitivity_mode %in% modes
-    retained <- if (sensitivity) valid$kp_keep_sensitivity else valid$kp_keep_reported
-    window <- valid$abs_z[retained & abs(valid$abs_z - cutoff) <= max(half_widths)]
-    if (length(window)) {
-      hist(window, breaks = histogram_breaks, ylim = histogram_ylim,
-           main = if (sensitivity) "Omission: inferred-digit SENSITIVITY" else if (variance_based) {
-             "Omission: reported variance precision"
-           } else "Omission: reported SE precision",
-           xlab = if (variance_based) "|z| after variance-based precision rule" else "|z| after SE-significand >= 37 rule")
-      mtext(paste0("n = ", length(window)), side = 3, line = .3, cex = .8)
-      abline(v = cutoff, col = "red", lwd = 2)
-    } else plot.new()
-    draw_calipers(if (sensitivity) sensitivity_mode else reported_mode,
-      "Calipers: Kranz-Puetz omission",
-      if (sensitivity) "inferred-digit sensitivity" else if (variance_based) "variance-based omission" else "reported-SE omission",
-      sum(retained))
-  }, finally = dev.off())
+  if (!requireNamespace("ggplot2", quietly = TRUE) || !requireNamespace("gridExtra", quietly = TRUE)) {
+    stop("Install/restore ggplot2 and gridExtra first.")
+  }
+  sensitivity <- sensitivity_mode %in% modes
+  adjusted_mode <- if (sensitivity) sensitivity_mode else reported_mode
+  retained <- if (sensitivity) valid$kp_keep_sensitivity else valid$kp_keep_reported
+  # The histogram and largest caliper use exactly the same window.
+  histogram_limits <- cutoff + c(-1, 1) * max(half_widths)
+  histogram_breaks <- seq(histogram_limits[1], histogram_limits[2], length.out = 81)
+  in_display <- valid$abs_z >= histogram_limits[1] & valid$abs_z <= histogram_limits[2]
+  hist_counts <- function(z) {
+    counts <- if (length(z)) hist(z, breaks = histogram_breaks, plot = FALSE)$counts else rep(0, 80)
+    data.frame(xmin = head(histogram_breaks, -1), xmax = tail(histogram_breaks, -1), count = counts)
+  }
+  full_hist <- hist_counts(valid$abs_z[in_display])
+  adjusted_hist <- hist_counts(valid$abs_z[in_display & retained])
+  histogram_ylim <- c(0, max(1, full_hist$count) * 1.05)
+  plot_theme <- ggplot2::theme_bw(base_size = 11) +
+    ggplot2::theme(panel.grid.minor = ggplot2::element_blank(),
+      plot.title = ggplot2::element_text(face = "bold", size = 12),
+      plot.subtitle = ggplot2::element_text(size = 9),
+      plot.margin = ggplot2::margin(10, 12, 10, 10))
+  histogram_plot <- function(counts, title, n) {
+    ggplot2::ggplot(counts) +
+      ggplot2::geom_rect(ggplot2::aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = count),
+        fill = "grey75", colour = "grey20", linewidth = .25) +
+      ggplot2::geom_vline(xintercept = cutoff, colour = "red3", linewidth = .6) +
+      ggplot2::scale_x_continuous(limits = histogram_limits,
+        breaks = pretty(histogram_limits, n = 4), expand = ggplot2::expansion(mult = 0)) +
+      ggplot2::scale_y_continuous(limits = histogram_ylim, expand = ggplot2::expansion(mult = 0)) +
+      ggplot2::labs(title = title, subtitle = paste0("n = ", format(n, big.mark = ",", trim = TRUE)),
+        x = "|z|", y = "Frequency") + plot_theme
+  }
+  caliper_plot <- function(method, title) {
+    pooled <- results[results$group == "All" & results$method == method, ]
+    pooled <- pooled[order(pooled$half_width), ]
+    ci <- is.finite(pooled$cluster_ci_lower) & is.finite(pooled$cluster_ci_upper)
+    ci_label <- if (!any(ci)) "Cluster CIs unavailable" else if (identical(cluster_col, "metaID")) {
+      "95% pointwise article-clustered t CIs"
+    } else paste0("95% pointwise t CIs; clustered by ", cluster_col)
+    g <- ggplot2::ggplot(pooled, ggplot2::aes(x = half_width, y = share_above)) +
+      ggplot2::geom_hline(yintercept = .5, colour = "red3", linetype = "dashed") +
+      ggplot2::geom_errorbar(data = pooled[ci, ],
+        ggplot2::aes(ymin = cluster_ci_lower, ymax = cluster_ci_upper), width = .006) +
+      ggplot2::geom_point(size = 2, na.rm = TRUE) +
+      ggplot2::scale_x_continuous(breaks = pooled$half_width,
+        labels = paste0(sprintf("%.2f", pooled$half_width), "\n(",
+                        format(pooled$n_window, big.mark = ",", trim = TRUE), ")"),
+        limits = range(pooled$half_width) + c(-.01, .01), expand = ggplot2::expansion(mult = 0)) +
+      ggplot2::scale_y_continuous(breaks = seq(.35, .7, .05),
+        labels = sprintf("%.2f", seq(.35, .7, .05)), expand = ggplot2::expansion(mult = 0)) +
+      ggplot2::coord_cartesian(ylim = c(.35, .7)) +
+      ggplot2::labs(title = title, subtitle = ci_label,
+        x = "Caliper half-width (z units)", y = "Share above cutoff") + plot_theme
+    if (nrow(pooled) > 1L) g <- g + ggplot2::geom_line(na.rm = TRUE)
+    g
+  }
+  adjusted_title <- if (sensitivity) "Kranz-Puetz: precision sensitivity" else "Kranz-Puetz omission sample"
+  plots <- list(
+    histogram_plot(full_hist, "Full empirical sample", sum(in_display)),
+    caliper_plot("unadjusted", "Calipers: full empirical sample"),
+    histogram_plot(adjusted_hist, adjusted_title, sum(in_display & retained)),
+    caliper_plot(adjusted_mode, paste0("Calipers: ", adjusted_title))
+  )
+  diagnostic <- local({
+    # Grid needs a device for text metrics; avoid an implicit Rplots.pdf.
+    grDevices::pdf(NULL)
+    on.exit(grDevices::dev.off())
+    gridExtra::arrangeGrob(grobs = plots, ncol = 2)
+  })
+  ggplot2::ggsave(file.path(output_dir, "empirical_discontinuity_diagnostics.svg"),
+    plot = diagnostic, device = grDevices::svg, width = 10, height = 8)
+  ggplot2::ggsave(file.path(output_dir, "empirical_discontinuity_diagnostics.pdf"),
+    plot = diagnostic, device = grDevices::pdf, width = 10, height = 8)
   writeLines(c(
     "Kranz & Puetz (2022), doi:10.1257/aer.20210121; published omission rule: reported SE significand >= 37.",
     if (variance_based) c(
       "THIS RUN EXTENDS THE RULE TO REPORTED VARIANCES; it does not apply the published SE rule literally.",
       paste0("Precision comes from ", variance_col, "; SE = sqrt(", variance_col, "); digits of a computed sqrt are not treated as reported precision."),
+      if (minimum_based) paste0("Use d = min(reported decimals of ", variance_col, ", reported decimals of ", se_col, ") for each observation; this is a conservative resolution assumption around the stored variance, without rounding its value."),
       "For a variance v reported to d decimals, Delta_v = 10^(-d), v_L = max(0, v-Delta_v/2), v_U = v+Delta_v/2.",
       "SE bounds are sqrt(v_L) and sqrt(v_U). Equivalent SE step = 2*max(sqrt(v)-sqrt(v_L), sqrt(v_U)-sqrt(v)).",
       "The variance-based omission retains sqrt(v)/equivalent_SE_step >= 37; this score is not a reported integer SE significand."
@@ -576,6 +625,8 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     "Holm adjustment is applied across all tested rows separately for each p-value column.",
     paste0("This run tests half-widths ", paste(half_widths, collapse = ", "), " only; maximum permitted half-width is 0.2."),
     "Diagnostic layout: full empirical histogram/caliper panel above; Kranz-Puetz omission-sample histogram/caliper panel below.",
+    "Figure uses ggplot2 and is saved as SVG and PDF. Histograms filter both data and x range to cutoff +/- max(half_widths), i.e. 1.76 to 2.16 by default; the default cutoff is the paper's rounded 1.96.",
+    "Caliper x-axis labels give each window's own n in parentheses on the second line.",
     "Both caliper panels have y limits 0.35 to 0.70 and show pointwise 95% article-clustered t(G-1) CIs, not exact-binomial or simultaneous intervals.",
     "Finite-width symmetry is stronger than density continuity: a rejection is not proof of publication bias.",
     paste0("Reporting precision basis: ", if (is.null(statistic_col)) precision_basis else "direct_statistic", ". Coefficient resolution uses its own reported entries."),
