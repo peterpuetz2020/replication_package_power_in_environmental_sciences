@@ -17,12 +17,13 @@ distributions, fitted meta-means, or the model-based outlier screen.
 ## Tests and estimands
 
 The null value is zero. The default statistic is `abs(yi / sqrt(vi))`, with cutoff
-`1.96`, the paper's rounded normal threshold for a two-sided p-value of approximately 0.05. Caliper
+`qnorm(0.975)`, the exact normal threshold for a two-sided p-value of 0.05,
+consistent with the main workflow. Caliper
 half-widths are 0.05, 0.1, 0.15 and 0.2 in **z units**. The runner rejects
 half-widths larger than 0.2.
 Window endpoints are included, and exact cutoff ties count as above, matching
 the author replication's binomial/randomization procedure. Supply
-`cutoff = qnorm(0.975)` if an exactly calibrated normal p = 0.05 cutoff is needed.
+`cutoff = 1.96` only when the paper's rounded threshold is specifically needed.
 
 For each caliper, the script reports the fraction above the cutoff, one-sided
 and two-sided exact binomial tests against 0.5, and binomial confidence
@@ -219,12 +220,24 @@ Both caliper panels use **y limits 0.35–0.70**. Their error bars are **pointwi
 variance correction `G/(G-1)` and `t(G-1)` quantiles. They are not the exact
 binomial intervals also saved in the workbook, and are not simultaneous or
 Holm-adjusted intervals. Each panel identifies its input sample, and
-each caliper's own `n_window` is printed in parentheses just below its half-width
+each caliper's own `n_window` is printed as `(n = ...)` just below its half-width
 on the x-axis. Workbook-name and total-N subtitle lines are omitted. The
-histograms filter the data to **1.96 +/- 0.2 = [1.76, 2.16]** by default and
+histograms filter the data to **qnorm(0.975) +/- 0.2**, approximately **[1.76, 2.16]**, by default and
 use exactly those x limits without padding. They have shared bins and vertical
 scales and show their own local sample sizes. The default tests use the same
-literal 1.96 threshold, so the largest caliper and histogram include the same observations.
+exact normal threshold as the main workflow, so the largest caliper and histogram include the same observations.
+
+Clustering is appropriate when multiple estimates share a source of dependence.
+In publication-bias applications that source is often the original research
+article. Here `metaID` identifies a **meta-analysis article**, consistent with
+the main workflow's article-cluster bootstrap. It is a practical cluster level
+for this repository, but cannot account for primary studies shared across
+different meta-analysis articles. Globally matched primary-article identifiers
+would support more direct checks of that dependence. The Kranz–Puetz replication
+uses article clustering in its design-comparison probits; its exact-binomial
+window figures assume independent observations. Our clustered share intervals
+are an additional dependence adjustment, not a literal reproduction of those
+binomial figures.
 
 The row-level audit is saved to the ignored
 `data/derived_data/discontinuity_tests/observation_audit.rds`. Alternative output

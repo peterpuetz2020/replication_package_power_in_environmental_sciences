@@ -101,6 +101,7 @@ t_run <- run_discontinuity_tests(tdata, statistic_col = "t_value", df_col = "df"
   cluster_col = NULL, subgroup_col = NULL, half_widths = .1,
   output_dir = folder, audit_dir = file.path(folder, "audit"))
 stopifnot(nrow(t_run$tests) == 2L, all(t_run$tests$n_window == 3),
+          all(abs(t_run$tests$p_cutoff - .05) < 1e-14),
           all(t_run$tests$cluster_status == "no_cluster_column"))
 unlink(folder, recursive = TRUE)
 
