@@ -351,7 +351,7 @@ caliper_test <- function(z, cluster = NULL, cutoff = qnorm(.975), half_width = .
 run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
                                      output_dir = "results/discontinuity_tests",
                                      audit_dir = "data/derived_data/discontinuity_tests",
-                                     half_widths = c(.05, .075, .1, .2, .3, .4, .5),
+                                     half_widths = c(.05, .075, .1, .2),
                                      cutoff = qnorm(.975), infer_precision = TRUE,
                                      subgroup_col = "subfield",
                                      estimate_col = "yi", se_col = "sei", variance_col = "vi",
@@ -362,6 +362,7 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
                                      use_workbook_entries = TRUE,
                                      ...) {
   precision_basis <- match.arg(precision_basis)
+  if (!requireNamespace("openxlsx", quietly = TRUE)) stop("Install/restore openxlsx first.")
   variance_based <- is.null(statistic_col) && precision_basis == "variance"
   precision_col <- if (variance_based) variance_col else se_col
   data <- if (is.data.frame(input)) input else if (grepl("\\.csv$", input, ignore.case = TRUE)) {
@@ -370,8 +371,9 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     if (!requireNamespace("readxl", quietly = TRUE)) stop("Install/restore readxl first.")
     as.data.frame(readxl::read_excel(input))
   }
-  if (!length(half_widths) || any(!is.finite(half_widths) | half_widths <= 0 | half_widths >= cutoff)) {
-    stop("Caliper half-widths must be positive and smaller than the cutoff.")
+  if (!length(half_widths) || any(!is.finite(half_widths) | half_widths <= 0 |
+                                half_widths > .2 | half_widths >= cutoff)) {
+    stop("Caliper half-widths must be positive, no larger than 0.2, and smaller than the cutoff.")
   }
   entries <- NULL
   if (!is.data.frame(input) && grepl("\\.xlsx$", input, ignore.case = TRUE) &&
@@ -481,14 +483,51 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     results[[paste0(column, "_holm")]] <- adjusted
   }
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-  write.csv(results, file.path(output_dir, "caliper_tests.csv"), row.names = FALSE)
-  write.csv(do.call(rbind, coverage), file.path(output_dir, "precision_coverage.csv"), row.names = FALSE)
-  write.csv(do.call(rbind, risks), file.path(output_dir, "rounding_risks.csv"), row.names = FALSE)
+  workbook_notes <- c(
+    paste0("Input data: ", if (is.data.frame(input)) "supplied data frame" else input),
+    paste0("Caliper half-widths in equivalent z units: ", paste(half_widths, collapse = ", ")),
+    paste0("Precision basis: ", if (is.null(statistic_col)) precision_basis else "direct_statistic"),
+    paste0("Omission criterion: ", omission_rule,
+           if (variance_based) " (variance-based extension of Kranz-Puetz, not the literal published SE rule)." else "."),
+    paste0("Cluster identifier: ", if (is.null(cluster_col)) "none" else cluster_col),
+    "Plotted CIs: pointwise 95% article-clustered Student t(G-1) intervals for share above cutoff; G/(G-1) sandwich correction. Not simultaneous or Holm-adjusted CIs.",
+    "Binomial CIs in the test workbook are exact 95% intervals assuming independent observations; they are not the plotted intervals.",
+    paste0("Holm correction uses all ", nrow(results), " tested rows, separately for each p-value column."),
+    "Blank cells indicate unavailable/not-applicable results; consult the status columns."
+  )
+  write_workbook <- function(table, stem, description) {
+    openxlsx::write.xlsx(list(Results = table, Notes = data.frame(note = c(description, workbook_notes))),
+      file = file.path(output_dir, paste0(stem, ".xlsx")), asTable = TRUE,
+      firstRow = TRUE, colWidths = "auto", overwrite = TRUE)
+  }
+  write_workbook(results, "caliper_tests", "One row per group, method and caliper width; counts, share estimates and inference.")
+  write_workbook(do.call(rbind, coverage), "precision_coverage", "One row per group; valid input and precision-filter coverage before caliper restriction.")
+  write_workbook(do.call(rbind, risks), "rounding_risks", "Possible rounding risks across the entire retained group, not just observed window members; these are not confirmed errors.")
+  unlink(file.path(output_dir, c("caliper_tests.csv", "precision_coverage.csv", "rounding_risks.csv")))
   dir.create(audit_dir, recursive = TRUE, showWarnings = FALSE)
   saveRDS(d, file.path(audit_dir, "observation_audit.rds"))
   pdf(file.path(output_dir, "empirical_discontinuity_diagnostics.pdf"), width = 10, height = 8)
   tryCatch({
-    par(mfrow = c(2, 2))
+    par(mfrow = c(2, 2), mar = c(4.2, 4.2, 5.5, 1.5))
+    source_label <- if (is.data.frame(input)) "Supplied data" else basename(input)
+    draw_calipers <- function(method, panel_title, sample_label, n_total) {
+      pooled <- results[results$group == "All" & results$method == method, ]
+      plot(pooled$half_width, pooled$share_above, ylim = c(.35, .7), yaxs = "i", type = "b",
+           pch = 16, xaxt = "n", xlab = "Caliper half-width (z units)", ylab = "Share above cutoff")
+      axis(1, at = sort(unique(pooled$half_width)), labels = sort(unique(pooled$half_width)))
+      title(main = panel_title, line = 3.6, cex.main = 1.05)
+      mtext(paste0(source_label, "; ", sample_label, "; N = ", format(n_total, big.mark = ",")),
+            side = 3, line = 2, cex = .7)
+      ci <- is.finite(pooled$cluster_ci_lower) & is.finite(pooled$cluster_ci_upper)
+      mtext(if (!any(ci)) "Cluster CIs unavailable" else if (identical(cluster_col, "metaID")) {
+        "95% pointwise article-clustered t CIs"
+      } else paste0("95% pointwise t CIs; clustered by ", cluster_col),
+            side = 3, line = .6, cex = .75)
+      if (any(ci)) arrows(pooled$half_width[ci], pooled$cluster_ci_lower[ci],
+                         pooled$half_width[ci], pooled$cluster_ci_upper[ci],
+                         angle = 90, code = 3, length = .04)
+      abline(h = .5, col = "red", lty = 2)
+    }
     window <- valid$abs_z[abs(valid$abs_z - cutoff) <= max(half_widths)]
     histogram_breaks <- seq(cutoff - max(half_widths), cutoff + max(half_widths), length.out = 81)
     histogram_ylim <- if (length(window)) {
@@ -501,21 +540,7 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
       mtext(paste0("n = ", length(window)), side = 3, line = .3, cex = .8)
       abline(v = cutoff, col = "red", lwd = 2)
     } else plot.new()
-    pooled <- results[results$group == "All" & results$method == "unadjusted", ]
-    plot(pooled$half_width, pooled$share_above, ylim = c(0, 1), type = "b",
-         xlab = "Caliper half-width", ylab = "Share above cutoff", main = "Unadjusted; cluster 95% CI when available")
-    ci <- is.finite(pooled$cluster_ci_lower) & is.finite(pooled$cluster_ci_upper)
-    if (any(ci)) arrows(pooled$half_width[ci], pooled$cluster_ci_lower[ci],
-                       pooled$half_width[ci], pooled$cluster_ci_upper[ci],
-                       angle = 90, code = 3, length = .04)
-    abline(h = .5, col = "red", lty = 2)
-    pair <- valid$paired_input & abs(valid$estimate) > 0
-    if (any(pair)) {
-      plot(log10(valid$standard_error[pair]), log10(abs(valid$estimate[pair])), pch = 16,
-           cex = .25, col = adjustcolor("black", alpha.f = .15),
-           xlab = "log10(SE)", ylab = "log10(|estimate|)", main = "Joint estimate / SE distribution")
-      abline(a = log10(cutoff), b = 1, col = "red", lwd = 2)
-    } else plot.new()
+    draw_calipers("unadjusted", "Calipers: full empirical sample", "all valid estimates", nrow(valid))
     sensitivity <- sensitivity_mode %in% modes
     retained <- if (sensitivity) valid$kp_keep_sensitivity else valid$kp_keep_reported
     window <- valid$abs_z[retained & abs(valid$abs_z - cutoff) <= max(half_widths)]
@@ -528,6 +553,10 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
       mtext(paste0("n = ", length(window)), side = 3, line = .3, cex = .8)
       abline(v = cutoff, col = "red", lwd = 2)
     } else plot.new()
+    draw_calipers(if (sensitivity) sensitivity_mode else reported_mode,
+      "Calipers: Kranz-Puetz omission",
+      if (sensitivity) "inferred-digit sensitivity" else if (variance_based) "variance-based omission" else "reported-SE omission",
+      sum(retained))
   }, finally = dev.off())
   writeLines(c(
     "Kranz & Puetz (2022), doi:10.1257/aer.20210121; published omission rule: reported SE significand >= 37.",
@@ -545,6 +574,9 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     "Cluster inference is an intercept-share sandwich variance, small-sample G/(G-1), Student t(G-1).",
     "Default clusters are meta-analysis articles (metaID); unrelated articles may still share primary studies.",
     "Holm adjustment is applied across all tested rows separately for each p-value column.",
+    paste0("This run tests half-widths ", paste(half_widths, collapse = ", "), " only; maximum permitted half-width is 0.2."),
+    "Diagnostic layout: full empirical histogram/caliper panel above; Kranz-Puetz omission-sample histogram/caliper panel below.",
+    "Both caliper panels have y limits 0.35 to 0.70 and show pointwise 95% article-clustered t(G-1) CIs, not exact-binomial or simultaneous intervals.",
     "Finite-width symmetry is stronger than density continuity: a rejection is not proof of publication bias.",
     paste0("Reporting precision basis: ", if (is.null(statistic_col)) precision_basis else "direct_statistic", ". Coefficient resolution uses its own reported entries."),
     "Excel precision uses original string/numeric XML entries or simple explicit number formats; formulas with General format have unknown precision.",

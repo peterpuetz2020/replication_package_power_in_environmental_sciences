@@ -215,4 +215,7 @@ propagates variance rounding through `sqrt(vi)`, and applies an explicitly
 labelled variance-based extension of the omission rule. It reports
 article-clustered inference and writes separate diagnostics under
 `results/discontinuity_tests/`. It is independent of `scripts/main.R`.
+Caliper half-widths are 0.05, 0.075, 0.1 and 0.2. Summary tables are XLSX
+workbooks; the diagnostic PDF compares full and omission-filtered samples
+using pointwise 95% article-clustered t intervals.
 See [the method, precision conventions and input options](docs/discontinuity_tests.md).

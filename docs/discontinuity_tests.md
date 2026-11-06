@@ -16,7 +16,8 @@ distributions, fitted meta-means, or the model-based outlier screen.
 
 The null value is zero. The default statistic is `abs(yi / sqrt(vi))`, with cutoff
 `qnorm(0.975)` for a two-sided normal-approximation p-value of 0.05. Caliper
-half-widths are 0.05, 0.075, 0.1, 0.2, 0.3, 0.4 and 0.5 in **z units**.
+half-widths are 0.05, 0.075, 0.1 and 0.2 in **z units**. The runner rejects
+half-widths larger than 0.2.
 Window endpoints are included, and exact cutoff ties count as above, matching
 the author replication's binomial/randomization procedure. `cutoff = 1.96`
 can be supplied to reproduce the paper's rounded normal cutoff literally.
@@ -35,8 +36,8 @@ Pooled and subfield-specific tests are returned. Each p-value column also has
 a Holm adjustment across all available windows, groups and methods. Local
 probability balance in a finite window is stronger than density continuity;
 these are **discontinuity diagnostics**, not proof of p-hacking or publication
-bias. The joint coefficient/SE plot shows the relevant boundary
-`abs(coefficient) = cutoff * SE`. There is no single corresponding cutoff in
+bias. The relevant coefficient/SE boundary is
+`abs(coefficient) = cutoff * SE`; there is no single corresponding cutoff in
 the marginal coefficient or SE distribution by itself.
 
 ## Kranz–Pütz rule and its variance-based extension
@@ -173,14 +174,36 @@ automatic workbook-entry extraction.
 
 `results/discontinuity_tests/` contains:
 
-- `caliper_tests.csv`: counts, nominal and cluster-robust inference, Holm
+- `caliper_tests.xlsx`: counts, nominal and cluster-robust inference, Holm
   adjustments, retention counts and status flags;
-- `precision_coverage.csv`: valid/excluded rows and precision coverage;
-- `rounding_risks.csv`: classification/window-membership risk counts;
-- `empirical_discontinuity_diagnostics.pdf`: empirical local distribution,
-  caliper shares, the joint coefficient/SE distribution, and the adjusted
-  distribution, with shared histogram bins/vertical scales and sample sizes;
+- `precision_coverage.xlsx`: valid/excluded rows and precision coverage;
+- `rounding_risks.xlsx`: classification/window-membership risk counts;
+- `empirical_discontinuity_diagnostics.pdf`: a two-column comparison of full
+  and omission-filtered empirical samples, as described below;
 - `METHODS.txt`: conventions and limitations for interpreting the run.
+
+Each XLSX file has a `Results` sheet containing numeric results and a `Notes`
+sheet documenting the input, precision rule, confidence intervals and Holm
+correction. Obsolete CSV versions of these three generated outputs are removed
+when their XLSX replacements are written. The default run returns **64 test
+rows**: 8 groups (pooled plus 7 subfields), 2 methods and 4 widths. Holm
+adjustments are recalculated for these 64 rows separately per p-value column.
+
+The diagnostic figure has empirical histograms on the left and caliper-share
+plots on the right. The upper row uses all valid observations; the lower row
+uses the Kranz–Puetz omission sample, meaning the filtered observations from
+`MasterData.xlsx`, not the economics dataset in the authors' original paper.
+The default lower row uses the variance-based extension. If a missing-precision
+sensitivity is needed, that sample is explicitly labelled instead.
+
+Both caliper panels use **y limits 0.35–0.70**. Their error bars are **pointwise
+95% article-clustered Student-t intervals**, based on `metaID`, the sandwich
+variance correction `G/(G-1)` and `t(G-1)` quantiles. They are not the exact
+binomial intervals also saved in the workbook, and are not simultaneous or
+Holm-adjusted intervals. Each panel identifies its input sample and total N;
+the count within each caliper is available in `n_window` in the workbook.
+The histograms use the range within 0.2 z units of the cutoff by default, with
+shared bins and vertical scales and their own local sample sizes.
 
 The row-level audit is saved to the ignored
 `data/derived_data/discontinuity_tests/observation_audit.rds`. Alternative output

@@ -103,8 +103,15 @@ res <- run_discontinuity_tests(d, output_dir = folder, half_widths = c(.1, .2),
   audit_dir = file.path(folder, "audit"),
   subgroup_col = NULL, estimate_digits_col = "md", se_digits_col = "sd", precision_basis = "se")
 stopifnot(nrow(res$tests) == 4L,
-          all(file.exists(file.path(folder, c("caliper_tests.csv", "precision_coverage.csv",
-                                             "rounding_risks.csv", "METHODS.txt")))))
+          all(file.exists(file.path(folder, c("caliper_tests.xlsx", "precision_coverage.xlsx",
+                                             "rounding_risks.xlsx", "METHODS.txt")))))
+saved <- openxlsx::read.xlsx(file.path(folder, "caliper_tests.xlsx"), sheet = "Results")
+stopifnot(identical(saved$n_window, as.numeric(res$tests$n_window)),
+          max(abs(saved$binom_p_greater_iid - res$tests$binom_p_greater_iid)) < 1e-14,
+          identical(openxlsx::getSheetNames(file.path(folder, "caliper_tests.xlsx")), c("Results", "Notes")),
+          !any(file.exists(file.path(folder, c("caliper_tests.csv", "precision_coverage.csv", "rounding_risks.csv")))))
+stopifnot(inherits(try(run_discontinuity_tests(d, half_widths = c(.1, .3),
+  subgroup_col = NULL, precision_basis = "se"), silent = TRUE), "try-error"))
 unlink(folder, recursive = TRUE)
 
 ## Excel text and fixed decimal formats must preserve trailing zeros, unlike
@@ -139,12 +146,14 @@ path <- tempfile(fileext = ".xlsx")
 folder <- tempfile("variance-xlsx-")
 openxlsx::saveWorkbook(wb, path)
 vres <- run_discontinuity_tests(path, output_dir = folder,
-  audit_dir = file.path(folder, "audit"), subgroup_col = NULL, half_widths = .1)
+  audit_dir = file.path(folder, "audit"), subgroup_col = NULL)
 stopifnot(identical(vres$audit$variance_decimals, c(2, 4)),
           identical(vres$audit$reported_variance_entry, c("0.04", "0.0400")),
           identical(vres$audit$kp_keep_reported, c(FALSE, TRUE)),
           identical(vres$audit$standard_error, c(.2, .2)),
           all(vres$audit$stored_workbook_se == 999),
-          identical(vres$tests$method, c("unadjusted", "kp_reported_variance_precision")))
+          identical(unique(vres$tests$method), c("unadjusted", "kp_reported_variance_precision")),
+          identical(sort(unique(vres$tests$half_width)), c(.05, .075, .1, .2)),
+          nrow(vres$tests) == 8L)
 unlink(c(path, folder), recursive = TRUE)
 cat("PASS: binomial/clustered inference, SE and variance precision, exact transformed bounds, t calibration and planted jump\n")
