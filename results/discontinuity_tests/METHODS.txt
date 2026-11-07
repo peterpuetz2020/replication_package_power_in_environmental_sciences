@@ -1,4 +1,4 @@
-Kranz & Puetz (2022), doi:10.1257/aer.20210121; published omission rule: reported SE significand >= 37.
+Kranz & Pütz (2022), doi:10.1257/aer.20210121; published omission rule: reported SE significand >= 37.
 THIS RUN EXTENDS THE RULE TO REPORTED VARIANCES; it does not apply the published SE rule literally.
 Precision comes from vi; SE = sqrt(vi); digits of a computed sqrt are not treated as reported precision.
 Use d = min(reported decimals of vi, reported decimals of sei) for each observation; this is a conservative resolution assumption around the stored variance, without rounding its value.
@@ -14,10 +14,10 @@ Default clusters are meta-analysis articles (metaID); unrelated articles may sti
 Field-specific calipers are omitted. All caliper output concerns the pooled empirical sample.
 Bootstrap sensitivity: 9999 whole-article resamples; seed 20261107; percentile 95% CIs. Empty windows are reported; bounds require >=95% valid draws.
 This run tests half-widths 0.05, 0.1, 0.15, 0.2 only; maximum permitted half-width is 0.2.
-Diagnostic layout: full empirical histogram/caliper panel above; Kranz-Puetz omission-sample histogram/caliper panel below.
+Diagnostic layout: full empirical histogram/caliper panel above; Kranz-Pütz omission-sample histogram/caliper panel below.
 Figure uses ggplot2 and is saved as SVG and PDF. Histograms filter both data and x range to cutoff +/- max(half_widths), approximately 1.76 to 2.16 by default; the exact normal cutoff qnorm(0.975) matches the main workflow.
 Caliper x-axis labels give each window's own sample size as (n = ...) on the second line.
-Both caliper panels have y limits 0.35 to 0.70 and compare pointwise 95% article-clustered t(G-1) and cluster-bootstrap percentile CIs. These are not simultaneous intervals.
+Both caliper panels have y limits 0.40 to 0.60 and compare pointwise 95% article-clustered t(G-1) and cluster-bootstrap percentile CIs. These are not simultaneous intervals.
 Finite-width symmetry is stronger than density continuity: a rejection is not proof of publication bias.
 Reporting precision basis: min_variance_se. Coefficient resolution uses its own reported entries.
 Excel precision uses original string/numeric XML entries or simple explicit number formats; formulas with General format have unknown precision.

@@ -213,7 +213,7 @@ iteration count as its first argument when checking a smaller run.
 
 ## Separate empirical discontinuity tests
 
-Run `Rscript scripts/discontinuity_tests.R` to test the observed distribution
+Run `Rscript scripts/caliper_tests.R` to test the observed distribution
 near two-sided p = 0.05 using calipers and the Kranz–Pütz (2022) rounding-omission
 method. The script reads reported `yi`/`vi`/`sei` precision from the workbook entries,
 uses the smaller `vi`/`sei` decimal count for each variance rounding interval,

@@ -3,7 +3,7 @@
 Run separately from the manuscript workflow:
 
 ```sh
-Rscript scripts/discontinuity_tests.R
+Rscript scripts/caliper_tests.R
 ```
 
 This uses **all observed rows** of `data/MasterData.xlsx`, with `yi` as the
@@ -147,7 +147,7 @@ separate latent-density analyses. Author sources:
 Source the file to access functions without automatically running an analysis:
 
 ```r
-source("scripts/discontinuity_tests.R")
+source("scripts/caliper_tests.R")
 
 # A data frame with original coefficient/variance/SE strings, preserving zeros.
 d$coefficient_decimals <- reported_decimal_places(d$coefficient_as_reported)
@@ -214,7 +214,7 @@ uses the Kranz–Puetz omission sample, meaning the filtered observations from
 The default lower row uses the variance-based extension. If a missing-precision
 sensitivity is needed, that sample is explicitly labelled instead.
 
-Both caliper panels use **y limits 0.35–0.70**. Their error bars compare
+Both caliper panels use **y limits 0.40–0.60**. Their error bars compare
 **pointwise 95% article-clustered Student-t intervals** (black) with **article
 cluster-bootstrap percentile intervals** (blue). The t intervals use `metaID`,
 the sandwich correction `G/(G-1)` and `t(G-1)` quantiles. Exact binomial
@@ -226,6 +226,11 @@ histograms filter the data to **qnorm(0.975) +/- 0.2**, approximately **[1.76, 2
 use exactly those x limits without padding. They have shared bins and vertical
 scales and show their own local sample sizes. The default tests use the same
 exact normal threshold as the main workflow, so the largest caliper and histogram include the same observations.
+
+The 0.40–0.60 display range retains the axis settings from the GitHub script.
+Some upper bootstrap bounds exceed 0.60 and are clipped in this zoomed view;
+the XLSX workbooks retain the complete interval bounds. The earlier
+`scripts/discontinuity_tests.R` entry point forwards to `scripts/caliper_tests.R`.
 
 The bootstrap uses **9,999 whole-article resamples**, with seed **20261107**,
 by default. It resamples all articles in each retained dataset, including

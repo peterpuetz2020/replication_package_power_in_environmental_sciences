@@ -1,4 +1,4 @@
-source("scripts/discontinuity_tests.R")
+source("scripts/caliper_tests.R")
 stopifnot(identical(reported_decimal_places(c("0.0400", "1.20e-3", "100", "1e3", NA)),
                     c(4, 5, 0, -3, NA_real_)))
 
