@@ -591,6 +591,10 @@ if (!exists("all_combination_results") || !exists("all_esr_results")) {
 if (!"waap_wls" %in% all_esr_results$estimator) {
   stop("Figure S5 inputs lack WAAP-WLS. Run compute_waap_wls.R and create_tables_and_figures.R first.")
 }
+if (any(all_esr_results$estimator %in% c("fixed_effect", "waap_wls") &
+        all_esr_results$heterogeneity_multiplier != 0)) {
+  stop("Stale Figure S5 inputs: fixed effects and WAAP-WLS must use zero heterogeneity only. Rebuild the figure inputs.")
+}
 write.csv(
   all_combination_results,
   file.path(derived_data_dir, "Figure_S5_numbers.csv"),
@@ -636,7 +640,7 @@ esr_plot <- ggplot(
   labs(
     x = "Share of genuine heterogeneity", y = expression(ESR[0.05]^sig),
     color = "Estimator",
-    caption = "WAAP-WLS counterfactuals use heterogeneity from the corresponding random-effects sample."
+    caption = "Fixed-effects and WAAP-WLS are shown only for zero genuine heterogeneity."
   ) +
   supplement_figure_theme() +
   theme(legend.position = "bottom")

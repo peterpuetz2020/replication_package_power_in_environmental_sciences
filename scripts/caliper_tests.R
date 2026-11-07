@@ -302,7 +302,7 @@ prepare_discontinuity_data <- function(data, estimate_col = "yi", se_col = "sei"
 }
 
 cluster_bootstrap_calipers <- function(z, cluster, half_widths, cutoff = qnorm(.975),
-                                       iterations = 9999L, seed = 20261107L) {
+                                       iterations = 1000L, seed = 20261107L) {
   if (length(iterations) != 1 || !is.finite(iterations) || iterations < 100 || iterations != trunc(iterations)) {
     stop("Use at least 100 integer bootstrap iterations.")
   }
@@ -355,50 +355,20 @@ caliper_test <- function(z, cluster = NULL, cutoff = qnorm(.975), half_width = .
       length(half_width) != 1L || !is.finite(half_width) ||
       half_width <= 0 || half_width >= cutoff) stop("Invalid cutoff or caliper half-width.")
   if (!is.null(cluster) && length(cluster) != length(z)) stop("Cluster length mismatch.")
-  inside <- is.finite(z) & z >= cutoff - half_width & z <= cutoff + half_width
-  y <- as.numeric(z[inside] >= cutoff)
-  n <- length(y)
-  n_above <- sum(y)
-  out <- data.frame(
-    cutoff = cutoff,
-    half_width = half_width, n_window = n, n_below = n - n_above,
-    n_at_cutoff = sum(z[inside] == cutoff), n_above_including_ties = n_above,
-    share_above = if (n) mean(y) else NA_real_,
-    binom_ci_lower = NA_real_, binom_ci_upper = NA_real_,
-    n_clusters = NA_integer_, cluster_se = NA_real_,
-    cluster_ci_lower = NA_real_, cluster_ci_upper = NA_real_,
-    cluster_status = "empty_window"
-  )
-  if (!n) return(out)
-  exact <- binom.test(n_above, n, p = .5)
-  out$binom_ci_lower <- exact$conf.int[1]
-  out$binom_ci_upper <- exact$conf.int[2]
-  if (is.null(cluster)) {
-    out$cluster_status <- "no_cluster_column"
-    return(out)
-  }
+  inside <- is.finite(z) & z >= cutoff-half_width & z <= cutoff+half_width
+  y <- z[inside] >= cutoff
+  out <- data.frame(cutoff = cutoff, half_width = half_width,
+    n_window = length(y), n_below = sum(!y), n_at_cutoff = sum(z[inside]==cutoff),
+    n_above_including_ties = sum(y), share_above = if (length(y)) mean(y) else NA_real_,
+    n_clusters = NA_integer_, cluster_status = "empty_window")
+  if (!length(y)) return(out)
+  if (is.null(cluster)) {out$cluster_status <- "no_cluster_column"; return(out)}
   labels <- as.character(cluster[inside])
   if (anyNA(labels) || any(!nzchar(trimws(labels)))) {
-    out$cluster_status <- "missing_cluster_identifiers"
-    return(out)
+    out$cluster_status <- "missing_cluster_identifiers"; return(out)
   }
-  scores <- tapply(y - mean(y), labels, sum)
-  g <- length(scores)
-  out$n_clusters <- g
-  if (g < 2L) {
-    out$cluster_status <- "fewer_than_two_clusters"
-    return(out)
-  }
-  se <- sqrt(g / (g - 1) * sum(scores^2) / n^2)
-  out$cluster_se <- se
-  if (!is.finite(se) || se <= sqrt(.Machine$double.eps)) {
-    out$cluster_status <- "degenerate_cluster_variance"
-    return(out)
-  }
-  margin <- qt(.975, g - 1) * se
-  out$cluster_ci_lower <- max(0, mean(y) - margin)
-  out$cluster_ci_upper <- min(1, mean(y) + margin)
-  out$cluster_status <- "ok_cluster_t_approximation"
+  out$n_clusters <- length(unique(labels))
+  out$cluster_status <- if (out$n_clusters < 2L) "fewer_than_two_clusters" else "ok_cluster_counts"
   out
 }
 
@@ -408,7 +378,7 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
                                      half_widths = c(.05, .1, .15, .2),
                                      cutoff = qnorm(.975), infer_precision = TRUE,
                                      subgroup_col = NULL,
-                                     bootstrap_iterations = 9999L, bootstrap_seed = 20261107L,
+                                     bootstrap_iterations = 1000L, bootstrap_seed = 20261107L,
                                      estimate_col = "yi", se_col = "sei", variance_col = "vi",
                                      statistic_col = NULL, df_col = NULL, cluster_col = "metaID",
                                      estimate_digits_col = NULL, se_digits_col = NULL,
@@ -554,9 +524,8 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     paste0("Omission criterion: ", omission_rule,
            if (variance_based) " (variance-based extension of Kranz-Pütz, not the literal published SE rule)." else "."),
     paste0("Cluster identifier: ", if (is.null(cluster_col)) "none" else cluster_col),
-    "Plotted CIs compare pointwise 95% article-clustered t(G-1) intervals (G/(G-1) sandwich correction) with cluster-bootstrap percentile intervals. Not simultaneous intervals.",
-    "Binomial CIs in the test workbook are exact 95% intervals assuming independent observations; they are not the plotted intervals.",
-    paste0("Pooled sample only; no caliper p-values. Cluster-bootstrap sensitivity: ", bootstrap_iterations,
+    "Only pointwise 95% article-cluster bootstrap percentile intervals are computed and plotted; no binomial or analytical t intervals.",
+    paste0("Pooled sample only; no caliper p-values. Cluster bootstrap: ", bootstrap_iterations,
       " whole-article resamples, seed ",bootstrap_seed,"; 2.5%/97.5% percentile intervals, with window counts recomputed in each draw."),
     "Blank cells indicate unavailable/not-applicable results; consult the status columns."
   )
@@ -607,24 +576,14 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
   caliper_plot <- function(method, title) {
     pooled <- results[results$group == "All" & results$method == method, ]
     pooled <- pooled[order(pooled$half_width), ]
-    ci <- is.finite(pooled$cluster_ci_lower) & is.finite(pooled$cluster_ci_upper)
     boot_ci <- is.finite(pooled$bootstrap_ci_lower) & is.finite(pooled$bootstrap_ci_upper)
-    intervals <- rbind(
-      data.frame(x_plot=pooled$half_width[ci]-.003,
-        lower=pooled$cluster_ci_lower[ci],upper=pooled$cluster_ci_upper[ci],ci_method=rep("Clustered t",sum(ci))),
-      data.frame(x_plot=pooled$half_width[boot_ci]+.003,
-        lower=pooled$bootstrap_ci_lower[boot_ci],upper=pooled$bootstrap_ci_upper[boot_ci],ci_method=rep("Cluster bootstrap",sum(boot_ci))))
-    ci_label <- if (identical(cluster_col,"metaID")) {
-      "Pointwise 95% CIs; meta-analysis article clusters"
-    } else "Pointwise 95% confidence intervals"
+    ci_label <- paste0("95% cluster-bootstrap percentile CIs; ",format(bootstrap_iterations,big.mark=",",trim=TRUE)," draws")
     g <- ggplot2::ggplot(pooled, ggplot2::aes(x = half_width, y = share_above)) +
       ggplot2::geom_hline(yintercept = .5, colour = "red3", linetype = "dashed") +
-      ggplot2::geom_errorbar(data = intervals,
-        ggplot2::aes(x=x_plot,ymin=lower,ymax=upper,colour=ci_method),
-        inherit.aes=FALSE,width=.004) +
-      ggplot2::scale_colour_manual(values=c("Clustered t"="black","Cluster bootstrap"="#0072B2"),
-        limits=c("Clustered t","Cluster bootstrap"),drop=FALSE,name=NULL) +
-      ggplot2::geom_point(size = 2, na.rm = TRUE) +
+      ggplot2::geom_errorbar(data = pooled[boot_ci, ],
+        ggplot2::aes(ymin=bootstrap_ci_lower,ymax=bootstrap_ci_upper),
+        colour="#0072B2",width=.006) +
+      ggplot2::geom_point(size = 2, colour="#0072B2",na.rm = TRUE) +
       ggplot2::scale_x_continuous(breaks = pooled$half_width,
         labels = paste0(sprintf("%.2f", pooled$half_width), "\n(n = ",
                         format(pooled$n_window, big.mark = ",", trim = TRUE), ")"),
@@ -633,9 +592,8 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
         labels = sprintf("%.2f", seq(.4, .6, .05)), expand = ggplot2::expansion(mult = 0)) +
       ggplot2::coord_cartesian(ylim = c(.4, .6)) +
       ggplot2::labs(title = title, subtitle = ci_label,
-        x = "Caliper half-width (z units)", y = "Share above cutoff") + plot_theme +
-      ggplot2::theme(legend.position="bottom",legend.text=ggplot2::element_text(size=9))
-    if (nrow(pooled) > 1L) g <- g + ggplot2::geom_line(na.rm = TRUE)
+        x = "Caliper half-width (z units)", y = "Share above cutoff") + plot_theme
+    if (nrow(pooled) > 1L) g <- g + ggplot2::geom_line(colour="#0072B2",na.rm = TRUE)
     g
   }
   adjusted_title <- if (sensitivity) "Kranz-Pütz: precision sensitivity" else "Kranz-Pütz omission sample"
@@ -668,17 +626,16 @@ run_discontinuity_tests <- function(input = "data/MasterData.xlsx",
     "Original, empirical observations only; no counterfactual simulations or model outlier screening.",
     paste0("Cutoff = ", format(cutoff, digits = 16), "; two-sided normal p = ", 2 * pnorm(cutoff, lower.tail = FALSE), "."),
     "Window includes both endpoints; exact cutoff ties count as above, following the author replication.",
-    "Exact-binomial CIs assume independent observations. Caliper p-values are not computed or exported.",
-    "Cluster inference is an intercept-share sandwich variance, small-sample G/(G-1), Student t(G-1).",
+    "Only article-cluster bootstrap percentile CIs are computed. No binomial or analytical t CIs and no caliper p-values are returned.",
     "Default clusters are meta-analysis articles (metaID); unrelated articles may still share primary studies.",
     "Field-specific calipers are omitted. All caliper output concerns the pooled empirical sample.",
-    paste0("Bootstrap sensitivity: ",bootstrap_iterations," whole-article resamples; seed ",bootstrap_seed,
+    paste0("Cluster bootstrap: ",bootstrap_iterations," whole-article resamples; seed ",bootstrap_seed,
       "; percentile 95% CIs. Empty windows are reported; bounds require >=95% valid draws."),
     paste0("This run tests half-widths ", paste(half_widths, collapse = ", "), " only; maximum permitted half-width is 0.2."),
     "Diagnostic layout: full empirical histogram/caliper panel above; Kranz-Pütz omission-sample histogram/caliper panel below.",
     "Figure uses ggplot2 and is saved as SVG and PDF. Histograms filter both data and x range to cutoff +/- max(half_widths), approximately 1.76 to 2.16 by default; the exact normal cutoff qnorm(0.975) matches the main workflow.",
     "Caliper x-axis labels give each window's own sample size as (n = ...) on the second line.",
-    "Both caliper panels have y limits 0.40 to 0.60 and compare pointwise 95% article-clustered t(G-1) and cluster-bootstrap percentile CIs. These are not simultaneous intervals.",
+    "Both caliper panels have y limits 0.40 to 0.60 and show only pointwise 95% article-cluster bootstrap percentile CIs. These are not simultaneous intervals.",
     "Finite-width symmetry is stronger than density continuity: a rejection is not proof of publication bias.",
     paste0("Reporting precision basis: ", if (is.null(statistic_col)) precision_basis else "direct_statistic", ". Coefficient resolution uses its own reported entries."),
     "Excel precision uses original string/numeric XML entries or simple explicit number formats; formulas with General format have unknown precision.",

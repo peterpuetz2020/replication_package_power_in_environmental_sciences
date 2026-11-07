@@ -25,13 +25,12 @@ Window endpoints are included, and exact cutoff ties count as above, matching
 the author replication's binomial/randomization procedure. Supply
 `cutoff = 1.96` only when the paper's rounded threshold is specifically needed.
 
-For each caliper, the script reports the fraction above the cutoff and exact
-binomial confidence intervals assuming independent observations. It does not
-compute or export caliper p-values. The additional
-cluster-robust results use meta-analysis article `metaID` by default, a
-`G/(G-1)` sandwich correction for the estimated share, and a `t(G-1)` reference.
-Missing clusters, fewer than two clusters, and degenerate cluster variance are
-explicitly flagged instead of producing spurious precision. Primary studies
+For each caliper, the script reports the fraction above the cutoff and **only
+article-cluster bootstrap percentile confidence intervals**, using **1,000
+resamples** by default. It does not compute analytical t or binomial intervals
+or export caliper p-values. The cluster identifier is meta-analysis article
+`metaID` by default. Missing clusters and fewer than two clusters are explicitly
+flagged. Primary studies
 may overlap across meta-analysis articles; this default clustering does not
 identify those overlaps.
 
@@ -134,8 +133,8 @@ rule and the labels `kp_reported_precision` /
 Directly reported z/t statistics are retained by the omission rule, as in the
 paper: its coefficient/SE significand rule does not apply to direct reports.
 
-The implementation follows the binomial/randomization diagnostic and either
-the original omission criterion or the explicitly labelled variance extension,
+The implementation follows the omission criterion or its explicitly labelled
+variance extension, with cluster-bootstrap inference for the local shares,
 not the paper's design-comparison probit specifications or its
 separate latent-density analyses. Author sources:
 
@@ -191,8 +190,8 @@ automatic workbook-entry extraction.
 
 `results/discontinuity_tests/` contains:
 
-- `caliper_tests.xlsx`: pooled counts, share estimates, exact-binomial CIs,
-  clustered t CIs, cluster-bootstrap sensitivity CIs, retention counts and status flags;
+- `caliper_tests.xlsx`: pooled counts, share estimates, cluster-bootstrap
+  percentile CIs, retention counts and status flags;
 - `precision_coverage.xlsx`: valid/excluded rows and precision coverage;
 - `rounding_risks.xlsx`: classification/window-membership risk counts;
 - `empirical_discontinuity_diagnostics.pdf`: a two-column comparison of full
@@ -214,12 +213,10 @@ uses the Kranz–Puetz omission sample, meaning the filtered observations from
 The default lower row uses the variance-based extension. If a missing-precision
 sensitivity is needed, that sample is explicitly labelled instead.
 
-Both caliper panels use **y limits 0.40–0.60**. Their error bars compare
-**pointwise 95% article-clustered Student-t intervals** (black) with **article
-cluster-bootstrap percentile intervals** (blue). The t intervals use `metaID`,
-the sandwich correction `G/(G-1)` and `t(G-1)` quantiles. Exact binomial
-intervals are also saved in the workbook but are not plotted. These intervals
-are pointwise, not simultaneous. Each panel identifies its input sample, and
+Both caliper panels use **y limits 0.40–0.60**. Their error bars show only
+**pointwise 95% article-cluster bootstrap percentile intervals** (blue).
+There are no analytical t or binomial intervals in either plots or workbooks.
+The intervals are pointwise, not simultaneous. Each panel identifies its input sample, and
 each caliper's own `n_window` is printed as `(n = ...)` just below its half-width
 on the x-axis. Workbook-name and total-N subtitle lines are omitted. The
 histograms filter the data to **qnorm(0.975) +/- 0.2**, approximately **[1.76, 2.16]**, by default and
@@ -232,7 +229,7 @@ Some upper bootstrap bounds exceed 0.60 and are clipped in this zoomed view;
 the XLSX workbooks retain the complete interval bounds. The earlier
 `scripts/discontinuity_tests.R` entry point forwards to `scripts/caliper_tests.R`.
 
-The bootstrap uses **9,999 whole-article resamples**, with seed **20261107**,
+The bootstrap uses **1,000 whole-article resamples**, with seed **20261107**,
 by default. It resamples all articles in each retained dataset, including
 articles with zero observations in a particular window, and recomputes the
 above-threshold share using that draw's own window count. The same article
@@ -253,7 +250,7 @@ for this repository, but cannot account for primary studies shared across
 different meta-analysis articles. Globally matched primary-article identifiers
 would support more direct checks of that dependence. The Kranz–Puetz replication
 uses article clustering in its design-comparison probits; its exact-binomial
-window figures assume independent observations. Our clustered share intervals
+window figures assume independent observations. Our cluster-bootstrap share intervals
 are an additional dependence adjustment, not a literal reproduction of those
 binomial figures.
 
@@ -265,7 +262,7 @@ and audit directories can be supplied to the runner.
 Rscript tests/test_discontinuity_tests.R
 ```
 
-Tests cover hand-calculated binomial and clustered inference, duplicated
+Tests cover hand-calculated window counts and cluster-bootstrap inference, duplicated
 observations within clusters, unavailable/degenerate cases, SE significands,
 propagated variance bounds and their agreement with an independent rounding
 grid, stable precision scores at high precision, preserved Excel trailing zeros
@@ -275,7 +272,6 @@ and a planted discontinuity.
 
 The default workbook run includes 64,810 valid observations. Retention counts
 under the minimum-decimal variance extension are saved in the coverage workbook.
-The binomial interval conventions follow the pinned author implementation.
 SE-mode significands and rounding bounds have been checked against the author
 functions. The variance extension is validated by mathematical interval
 calculations and regression tests. Bootstrap tests check an independently known

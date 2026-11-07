@@ -10,7 +10,8 @@ for (variant in c("outliers_removed","all_data")) {
     d <- readRDS(file)
     original <- readRDS(file.path(paste0("data/derived_data/multilevel_random",suffix),basename(file)))
     stopifnot(identical(d$yi,original$yi),identical(d$vi,original$vi),
-      identical(d$sID,original$sID),identical(d$eID,original$eID),identical(d$tau2,original$tau2))
+      identical(d$sID,original$sID),identical(d$eID,original$eID),all(d$tau2==0),
+      all(d$heterogeneity_source=="not_estimated_zero_assumed"))
     mu <- weighted.mean(d$yi,1/d$vi)
     lambda <- abs(mu)/sqrt(d$vi)
     adequate <- pnorm(-qnorm(.975)-lambda)+pnorm(lambda-qnorm(.975))>=.8
@@ -21,8 +22,9 @@ for (variant in c("outliers_removed","all_data")) {
 }
 rows <- readRDS("data/derived_data/Figure_S5_inputs.rds")$all_esr_results
 waap <- subset(rows,estimator=="waap_wls" & measure=="ESR_{0.05}^{sig}")
-stopifnot(nrow(waap)==16L,setequal(waap$meta_average_multiplier,c(.25,.5,.75,1)),
-  setequal(waap$heterogeneity_multiplier,c(0,.25,.5,.75)),
+stopifnot(nrow(waap)==4L,setequal(waap$meta_average_multiplier,c(.25,.5,.75,1)),
+  all(waap$heterogeneity_multiplier==0),
+  all(rows$heterogeneity_multiplier[rows$estimator=="fixed_effect"]==0),
   setequal(unique(rows$estimator),c("pet_peese","multilevel_random","fixed_effect","waap_wls")))
 d <- do.call(rbind,lapply(list.files("data/derived_data/waap_wls",full.names=TRUE,pattern="\\.rds$"),readRDS))
 breaks <- c(0,qnorm(c(.9,.8,.7,.6,.5,.4,.3,.2,.1,.05,.01,.001)/2,lower.tail=FALSE),Inf)
@@ -41,4 +43,4 @@ for(i in seq_len(nrow(waap))) {
   stopifnot(nrow(draws[[1]])==1000L,abs(as.numeric(row$estimate)-expected_point)<1e-12,
     max(abs(stored_ci-expected_ci))<1e-12)
 }
-cat("PASS: all shared samples and heterogeneity retained, WAAP fits/fallbacks, and all 16 Figure S5 points/1000-draw intervals.\n")
+cat("PASS: shared samples and WAAP fits retained; fixed effects and WAAP restricted to zero heterogeneity; four WAAP points/1000-draw intervals.\n")

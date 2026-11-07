@@ -1,8 +1,9 @@
 # WAAP-WLS and Figure S5
 
 WAAP-WLS is an inverse-variance weighted mean, not a multilevel model. It is
-included alongside PET–PEESE, random effects and the existing zero-heterogeneity
-fixed-effect comparison in Figure S5. Main-text estimator choices are unchanged.
+included alongside PET–PEESE, random effects and fixed effects in Figure S5.
+Both WAAP-WLS and fixed effects appear **only at zero genuine heterogeneity**.
+Main-text estimator choices are unchanged.
 
 For every `cID` and both shared samples (all data and the existing RE outlier
 screen), the estimator first calculates the full-sample inverse-variance mean.
@@ -22,10 +23,12 @@ It is not silently replaced with independent-observation standard errors.
 
 The adequate subset determines the fitted mean only. All effects in the shared
 variant sample remain available for the empirical ESR reference and denominators.
-WAAP has no estimator of `tau2`; Figure S5's nonzero-heterogeneity scenarios
-therefore combine the WAAP mean with the corresponding existing random-effects
-heterogeneity estimate on that same variant sample. This combination is labelled
-in the figure and audit workbook; it is not a multilevel WAAP model.
+WAAP has no estimator of `tau2`. Its counterfactuals therefore assume zero genuine
+heterogeneity, just like the fixed-effect comparison. No random-effects variance
+components are borrowed. Stored `tau2` and `isq` are zero by assumption, with
+`heterogeneity_source = "not_estimated_zero_assumed"`; they are not WAAP estimates
+of these quantities. Figure generation rejects nonzero-heterogeneity scenarios
+for either estimator, including stale figure inputs.
 
 Run after the existing meta-analysis inputs are available:
 
@@ -41,7 +44,7 @@ method settings. `results/supplement/WAAP_WLS_estimates.xlsx` records means,
 CR2 standard errors, degrees of freedom, confidence intervals, adequate/selected
 counts, independent study counts, inference status and WLS fallback use.
 Rebuilding the standard table/figure workflow adds WAAP to Figure S5 for all
-four meta-average and all four genuine-heterogeneity shares.
+four meta-average multipliers at zero genuine heterogeneity only.
 The updated Figure S5 uses 1,000 article-bootstrap replications, matching the
 existing figure's caches. Set `n_iterations <- 1000` before the full manuscript
 workflow for that resolution.

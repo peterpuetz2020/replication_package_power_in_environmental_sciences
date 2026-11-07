@@ -109,6 +109,9 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
                                  heterogeneity_multiplier, setup_label,
                                  estimator, outlier_variant = "outliers_removed",
                                  progress_bar = NULL, progress_offset = 0) {
+  if (estimator %in% c("fixed_effect", "waap_wls") && heterogeneity_multiplier != 0) {
+    stop("Fixed effects and WAAP-WLS are restricted to zero genuine heterogeneity.")
+  }
   variant_suffix <- if (outlier_variant == "all_data") "_all_data" else ""
   result_suffix <- paste(setup_label, estimator, outlier_variant, sep = "_")
   estimator_power <- add_power_variables(estimator_raw, meta_average_multiplier)

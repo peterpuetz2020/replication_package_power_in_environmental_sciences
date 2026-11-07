@@ -58,12 +58,24 @@ compute_waap_wls <- function(root = ".", recreate = FALSE) {
     if (length(stale)) unlink(file.path(output_dir, stale))
     for (i in seq_along(files)) {
       dat <- readRDS(files[i])
-      key <- list(version = 1L, source_md5 = unname(tools::md5sum(files[i])),
+      key <- list(version = 2L, source_md5 = unname(tools::md5sum(files[i])),
                   alpha = .05, adequate_power = .8)
       output <- file.path(output_dir, basename(files[i]))
       cached <- if (!recreate && file.exists(output)) readRDS(output) else NULL
-      if (!is.null(cached) && identical(attr(cached, "waap_cache_key"), key)) {
+      # Version 2 changes only heterogeneity storage, not WAAP fits or inference.
+      previous_key <- key; previous_key$version <- 1L
+      if (!recreate && !is.null(cached) && (identical(attr(cached, "waap_cache_key"), key) ||
+          identical(attr(cached, "waap_cache_key"), previous_key))) {
         summary <- attr(cached, "waap_summary")
+        if (!identical(attr(cached, "waap_cache_key"), key)) {
+          cached$tau2 <- 0; cached$isq <- 0
+          cached$heterogeneity_source <- "not_estimated_zero_assumed"
+          summary$tau2_for_counterfactual <- 0
+          summary$heterogeneity_source <- "not_estimated_zero_assumed"
+          attr(cached, "waap_cache_key") <- key
+          attr(cached, "waap_summary") <- summary
+          saveRDS(cached, output)
+        }
       } else {
         if (nrow(dat) < 2 || any(!is.finite(dat$yi) | !is.finite(dat$vi) | dat$vi <= 0) ||
             length(unique(dat$sID)) < 5L) {
@@ -73,9 +85,10 @@ compute_waap_wls <- function(root = ".", recreate = FALSE) {
         fit <- fit_waap_wls(dat)
         dat$GE <- fit$estimate
         dat$sig_overall <- fit$p_value
-        # WAAP has no variance-component estimator. The existing full-sample
-        # RE components are retained only for the counterfactual distribution.
-        dat$heterogeneity_source <- "random_effects_on_shared_variant_sample"
+        # WAAP does not estimate variance components. Its counterfactuals use
+        # zero genuine heterogeneity; no RE components are borrowed.
+        dat$tau2 <- 0; dat$isq <- 0
+        dat$heterogeneity_source <- "not_estimated_zero_assumed"
         dat$waap_selected_method <- fit$method
         dat$waap_n_adequate <- fit$n_adequate
         dat$waap_n_fit <- fit$n_fit
@@ -106,7 +119,7 @@ compute_waap_wls <- function(root = ".", recreate = FALSE) {
     "At least two adequate estimates: WAAP; otherwise full-sample WLS fallback.",
     "Inference: primary-study sID clusters, CR2 and Satterthwaite, matching fixed effects. Unavailable inference is flagged, not replaced by independent-observation SEs.",
     "WAAP fits on the adequate subset; all shared-sample empirical effects remain in ESR denominators.",
-    "Counterfactuals combine the WAAP mean with existing RE heterogeneity from the same sample; WAAP does not estimate tau2."
+    "WAAP does not estimate tau2. Like fixed effects, its counterfactuals are restricted to zero genuine heterogeneity; zero is assumed, not estimated."
   ))), file.path(root, "results", "supplement", "WAAP_WLS_estimates.xlsx"), overwrite = TRUE)
   invisible(summary)
 }

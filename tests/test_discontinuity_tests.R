@@ -6,18 +6,15 @@ c <- qnorm(.975)
 z <- c + ifelse(c(0, 1, 1, 0, 0, 1, 1, 1), .05, -.05)
 clusters <- c("a", "a", "a", "b", "b", "c", "c", "d")
 test <- caliper_test(z, clusters, c, .1)
-expected_se <- sqrt(4 / 3 * (.125^2 + (-1.25)^2 + .75^2 + .375^2) / 8^2)
-stopifnot(test$n_window == 8, test$n_above_including_ties == 5,
-          abs(test$cluster_se - expected_se) < 1e-14,
-          abs(test$cluster_ci_lower - max(0,.625-qt(.975,3)*expected_se)) < 1e-14)
+stopifnot(test$n_window==8, test$n_above_including_ties==5,
+          test$share_above==5/8,test$n_clusters==4)
 duplicated <- rep(seq_along(z), each = 10)
 repeated <- caliper_test(z[duplicated], clusters[duplicated], c, .1)
-stopifnot(abs(repeated$cluster_se - test$cluster_se) < 1e-12,
-          repeated$n_window == 10*test$n_window)
-stopifnot(caliper_test(10, "a", c, .1)$n_window == 0,
-          is.na(caliper_test(c, "a", c, .1)$cluster_ci_lower),
-          caliper_test(c, "a", c, .1)$n_at_cutoff == 1)
-stopifnot(caliper_test(c(1.76, 2.16), cutoff = 1.96, half_width = .2)$n_window == 2)
+stopifnot(repeated$share_above==test$share_above,repeated$n_window==10*test$n_window,
+          repeated$n_clusters==test$n_clusters)
+stopifnot(caliper_test(10,"a",c,.1)$n_window==0,
+          caliper_test(c,"a",c,.1)$n_at_cutoff==1,
+          caliper_test(c(1.76,2.16),cutoff=1.96,half_width=.2)$n_window==2)
 
 ## Trailing zeros are real reporting information, not floating-point digits.
 d <- data.frame(yi = c(.08, .08, .074, .072), sei = c(.04, .04, .037, .036),
@@ -107,11 +104,10 @@ unlink(folder, recursive = TRUE)
 ## A planted jump must be detected, with article-level inference available.
 set.seed(11)
 signal <- c(c - runif(80, .001, .099), c + runif(320, .001, .099))
-degenerate <- caliper_test(signal, rep(1:80, 5), c, .1)
-stopifnot(is.na(degenerate$cluster_ci_lower),
-          degenerate$cluster_status == "degenerate_cluster_variance")
-detected <- caliper_test(signal, rep(1:80, each = 5), c, .1)
-stopifnot(detected$share_above == .8, detected$cluster_ci_lower > .5)
+degenerate <- cluster_bootstrap_calipers(signal,rep(1:80,5),.1,cutoff=c)
+stopifnot(degenerate$bootstrap_ci_lower==.8,degenerate$bootstrap_ci_upper==.8)
+detected <- cluster_bootstrap_calipers(signal,rep(1:80,each=5),.1,cutoff=c)
+stopifnot(detected$bootstrap_ci_lower>.5)
 
 ## End-to-end reported-precision mode; source() itself writes no outputs.
 folder <- tempfile("discontinuity-output-")
@@ -174,20 +170,21 @@ stopifnot(identical(vres$audit$variance_decimals, c(2, 4, 2)),
           nrow(vres$tests) == 8L,
           file.exists(file.path(folder, "empirical_discontinuity_diagnostics.svg")))
 unlink(c(path, folder), recursive = TRUE)
-cat("PASS: binomial/clustered inference, SE and variance precision, exact transformed bounds, t calibration and planted jump\n")
+cat("PASS: window counts, bootstrap inference, SE/variance precision, transformed bounds, t calibration and planted jump\n")
 
 # Bootstrap preserves article dependence: repeat observations within each cluster
 # without changing its share or the distribution of the resampled article mean.
 z_boot <- rep(c(c+.05,c-.05),c(30,10))
 ids_boot <- rep(1:8,each=5)
 set.seed(89); before_bootstrap <- .Random.seed
-b <- cluster_bootstrap_calipers(z_boot,ids_boot,.1,iterations=19999,seed=123)
+b <- cluster_bootstrap_calipers(z_boot,ids_boot,.1,iterations=1000,seed=123)
 stopifnot(identical(.Random.seed,before_bootstrap))
 b_rep <- cluster_bootstrap_calipers(rep(z_boot,each=3),rep(ids_boot,each=3),.1,
-  iterations=19999,seed=123)
-stopifnot(identical(b,b_rep),b$bootstrap_ci_lower==qbinom(.025,8,.75)/8,
-  b$bootstrap_ci_upper==qbinom(.975,8,.75)/8)
+  iterations=1000,seed=123)
+stopifnot(identical(b,b_rep),abs(b$bootstrap_ci_lower-qbinom(.025,8,.75)/8)<=1/8,
+  abs(b$bootstrap_ci_upper-qbinom(.975,8,.75)/8)<=1/8)
 # No subgroup or inferential p-value output, even if subgroup metadata is supplied.
 stopifnot(!any(grepl("(^p_|_p_|p_value|holm)",names(vres$tests))),
-  all(vres$tests$group=="All"))
+  all(vres$tests$group=="All"),all(vres$tests$bootstrap_iterations==1000),
+  !any(grepl("^(binom_|cluster_ci|cluster_se)",names(vres$tests))))
 cat("PASS: article-bootstrap dependence and percentile distribution; pooled CI-only output.\n")

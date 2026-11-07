@@ -481,6 +481,9 @@ if (length(missing_figure_1_heterogeneity) > 0) {
 calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
                               setup_label, estimator, outlier_variant,
                               subfield = NULL, ...) {
+  if (estimator %in% c("fixed_effect", "waap_wls") && heterogeneity_multiplier != 0) {
+    stop("Fixed effects and WAAP-WLS are restricted to zero genuine heterogeneity.")
+  }
   pps_rstandard <- load_estimator_data(
     estimator, setup_label, outlier_variant
   )
@@ -542,18 +545,16 @@ table_2_parameters <- tidyr::crossing(
   estimator = meta_analysis_estimators,
   outlier_variant = "outliers_removed"
 )
-## A fixed-effect counterfactual is meaningful only when the assumed share of
-## genuine heterogeneity is zero. Include it for every meta-average multiplier
-## in the Figure S5 inputs without changing the estimators used by other output.
-figure_s5_fixed_effect_parameters <- tidyr::crossing(
+## Fixed effects and WAAP-WLS do not estimate genuine heterogeneity. Include
+## both only at zero heterogeneity for each meta-average multiplier in Figure S5.
+figure_s5_zero_heterogeneity_parameters <- tidyr::crossing(
   analysis_setups %>% filter(heterogeneity_multiplier == 0),
-  estimator = "fixed_effect",
+  estimator = c("fixed_effect", "waap_wls"),
   outlier_variant = "outliers_removed"
 )
 table_2_parameters <- bind_rows(
   table_2_parameters,
-  figure_s5_fixed_effect_parameters,
-  tidyr::crossing(analysis_setups, estimator = "waap_wls", outlier_variant = "outliers_removed")
+  figure_s5_zero_heterogeneity_parameters
 )
 table_2_results <- table_2_parameters %>%
   pmap(calculate_table_2)
