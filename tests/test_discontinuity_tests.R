@@ -8,15 +8,14 @@ clusters <- c("a", "a", "a", "b", "b", "c", "c", "d")
 test <- caliper_test(z, clusters, c, .1)
 expected_se <- sqrt(4 / 3 * (.125^2 + (-1.25)^2 + .75^2 + .375^2) / 8^2)
 stopifnot(test$n_window == 8, test$n_above_including_ties == 5,
-          abs(test$binom_p_greater_iid - binom.test(5, 8, .5, alternative = "greater")$p.value) < 1e-14,
           abs(test$cluster_se - expected_se) < 1e-14,
-          abs(test$cluster_p_greater - pt(.125 / expected_se, 3, lower.tail = FALSE)) < 1e-14)
+          abs(test$cluster_ci_lower - max(0,.625-qt(.975,3)*expected_se)) < 1e-14)
 duplicated <- rep(seq_along(z), each = 10)
 repeated <- caliper_test(z[duplicated], clusters[duplicated], c, .1)
 stopifnot(abs(repeated$cluster_se - test$cluster_se) < 1e-12,
-          repeated$binom_p_greater_iid < test$binom_p_greater_iid)
+          repeated$n_window == 10*test$n_window)
 stopifnot(caliper_test(10, "a", c, .1)$n_window == 0,
-          is.na(caliper_test(c, "a", c, .1)$cluster_p_greater),
+          is.na(caliper_test(c, "a", c, .1)$cluster_ci_lower),
           caliper_test(c, "a", c, .1)$n_at_cutoff == 1)
 stopifnot(caliper_test(c(1.76, 2.16), cutoff = 1.96, half_width = .2)$n_window == 2)
 
@@ -101,7 +100,7 @@ t_run <- run_discontinuity_tests(tdata, statistic_col = "t_value", df_col = "df"
   cluster_col = NULL, subgroup_col = NULL, half_widths = .1,
   output_dir = folder, audit_dir = file.path(folder, "audit"))
 stopifnot(nrow(t_run$tests) == 2L, all(t_run$tests$n_window == 3),
-          all(abs(t_run$tests$p_cutoff - .05) < 1e-14),
+          all(t_run$tests$cutoff == qnorm(.975)),
           all(t_run$tests$cluster_status == "no_cluster_column"))
 unlink(folder, recursive = TRUE)
 
@@ -109,10 +108,10 @@ unlink(folder, recursive = TRUE)
 set.seed(11)
 signal <- c(c - runif(80, .001, .099), c + runif(320, .001, .099))
 degenerate <- caliper_test(signal, rep(1:80, 5), c, .1)
-stopifnot(is.na(degenerate$cluster_p_greater),
+stopifnot(is.na(degenerate$cluster_ci_lower),
           degenerate$cluster_status == "degenerate_cluster_variance")
 detected <- caliper_test(signal, rep(1:80, each = 5), c, .1)
-stopifnot(detected$share_above == .8, detected$cluster_p_greater < .001)
+stopifnot(detected$share_above == .8, detected$cluster_ci_lower > .5)
 
 ## End-to-end reported-precision mode; source() itself writes no outputs.
 folder <- tempfile("discontinuity-output-")
@@ -124,7 +123,7 @@ stopifnot(nrow(res$tests) == 4L,
                                              "rounding_risks.xlsx", "METHODS.txt")))))
 saved <- openxlsx::read.xlsx(file.path(folder, "caliper_tests.xlsx"), sheet = "Results")
 stopifnot(identical(saved$n_window, as.numeric(res$tests$n_window)),
-          max(abs(saved$binom_p_greater_iid - res$tests$binom_p_greater_iid)) < 1e-14,
+          max(abs(saved$share_above - res$tests$share_above)) < 1e-14,
           identical(openxlsx::getSheetNames(file.path(folder, "caliper_tests.xlsx")), c("Results", "Notes")),
           !any(file.exists(file.path(folder, c("caliper_tests.csv", "precision_coverage.csv", "rounding_risks.csv")))))
 stopifnot(inherits(try(run_discontinuity_tests(d, half_widths = c(.1, .3),
@@ -159,12 +158,12 @@ wb <- openxlsx::createWorkbook()
 openxlsx::addWorksheet(wb, "Reported variances")
 openxlsx::writeData(wb, 1, data.frame(yi = c("0.0880", "0.0880", "0.4000"),
   vi = c("0.0019", "0.00190000", "0.04"),
-  sei = c("0.04", "0.0436", "0.2000"), metaID = 1:3))
+  sei = c("0.04", "0.0436", "0.2000"), metaID = 1:3, subfield = c("A","B","B")))
 path <- tempfile(fileext = ".xlsx")
 folder <- tempfile("variance-xlsx-")
 openxlsx::saveWorkbook(wb, path)
 vres <- run_discontinuity_tests(path, output_dir = folder,
-  audit_dir = file.path(folder, "audit"), subgroup_col = NULL)
+  audit_dir = file.path(folder, "audit"), subgroup_col = "subfield")
 stopifnot(identical(vres$audit$variance_decimals, c(2, 4, 2)),
           identical(vres$audit$reported_variance_entry, c("0.0019", "0.00190000", "0.04")),
           identical(vres$audit$reported_se_entry, c("0.04", "0.0436", "0.2000")),
@@ -176,3 +175,19 @@ stopifnot(identical(vres$audit$variance_decimals, c(2, 4, 2)),
           file.exists(file.path(folder, "empirical_discontinuity_diagnostics.svg")))
 unlink(c(path, folder), recursive = TRUE)
 cat("PASS: binomial/clustered inference, SE and variance precision, exact transformed bounds, t calibration and planted jump\n")
+
+# Bootstrap preserves article dependence: repeat observations within each cluster
+# without changing its share or the distribution of the resampled article mean.
+z_boot <- rep(c(c+.05,c-.05),c(30,10))
+ids_boot <- rep(1:8,each=5)
+set.seed(89); before_bootstrap <- .Random.seed
+b <- cluster_bootstrap_calipers(z_boot,ids_boot,.1,iterations=19999,seed=123)
+stopifnot(identical(.Random.seed,before_bootstrap))
+b_rep <- cluster_bootstrap_calipers(rep(z_boot,each=3),rep(ids_boot,each=3),.1,
+  iterations=19999,seed=123)
+stopifnot(identical(b,b_rep),b$bootstrap_ci_lower==qbinom(.025,8,.75)/8,
+  b$bootstrap_ci_upper==qbinom(.975,8,.75)/8)
+# No subgroup or inferential p-value output, even if subgroup metadata is supplied.
+stopifnot(!any(grepl("(^p_|_p_|p_value|holm)",names(vres$tests))),
+  all(vres$tests$group=="All"))
+cat("PASS: article-bootstrap dependence and percentile distribution; pooled CI-only output.\n")

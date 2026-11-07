@@ -60,6 +60,10 @@ if (run_meta_analysis_fitting || length(missing_estimator_inputs) > 0) {
   source(here::here("scripts", "compute_meta_estimates.R"))
 }
 
+## WAAP reuses these exact fitting/screening samples and has separate resumable caches.
+if (!(run_meta_analysis_fitting || length(missing_estimator_inputs) > 0)) {
+  source(here::here("scripts", "compute_waap_wls.R"))
+}
 ## Build setup-specific datasets and any missing counterfactual simulations before
 ## rendering. Existing counterfactual files are reused unless explicitly rebuilt.
 source(here::here("scripts", "create_analysis_data.R"))

@@ -139,6 +139,8 @@ load_estimator_data <- function(estimator, setup_label_value = setup_label,
       "data", "derived_data",
       if (outlier_variant == "all_data") "fixed_effect_all_data" else "fixed_effect"
     ),
+    waap_wls = here("data", "derived_data",
+      if (outlier_variant == "all_data") "waap_wls_all_data" else "waap_wls"),
     stop("Unknown estimator: ", estimator)
   )
   estimator_files <- list.files(
@@ -550,7 +552,8 @@ figure_s5_fixed_effect_parameters <- tidyr::crossing(
 )
 table_2_parameters <- bind_rows(
   table_2_parameters,
-  figure_s5_fixed_effect_parameters
+  figure_s5_fixed_effect_parameters,
+  tidyr::crossing(analysis_setups, estimator = "waap_wls", outlier_variant = "outliers_removed")
 )
 table_2_results <- table_2_parameters %>%
   pmap(calculate_table_2)

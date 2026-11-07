@@ -56,6 +56,8 @@ load_estimator_data <- function(estimator, outlier_variant = "outliers_removed")
     pet_peese_all_data = here("data", "derived_data", "pet_peese_all_data"),
     multilevel_random_outliers_removed = here("data", "derived_data", "multilevel_random"),
     multilevel_random_all_data = here("data", "derived_data", "multilevel_random_all_data"),
+    waap_wls_outliers_removed = here("data", "derived_data", "waap_wls"),
+    waap_wls_all_data = here("data", "derived_data", "waap_wls_all_data"),
     stop("Unknown estimator/outlier variant: ", estimator, "/", outlier_variant)
   )
 

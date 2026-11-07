@@ -588,6 +588,9 @@ if (!exists("all_combination_results") || !exists("all_esr_results")) {
   all_combination_results <- figure_s5_inputs$all_combination_results
   all_esr_results <- figure_s5_inputs$all_esr_results
 }
+if (!"waap_wls" %in% all_esr_results$estimator) {
+  stop("Figure S5 inputs lack WAAP-WLS. Run compute_waap_wls.R and create_tables_and_figures.R first.")
+}
 write.csv(
   all_combination_results,
   file.path(derived_data_dir, "Figure_S5_numbers.csv"),
@@ -603,7 +606,8 @@ esr_plot_data <- all_esr_results %>%
       estimator,
       pet_peese = "PET-PEESE",
       multilevel_random = "Random-effects",
-      fixed_effect = "Fixed-effects"
+      fixed_effect = "Fixed-effects",
+      waap_wls = "WAAP-WLS"
     )
   ) %>%
   rename(`Meta-average multiplier` = meta_average_multiplier)
@@ -625,12 +629,14 @@ esr_plot <- ggplot(
     values = c(
       "PET-PEESE" = "#E69F00",
       "Random-effects" = "#0072B2",
-      "Fixed-effects" = "#CC79A7"
+      "Fixed-effects" = "#CC79A7",
+      "WAAP-WLS" = "#009E73"
     )
   ) +
   labs(
     x = "Share of genuine heterogeneity", y = expression(ESR[0.05]^sig),
-    color = "Estimator"
+    color = "Estimator",
+    caption = "WAAP-WLS counterfactuals use heterogeneity from the corresponding random-effects sample."
   ) +
   supplement_figure_theme() +
   theme(legend.position = "bottom")

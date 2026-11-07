@@ -164,6 +164,11 @@ multipliers 0.25, 0.5, 0.75 and 1, crossed with four heterogeneity multipliers.
 Figure S5 includes all four meta-average values in a two-column, two-row layout. Main Tables 1–3 and Figures
 1–2 retain the manuscript's half-meta-average specification.
 
+Figure S5 additionally includes WAAP-WLS, with primary-study clustering and the
+same CR2/Satterthwaite correction as fixed effects. Its counterfactuals retain
+the shared-sample random-effects heterogeneity estimates. See
+[WAAP-WLS details and its audit workbook](docs/waap_wls.md).
+
 | Supplement output | Contents |
 |---|---|
 | Table S1 | Excess significance by subfield |
@@ -218,5 +223,6 @@ article-clustered inference and writes separate diagnostics under
 `results/discontinuity_tests/`. It is independent of `scripts/main.R`.
 Caliper half-widths are 0.05, 0.1, 0.15 and 0.2. Summary tables are XLSX
 workbooks; ggplot diagnostics saved as SVG and PDF compare full and omission-filtered samples
-using pointwise 95% article-clustered t intervals.
+using pointwise 95% article-clustered t and cluster-bootstrap percentile intervals.
+Caliper output is pooled only and contains confidence intervals without p-values.
 See [the method, precision conventions and input options](docs/discontinuity_tests.md).

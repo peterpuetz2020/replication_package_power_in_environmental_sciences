@@ -606,3 +606,4 @@ report_outlier_removal <- function(estimator, removed_column) {
 
 ## The single random-effects screen supplies the data for every estimator.
 report_outlier_removal("Random-effects model", "n_outliers_removed")
+source(here("scripts", "compute_waap_wls.R"))

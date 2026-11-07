@@ -25,9 +25,9 @@ Window endpoints are included, and exact cutoff ties count as above, matching
 the author replication's binomial/randomization procedure. Supply
 `cutoff = 1.96` only when the paper's rounded threshold is specifically needed.
 
-For each caliper, the script reports the fraction above the cutoff, one-sided
-and two-sided exact binomial tests against 0.5, and binomial confidence
-intervals. Those nominal tests assume independent observations. The additional
+For each caliper, the script reports the fraction above the cutoff and exact
+binomial confidence intervals assuming independent observations. It does not
+compute or export caliper p-values. The additional
 cluster-robust results use meta-analysis article `metaID` by default, a
 `G/(G-1)` sandwich correction for the estimated share, and a `t(G-1)` reference.
 Missing clusters, fewer than two clusters, and degenerate cluster variance are
@@ -35,8 +35,7 @@ explicitly flagged instead of producing spurious precision. Primary studies
 may overlap across meta-analysis articles; this default clustering does not
 identify those overlaps.
 
-Pooled and subfield-specific tests are returned. Each p-value column also has
-a Holm adjustment across all available windows, groups and methods. Local
+Only the pooled sample is returned; field-specific calipers are omitted. Local
 probability balance in a finite window is stronger than density continuity;
 these are **discontinuity diagnostics**, not proof of p-hacking or publication
 bias. The relevant coefficient/SE boundary is
@@ -192,8 +191,8 @@ automatic workbook-entry extraction.
 
 `results/discontinuity_tests/` contains:
 
-- `caliper_tests.xlsx`: counts, nominal and cluster-robust inference, Holm
-  adjustments, retention counts and status flags;
+- `caliper_tests.xlsx`: pooled counts, share estimates, exact-binomial CIs,
+  clustered t CIs, cluster-bootstrap sensitivity CIs, retention counts and status flags;
 - `precision_coverage.xlsx`: valid/excluded rows and precision coverage;
 - `rounding_risks.xlsx`: classification/window-membership risk counts;
 - `empirical_discontinuity_diagnostics.pdf`: a two-column comparison of full
@@ -202,11 +201,11 @@ automatic workbook-entry extraction.
 - `METHODS.txt`: conventions and limitations for interpreting the run.
 
 Each XLSX file has a `Results` sheet containing numeric results and a `Notes`
-sheet documenting the input, precision rule, confidence intervals and Holm
-correction. Obsolete CSV versions of these three generated outputs are removed
-when their XLSX replacements are written. The default run returns **64 test
-rows**: 8 groups (pooled plus 7 subfields), 2 methods and 4 widths. Holm
-adjustments are recalculated for these 64 rows separately per p-value column.
+sheet documenting the input, precision rule and confidence intervals.
+Obsolete CSV versions of these three generated outputs are removed
+when their XLSX replacements are written. The default run returns **8 caliper
+rows**: 1 pooled group, 2 methods and 4 widths. Neither p-values nor Holm
+adjustments are returned.
 
 The ggplot diagnostic figure has empirical histograms on the left and caliper-share
 plots on the right. The upper row uses all valid observations; the lower row
@@ -215,17 +214,31 @@ uses the Kranz–Puetz omission sample, meaning the filtered observations from
 The default lower row uses the variance-based extension. If a missing-precision
 sensitivity is needed, that sample is explicitly labelled instead.
 
-Both caliper panels use **y limits 0.35–0.70**. Their error bars are **pointwise
-95% article-clustered Student-t intervals**, based on `metaID`, the sandwich
-variance correction `G/(G-1)` and `t(G-1)` quantiles. They are not the exact
-binomial intervals also saved in the workbook, and are not simultaneous or
-Holm-adjusted intervals. Each panel identifies its input sample, and
+Both caliper panels use **y limits 0.35–0.70**. Their error bars compare
+**pointwise 95% article-clustered Student-t intervals** (black) with **article
+cluster-bootstrap percentile intervals** (blue). The t intervals use `metaID`,
+the sandwich correction `G/(G-1)` and `t(G-1)` quantiles. Exact binomial
+intervals are also saved in the workbook but are not plotted. These intervals
+are pointwise, not simultaneous. Each panel identifies its input sample, and
 each caliper's own `n_window` is printed as `(n = ...)` just below its half-width
 on the x-axis. Workbook-name and total-N subtitle lines are omitted. The
 histograms filter the data to **qnorm(0.975) +/- 0.2**, approximately **[1.76, 2.16]**, by default and
 use exactly those x limits without padding. They have shared bins and vertical
 scales and show their own local sample sizes. The default tests use the same
 exact normal threshold as the main workflow, so the largest caliper and histogram include the same observations.
+
+The bootstrap uses **9,999 whole-article resamples**, with seed **20261107**,
+by default. It resamples all articles in each retained dataset, including
+articles with zero observations in a particular window, and recomputes the
+above-threshold share using that draw's own window count. The same article
+draws are used across widths. The precision rule is deterministic and is not
+refitted. Bounds are the 2.5th and 97.5th percentiles. The workbook records
+`bootstrap_iterations`, `bootstrap_valid_iterations`, `bootstrap_clusters`,
+`bootstrap_seed`, `bootstrap_status` and the two `bootstrap_ci_*` bounds.
+Undefined ratios from empty bootstrap windows are counted; intervals are
+withheld if fewer than 95% of draws are defined. The bootstrap preserves the
+caller's random-number state. Override with `bootstrap_iterations` /
+`bootstrap_seed` when running the function.
 
 Clustering is appropriate when multiple estimates share a source of dependence.
 In publication-bias applications that source is often the original research
@@ -257,10 +270,9 @@ and a planted discontinuity.
 
 The default workbook run includes 64,810 valid observations. Retention counts
 under the minimum-decimal variance extension are saved in the coverage workbook.
-The underlying one-sided binomial procedure
-was also checked against
-the pinned author implementation for every caliper width on both full and
-original-SE-omission samples at the paper's literal cutoff of 1.96. The original
-SE-mode significands and rounding bounds were checked against the author
-functions; the variance extension is validated separately by its mathematical
-interval calculations and regression tests.
+The binomial interval conventions follow the pinned author implementation.
+SE-mode significands and rounding bounds have been checked against the author
+functions. The variance extension is validated by mathematical interval
+calculations and regression tests. Bootstrap tests check an independently known
+article-resampling distribution, invariance to within-article duplication and
+preservation of the caller's random-number state.
