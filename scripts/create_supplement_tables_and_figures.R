@@ -589,7 +589,7 @@ if (!exists("all_combination_results") || !exists("all_esr_results")) {
   all_esr_results <- figure_s5_inputs$all_esr_results
 }
 if (!"waap_wls" %in% all_esr_results$estimator) {
-  stop("Figure S5 inputs lack WAAP-WLS. Run compute_waap_wls.R and create_tables_and_figures.R first.")
+  stop("Figure S5 inputs lack WAAP-WLS. Run compute_meta_estimates.R and create_tables_and_figures.R first.")
 }
 if (any(all_esr_results$estimator %in% c("fixed_effect", "waap_wls") &
         all_esr_results$heterogeneity_multiplier != 0)) {

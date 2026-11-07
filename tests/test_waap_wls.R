@@ -1,4 +1,11 @@
-source("scripts/waap_wls.R")
+## Load only helper definitions from the common fitting stage, without
+## executing the full meta-analysis pipeline during these unit tests.
+for (expr in parse("scripts/compute_meta_estimates.R")) {
+  if (is.call(expr) && identical(expr[[1]], as.name("<-")) &&
+      as.character(expr[[2]]) %in% c("fit_waap_wls", "compute_waap_wls")) {
+    eval(expr, envir = .GlobalEnv)
+  }
+}
 check_reference <- function(d, fit) {
   selected <- if (fit$method == "WAAP") d[fit$adequate, ] else d
   reference <- metafor::rma.mv(yi, vi, mods = ~1, method = "FE", test = "t", data = selected)

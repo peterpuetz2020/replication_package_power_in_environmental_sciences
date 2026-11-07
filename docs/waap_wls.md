@@ -30,14 +30,16 @@ components are borrowed. Stored `tau2` and `isq` are zero by assumption, with
 of these quantities. Figure generation rejects nonzero-heterogeneity scenarios
 for either estimator, including stale figure inputs.
 
-Run after the existing meta-analysis inputs are available:
+WAAP-WLS is implemented in the common fitting stage alongside the other estimators:
 
 ```sh
-Rscript scripts/compute_waap_wls.R
+Rscript scripts/compute_meta_estimates.R
 ```
 
-`scripts/main.R` runs this stage automatically. The existing fitting stage also
-creates WAAP inputs after producing the common samples. Individual results are
+`scripts/main.R` runs the common fitting stage automatically. When the other
+estimator inputs already exist, it uses the same script in its cached-input
+mode to update WAAP without refitting the other models. There is no separate
+WAAP calculation script. Individual results are
 cached under the ignored `data/derived_data/waap_wls/` and
 `waap_wls_all_data/` directories; each cache includes its source-file hash and
 method settings. The ignored `data/derived_data/WAAP_WLS_estimates.xlsx` records means,
