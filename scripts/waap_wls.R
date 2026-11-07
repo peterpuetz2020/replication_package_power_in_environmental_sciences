@@ -112,7 +112,8 @@ compute_waap_wls <- function(root = ".", recreate = FALSE) {
     }
   }
   summary <- do.call(rbind, summaries)
-  dir.create(file.path(root, "results", "supplement"), recursive = TRUE, showWarnings = FALSE)
+  summary_path <- file.path(root, "data", "derived_data", "WAAP_WLS_estimates.xlsx")
+  dir.create(dirname(summary_path), recursive = TRUE, showWarnings = FALSE)
   openxlsx::write.xlsx(list(Estimates = summary, Methods = data.frame(note = c(
     "Initial inverse-variance WLS mean; select estimates with exact normal two-sided power >= 0.80 at alpha 0.05.",
     "Preserve signed means; assess power using the mean's magnitude, before applying meta-average multipliers.",
@@ -120,6 +121,9 @@ compute_waap_wls <- function(root = ".", recreate = FALSE) {
     "Inference: primary-study sID clusters, CR2 and Satterthwaite, matching fixed effects. Unavailable inference is flagged, not replaced by independent-observation SEs.",
     "WAAP fits on the adequate subset; all shared-sample empirical effects remain in ESR denominators.",
     "WAAP does not estimate tau2. Like fixed effects, its counterfactuals are restricted to zero genuine heterogeneity; zero is assumed, not estimated."
-  ))), file.path(root, "results", "supplement", "WAAP_WLS_estimates.xlsx"), overwrite = TRUE)
+  ))), summary_path, overwrite = TRUE)
+  # Remove the obsolete generated supplement workbook after its replacement exists.
+  legacy_path <- file.path(root, "results", "supplement", "WAAP_WLS_estimates.xlsx")
+  if (file.exists(legacy_path)) unlink(legacy_path)
   invisible(summary)
 }

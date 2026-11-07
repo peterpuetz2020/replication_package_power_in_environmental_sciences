@@ -167,7 +167,8 @@ Figure S5 includes all four meta-average values in a two-column, two-row layout.
 Figure S5 additionally includes WAAP-WLS, with primary-study clustering and the
 same CR2/Satterthwaite correction as fixed effects. Both estimators are shown
 only at zero genuine heterogeneity; neither borrows random-effects variance estimates. See
-[WAAP-WLS details and its audit workbook](docs/waap_wls.md).
+[WAAP-WLS estimation details](docs/waap_wls.md). All WAAP estimates and fitting
+summaries are saved under `data/derived_data/`; Figure S5 displays the results.
 
 | Supplement output | Contents |
 |---|---|

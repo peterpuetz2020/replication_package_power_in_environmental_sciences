@@ -40,9 +40,12 @@ Rscript scripts/compute_waap_wls.R
 creates WAAP inputs after producing the common samples. Individual results are
 cached under the ignored `data/derived_data/waap_wls/` and
 `waap_wls_all_data/` directories; each cache includes its source-file hash and
-method settings. `results/supplement/WAAP_WLS_estimates.xlsx` records means,
+method settings. The ignored `data/derived_data/WAAP_WLS_estimates.xlsx` records means,
 CR2 standard errors, degrees of freedom, confidence intervals, adequate/selected
 counts, independent study counts, inference status and WLS fallback use.
+WAAP estimates are saved only under derived data; Figure S5 is the manuscript
+output displaying them. An obsolete copy of the workbook in `results/supplement/`
+is removed after the derived-data workbook has been written successfully.
 Rebuilding the standard table/figure workflow adds WAAP to Figure S5 for all
 four meta-average multipliers at zero genuine heterogeneity only.
 The updated Figure S5 uses 1,000 article-bootstrap replications, matching the

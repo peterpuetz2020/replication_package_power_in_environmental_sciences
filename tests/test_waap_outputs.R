@@ -1,6 +1,6 @@
 ## Integration checks after fitting WAAP and rebuilding Figure S5.
 source("scripts/functions.R")
-summary <- openxlsx::read.xlsx("results/supplement/WAAP_WLS_estimates.xlsx",sheet="Estimates")
+summary <- openxlsx::read.xlsx("data/derived_data/WAAP_WLS_estimates.xlsx",sheet="Estimates")
 stopifnot(!anyDuplicated(paste(summary$cID,summary$variant)))
 for (variant in c("outliers_removed","all_data")) {
   suffix <- if (variant=="all_data") "_all_data" else ""
