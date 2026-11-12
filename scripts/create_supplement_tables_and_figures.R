@@ -649,6 +649,19 @@ save_supplement_plot(
   width = 10, height = 8, draw = function() print(esr_plot)
 )
 
+## Figure S6: pooled empirical calipers with article-cluster bootstrap intervals.
+caliper_inputs_path <- here("data", "derived_data", "caliper_analysis.rds")
+if (!file.exists(caliper_inputs_path)) {
+  stop("Figure S6 inputs are unavailable. Run create_analysis_data.R first.")
+}
+caliper_analysis <- readRDS(caliper_inputs_path)
+save_supplement_plot(
+  file.path(supplement_dir, "Figure_S6"), width = 10, height = 4.5,
+  draw = function() gridExtra::grid.arrange(
+    grobs = make_caliper_plots(caliper_analysis, supplement_font_size), ncol = 2
+  )
+)
+
 ## Tables and remaining figures follow the order of the supplementary material.
 ## Every table is emitted as both an editable Word document and copy-ready LaTeX.
 library(officer)

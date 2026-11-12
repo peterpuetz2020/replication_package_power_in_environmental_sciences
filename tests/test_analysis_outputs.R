@@ -54,13 +54,13 @@ stopifnot(identical(power[[1]]$cID, power[[2]]$cID),
 required <- c(
   paste0("results/main/Table_", 1:3, ".docx"),
   paste0("results/supplement/Table_S", 1:8, ".docx"),
-  paste0("results/supplement/Figure_S", 1:5, ".pdf"),
-  paste0("results/supplement/Figure_S", 1:5, ".svg")
+  paste0("results/supplement/Figure_S", 1:6, ".pdf"),
+  paste0("results/supplement/Figure_S", 1:6, ".svg")
 )
 obsolete <- c("results/main/Table_4.docx", "results/main/Table_4.tex",
               "results/supplement/Table_S9.docx", "results/supplement/Table_S9.tex",
-              paste0("results/supplement/Figure_S", 6:8, ".pdf"),
-              paste0("results/supplement/Figure_S", 6:8, ".svg"),
+              paste0("results/supplement/Figure_S", 7:8, ".pdf"),
+              paste0("results/supplement/Figure_S", 7:8, ".svg"),
               "data/derived_data/regression_data")
 stopifnot(all(file.exists(required)), all(file.info(required)$size > 0),
           !any(file.exists(obsolete)))

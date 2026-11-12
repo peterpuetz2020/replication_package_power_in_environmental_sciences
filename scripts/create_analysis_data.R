@@ -212,6 +212,14 @@ write_analysis_setup <- function(estimator_raw, grids, meta_average_multiplier,
 
 ensure_output_dirs()
 
+## Pooled empirical calipers are independent of estimator/multiplier choices.
+## Keep their numerical inputs with the other derived analysis data.
+caliper_analysis <- compute_caliper_analysis(
+  readxl::read_excel(here("data", "MasterData.xlsx")),
+  source_data = "data/MasterData.xlsx"
+)
+save_caliper_analysis(caliper_analysis, here("data", "derived_data"))
+
 grids <- make_grids()
 analysis_data_parameters <- tidyr::crossing(
   analysis_setups,

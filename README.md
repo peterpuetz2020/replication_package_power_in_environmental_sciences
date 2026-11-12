@@ -181,6 +181,7 @@ summaries are saved under `data/derived_data/`; Figure S5 displays the results.
 | Figure S1 | Heterogeneity distributions |
 | Figures S2–S4 | Counterfactual sensitivities at multipliers 0.25, 0.75, 1 |
 | Figure S5 | ESR comparisons for all four multipliers, arranged in two columns |
+| Figure S6 | Empirical caliper estimates with article-cluster bootstrap intervals |
 
 Table S6 has exactly Table 2's layout: 13 p-value-bin rows, the two
 `ESR_0.05` measures (among all results and among significant results), and
@@ -212,18 +213,13 @@ Table S6's intervals against the paired counterfactual caches.
 This output check defaults to 1,000 iterations; pass an exploratory run's
 iteration count as its first argument when checking a smaller run.
 
-## Separate empirical discontinuity tests
+## Empirical calipers and Figure S6
 
-Run `Rscript scripts/caliper_tests.R` to test the observed distribution
-near two-sided p = 0.05 using calipers and the Kranz–Pütz (2022) rounding-omission
-method. The script reads reported `yi`/`vi`/`sei` precision from the workbook entries,
-uses the smaller `vi`/`sei` decimal count for each variance rounding interval,
-propagates variance rounding through `sqrt(vi)`, and applies an explicitly
-labelled variance-based extension of the omission rule. It reports
-article-clustered inference and writes separate diagnostics under
-`results/discontinuity_tests/`. It is independent of `scripts/main.R`.
-Caliper half-widths are 0.05, 0.1, 0.15 and 0.2. Summary tables are XLSX
-workbooks; ggplot diagnostics saved as SVG and PDF compare full and omission-filtered samples
-using only pointwise 95% article-cluster bootstrap percentile intervals from 1,000 resamples.
-Caliper output is pooled only and contains confidence intervals without p-values.
-See [the method, precision conventions and input options](docs/discontinuity_tests.md).
+The standard data-preparation and supplementary-rendering stages now compute
+and plot pooled empirical calipers as Figure S6. The calculation uses all valid
+observed estimates with no reporting-precision selection. Half-widths are 0.05,
+0.10, 0.15 and 0.20; only cluster-bootstrap percentile intervals from 1,000
+article resamples are computed, without p-values. Numerical results and the
+row audit are saved in `data/derived_data/`; Figure S6 is saved as PDF and SVG
+under `results/supplement/`.
+See [the method and output descriptions](docs/caliper_tests.md).

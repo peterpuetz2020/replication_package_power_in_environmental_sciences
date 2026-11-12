@@ -489,3 +489,218 @@ cf.disagg <- function(dat, z.grid) {
   # or absolute z-values for visualization.
   return(freqs.per.meta)
 }
+
+
+## Empirical caliper diagnostics: all observed estimates, article-cluster bootstrap.
+cluster_bootstrap_calipers <- function(z, cluster, half_widths, cutoff = qnorm(.975),
+                                       iterations = 1000L, seed = 20261107L) {
+  if (length(iterations) != 1 || !is.finite(iterations) || iterations < 100 || iterations != trunc(iterations)) {
+    stop("Use at least 100 integer bootstrap iterations.")
+  }
+  if (length(seed) != 1 || !is.finite(seed) || seed < 0 || seed > .Machine$integer.max || seed != trunc(seed)) stop("Invalid bootstrap seed.")
+  if (!is.null(cluster) && length(cluster) != length(z)) stop("Cluster length mismatch.")
+  out <- data.frame(half_width = half_widths, bootstrap_ci_lower = NA_real_,
+    bootstrap_ci_upper = NA_real_, bootstrap_iterations = iterations,
+    bootstrap_valid_iterations = 0L, bootstrap_clusters = NA_integer_,
+    bootstrap_seed = seed, bootstrap_status = "no_cluster_column")
+  if (is.null(cluster)) return(out)
+  valid <- is.finite(z)
+  z <- z[valid]; labels <- as.character(cluster[valid])
+  if (anyNA(labels) || any(!nzchar(trimws(labels)))) {
+    out$bootstrap_status <- "missing_cluster_identifiers"; return(out)
+  }
+  g <- length(unique(labels)); out$bootstrap_clusters <- g
+  if (g < 2L) {out$bootstrap_status <- "fewer_than_two_clusters"; return(out)}
+  # Resample all articles in the retained sample, including articles with no
+  # observations in a particular caliper. Recompute the ratio in every draw.
+  totals <- lapply(half_widths, function(h) {
+    inside <- z >= cutoff-h & z <= cutoff+h
+    rowsum(cbind(n = as.numeric(inside), above = as.numeric(inside & z >= cutoff)),
+      group = labels, reorder = FALSE)
+  })
+  n <- do.call(cbind,lapply(totals,function(x)x[,"n"]))
+  above <- do.call(cbind,lapply(totals,function(x)x[,"above"]))
+  had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  if (had_seed) old_seed <- get(".Random.seed", envir = .GlobalEnv)
+  on.exit(if (had_seed) assign(".Random.seed",old_seed,envir=.GlobalEnv) else
+    rm(".Random.seed",envir=.GlobalEnv))
+  set.seed(seed)
+  weights <- rmultinom(iterations,size=g,prob=rep(1/g,g))
+  denominator <- t(weights) %*% n
+  draws <- (t(weights) %*% above)/denominator
+  for (j in seq_along(half_widths)) {
+    finite <- is.finite(draws[,j])
+    out$bootstrap_valid_iterations[j] <- sum(finite)
+    if (sum(finite) < .95*iterations) {
+      out$bootstrap_status[j] <- "too_many_empty_bootstrap_windows"
+    } else {
+      out[j,c("bootstrap_ci_lower","bootstrap_ci_upper")] <- as.list(quantile(draws[finite,j],c(.025,.975),names=FALSE))
+      out$bootstrap_status[j] <- "ok_article_cluster_percentile"
+    }
+  }
+  out
+}
+
+caliper_test <- function(z, cluster = NULL, cutoff = qnorm(.975), half_width = .1) {
+  if (length(cutoff) != 1L || !is.finite(cutoff) || cutoff <= 0 ||
+      length(half_width) != 1L || !is.finite(half_width) ||
+      half_width <= 0 || half_width >= cutoff) stop("Invalid cutoff or caliper half-width.")
+  if (!is.null(cluster) && length(cluster) != length(z)) stop("Cluster length mismatch.")
+  inside <- is.finite(z) & z >= cutoff-half_width & z <= cutoff+half_width
+  y <- z[inside] >= cutoff
+  out <- data.frame(cutoff = cutoff, half_width = half_width,
+    n_window = length(y), n_below = sum(!y), n_at_cutoff = sum(z[inside]==cutoff),
+    n_above_including_ties = sum(y), share_above = if (length(y)) mean(y) else NA_real_,
+    n_clusters = NA_integer_, cluster_status = "empty_window")
+  if (!length(y)) return(out)
+  if (is.null(cluster)) {out$cluster_status <- "no_cluster_column"; return(out)}
+  labels <- as.character(cluster[inside])
+  if (anyNA(labels) || any(!nzchar(trimws(labels)))) {
+    out$cluster_status <- "missing_cluster_identifiers"; return(out)
+  }
+  out$n_clusters <- length(unique(labels))
+  out$cluster_status <- if (out$n_clusters < 2L) "fewer_than_two_clusters" else "ok_cluster_counts"
+  out
+}
+
+prepare_caliper_data <- function(data, estimate_col = "yi", variance_col = "vi",
+                                 statistic_col = NULL, df_col = NULL, cluster_col = "metaID") {
+  n <- nrow(data)
+  if (!n) stop("Caliper input data are empty.")
+  numeric_col <- function(name) {
+    if (!name %in% names(data)) stop("Missing column: ",name)
+    values <- data[[name]]
+    suppressWarnings(as.numeric(if (is.factor(values)) as.character(values) else values))
+  }
+  if (is.null(statistic_col)) {
+    estimate <- numeric_col(estimate_col)
+    variance <- numeric_col(variance_col)
+    se <- suppressWarnings(sqrt(variance))
+    statistic <- estimate/se
+    valid <- is.finite(estimate) & is.finite(variance) & variance>0 & is.finite(statistic)
+    reason <- ifelse(valid,"included","invalid_estimate_or_variance")
+  } else {
+    estimate <- variance <- se <- rep(NA_real_,n)
+    statistic <- numeric_col(statistic_col)
+    valid <- is.finite(statistic)
+    reason <- ifelse(valid,"included","nonfinite_statistic")
+  }
+  z <- abs(statistic)
+  df <- rep(NA_real_,n)
+  if (!is.null(df_col)) {
+    df <- numeric_col(df_col)
+    bad <- !is.finite(df) | df<=0
+    valid <- valid & !bad
+    reason[bad] <- "invalid_degrees_of_freedom"
+    z <- suppressWarnings(qnorm(pt(abs(statistic),df,lower.tail=FALSE,log.p=TRUE),
+      lower.tail=FALSE,log.p=TRUE))
+  }
+  valid <- valid & is.finite(z)
+  reason[reason=="included" & !valid] <- "nonfinite_equivalent_z"
+  cluster <- rep(NA_character_,n)
+  if (!is.null(cluster_col)) {
+    if (!cluster_col %in% names(data)) stop("Missing column: ",cluster_col)
+    cluster <- as.character(data[[cluster_col]])
+  }
+  data.frame(row_id=seq_len(n),estimate=estimate,variance=variance,standard_error=se,
+    raw_statistic=statistic,abs_z=z,df=df,cluster=cluster,valid=valid,
+    exclusion_reason=reason,stringsAsFactors=FALSE)
+}
+
+compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
+                                     cutoff = qnorm(.975), bootstrap_iterations = 1000L,
+                                     bootstrap_seed = 20261107L,
+                                     estimate_col = "yi", variance_col = "vi",
+                                     statistic_col = NULL, df_col = NULL, cluster_col = "metaID",
+                                     source_data = "supplied data") {
+  if (length(cutoff)!=1L || !is.finite(cutoff) || cutoff<=0 ||
+      !length(half_widths) || any(!is.finite(half_widths) | half_widths<=0 |
+                                 half_widths>.2 | half_widths>=cutoff)) {
+    stop("Caliper half-widths must be positive, no larger than 0.2, and smaller than the cutoff.")
+  }
+  half_widths <- sort(unique(half_widths))
+  audit <- prepare_caliper_data(data,estimate_col,variance_col,statistic_col,df_col,cluster_col)
+  valid <- audit[audit$valid,,drop=FALSE]
+  if (!nrow(valid)) stop("No valid observations remain for caliper analysis.")
+  labels <- if (is.null(cluster_col)) NULL else valid$cluster
+  bootstrap <- cluster_bootstrap_calipers(valid$abs_z,labels,half_widths,cutoff,
+    bootstrap_iterations,bootstrap_seed)
+  counts <- do.call(rbind,lapply(half_widths,function(h)caliper_test(valid$abs_z,labels,cutoff,h)))
+  tests <- cbind(counts,bootstrap[,setdiff(names(bootstrap),"half_width"),drop=FALSE])
+  tests$group <- "All"
+  tests$method <- "empirical"
+  coverage <- data.frame(n_input=nrow(audit),n_valid=nrow(valid),
+    n_excluded_invalid=sum(!audit$valid),
+    n_articles=length(unique(valid$cluster[!is.na(valid$cluster) & nzchar(trimws(valid$cluster))])),
+    n_missing_cluster_ids=sum(is.na(valid$cluster) | !nzchar(trimws(valid$cluster))))
+  list(tests=tests,coverage=coverage,audit=audit,
+    settings=list(half_widths=half_widths,cutoff=cutoff,bootstrap_iterations=bootstrap_iterations,
+      bootstrap_seed=bootstrap_seed,cluster_col=cluster_col,source_data=source_data,
+      reference=if (is.null(df_col)) "normal_approximation" else "student_t_to_equivalent_z"))
+}
+
+save_caliper_analysis <- function(analysis, derived_dir) {
+  dir.create(derived_dir,recursive=TRUE,showWarnings=FALSE)
+  notes <- data.frame(note=c(
+    paste0("Source: ",analysis$settings$source_data),
+    "Pooled empirical estimates; every valid observation is retained. No reporting-precision selection is used.",
+    paste0("Cutoff: ",format(analysis$settings$cutoff,digits=16),
+      "; half-widths: ",paste(analysis$settings$half_widths,collapse=", ")),
+    "Point estimate: observed fraction at/above cutoff among observations in the caliper, equally weighted per estimate.",
+    paste0("Pointwise 95% article-cluster bootstrap percentile CIs; ",analysis$settings$bootstrap_iterations,
+      " resamples; seed ",analysis$settings$bootstrap_seed,"; cluster identifier: ",
+      if (is.null(analysis$settings$cluster_col)) "none" else analysis$settings$cluster_col),
+    "Whole articles are resampled, including those with no observations in a given window; each draw recomputes its own ratio.",
+    "No caliper p-values, analytical t intervals, binomial intervals or field-specific calipers are returned.",
+    "Empty bootstrap windows are counted; intervals require at least 95% valid draws.",
+    "metaID identifies meta-analysis articles; shared primary studies across articles are not captured by this clustering.",
+    "Finite-window probability balance is stronger than density continuity; the diagnostics do not establish publication bias."
+  ))
+  openxlsx::write.xlsx(list(Results=analysis$tests,Notes=notes),
+    file.path(derived_dir,"caliper_tests.xlsx"),asTable=TRUE,firstRow=TRUE,colWidths="auto",overwrite=TRUE)
+  openxlsx::write.xlsx(list(Results=analysis$coverage,Notes=notes),
+    file.path(derived_dir,"caliper_coverage.xlsx"),asTable=TRUE,firstRow=TRUE,colWidths="auto",overwrite=TRUE)
+  saveRDS(analysis,file.path(derived_dir,"caliper_analysis.rds"))
+  invisible(analysis)
+}
+
+make_caliper_plots <- function(analysis, font_size = 12) {
+  settings <- analysis$settings
+  valid <- analysis$audit[analysis$audit$valid,,drop=FALSE]
+  limits <- settings$cutoff+c(-1,1)*max(settings$half_widths)
+  z <- valid$abs_z[valid$abs_z>=limits[1] & valid$abs_z<=limits[2]]
+  breaks <- seq(limits[1],limits[2],length.out=81)
+  counts <- if (length(z)) hist(z,breaks=breaks,plot=FALSE)$counts else rep(0,80)
+  bins <- data.frame(xmin=head(breaks,-1),xmax=tail(breaks,-1),count=counts)
+  theme <- ggplot2::theme_minimal(base_size=font_size)+ggplot2::theme(
+    text=ggplot2::element_text(size=font_size),
+    axis.text=ggplot2::element_text(size=font_size),
+    panel.grid.minor=ggplot2::element_blank(),
+    plot.title=ggplot2::element_text(face="bold"),
+    plot.margin=ggplot2::margin(10,12,10,10))
+  histogram <- ggplot2::ggplot(bins)+ggplot2::geom_rect(
+    ggplot2::aes(xmin=xmin,xmax=xmax,ymin=0,ymax=count),fill="grey75",colour="grey20",linewidth=.25)+
+    ggplot2::geom_vline(xintercept=settings$cutoff,colour="red3",linewidth=.6)+
+    ggplot2::scale_x_continuous(limits=limits,expand=ggplot2::expansion(mult=0))+
+    ggplot2::scale_y_continuous(expand=ggplot2::expansion(mult=c(0,.05)))+
+    ggplot2::labs(title="Observed |z| distribution",subtitle=paste0("n = ",format(length(z),big.mark=",",trim=TRUE)),
+      x="|z|",y="Frequency")+theme
+  tests <- analysis$tests
+  ci <- is.finite(tests$bootstrap_ci_lower) & is.finite(tests$bootstrap_ci_upper)
+  calipers <- ggplot2::ggplot(tests,ggplot2::aes(x=half_width,y=share_above))+
+    ggplot2::geom_hline(yintercept=.5,colour="red3",linetype="dashed")+
+    ggplot2::geom_errorbar(data=tests[ci,,drop=FALSE],
+      ggplot2::aes(ymin=bootstrap_ci_lower,ymax=bootstrap_ci_upper),colour="#0072B2",width=.006)+
+    ggplot2::geom_point(colour="#0072B2",size=2,na.rm=TRUE)+
+    ggplot2::scale_x_continuous(breaks=tests$half_width,
+      labels=paste0(sprintf("%.2f",tests$half_width),"\n(n = ",format(tests$n_window,big.mark=",",trim=TRUE),")"),
+      limits=range(tests$half_width)+c(-.01,.01),expand=ggplot2::expansion(mult=0))+
+    ggplot2::scale_y_continuous(breaks=seq(.4,.6,.05),labels=sprintf("%.2f",seq(.4,.6,.05)),
+      expand=ggplot2::expansion(mult=0))+
+    ggplot2::coord_cartesian(ylim=c(.4,.6))+
+    ggplot2::labs(title="Caliper estimates",subtitle=paste0("95% cluster-bootstrap CIs; ",
+      format(settings$bootstrap_iterations,big.mark=",",trim=TRUE)," resamples"),
+      x="Caliper half-width (z units)",y="Share above cutoff")+theme
+  if (nrow(tests)>1L) calipers <- calipers+ggplot2::geom_line(colour="#0072B2",na.rm=TRUE)
+  list(histogram,calipers)
+}
