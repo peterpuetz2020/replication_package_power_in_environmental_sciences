@@ -695,9 +695,9 @@ make_caliper_plots <- function(analysis, font_size = 12) {
     ggplot2::scale_x_continuous(breaks=tests$half_width,
       labels=paste0(sprintf("%.2f",tests$half_width),"\n(n = ",format(tests$n_window,big.mark=",",trim=TRUE),")"),
       limits=range(tests$half_width)+c(-.01,.01),expand=ggplot2::expansion(mult=0))+
-    ggplot2::scale_y_continuous(breaks=seq(.4,.6,.05),labels=sprintf("%.2f",seq(.4,.6,.05)),
+    ggplot2::scale_y_continuous(breaks=seq(.45,.65,.05),labels=sprintf("%.2f",seq(.45,.65,.05)),
       expand=ggplot2::expansion(mult=0))+
-    ggplot2::coord_cartesian(ylim=c(.4,.6))+
+    ggplot2::coord_cartesian(ylim=c(.45,.65))+
     ggplot2::labs(title="Caliper estimates",subtitle=paste0("95% cluster-bootstrap CIs; ",
       format(settings$bootstrap_iterations,big.mark=",",trim=TRUE)," resamples"),
       x="Caliper half-width (z units)",y="Share above cutoff")+theme
