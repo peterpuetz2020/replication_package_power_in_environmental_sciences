@@ -35,31 +35,42 @@ custom variance-to-SE precision propagation. Neither center is rounded to its
 selected precision. Consequently, the adjusted sample can differ from earlier
 runs of that custom implementation.
 
-The package supplies the exact bounds of a ratio under separate coefficient
-and SE rounding intervals. For the omission rule, evaluate its lower bound at
-benchmark coefficient `2 * sqrt(vi)` and retain the observation if that bound is
-at least the analysis cutoff. With `sigma = sqrt(vi)`, coefficient rounding step
-`a = 10^(-mu.dec)` and SE rounding step `b = 10^(-sigma.dec)`, retention requires
+The omission criterion is the **unchanged published rule**:
 
-```
-(2 * sigma - a/2) / (sigma + b/2) >= cutoff.
+```r
+s <- RoundingMatters::significand(sqrt(vi), num.deci = sigma.dec)
+keep <- s >= 37
 ```
 
-This is an **unequal-precision extension** of the paper’s omission criterion:
-when both decimal counts agree and the cutoff is 1.96, it reduces to
-`sigma / b >= 37`. It is not a call to the package’s common-precision defaults.
-The reference to z = 2 follows the rationale for 37 in Kranz and Pütz’s paper
-([doi:10.1257/aer.20210121](https://doi.org/10.1257/aer.20210121)). The same sample
-is retained for all window widths, without choosing omissions based on whether
-each observation’s actual z falls above or below the cutoff. Unknown precision
-excludes an observation from the adjusted sample only. This is an omission
-analysis; no random derounding or simulated replacements are used.
+The package computes the significand as `round(sqrt(vi) * 10^sigma.dec)`.
+The threshold remains exactly 37, independently of caliper cutoff or half-width.
+There is no hypothetical-z criterion and no extension of the rule to unequal
+coefficient/SE precision.
 
-Actual coefficient/SE rounding bounds are also evaluated with the package and
-saved in the audit. The omission criterion reduces rounding problems but does
-not guarantee that every retained observation is correctly classified. Its
-interpretation requires reporting precision not to be systematically related
-to the underlying z distribution.
+The rule's common-precision assumption is checked separately: it is applied only
+where `mu.dec == sigma.dec` under the selected precision convention above.
+Unequal-precision observations remain in the full empirical sample and receive
+rounding bounds, but have `kp_status = "unequal_precision_not_applicable"` and do
+not enter the omission panels. They are counted separately from observations
+omitted by the published rule. Missing precision likewise makes the omission
+analysis unavailable for that row. The plots therefore compare the full sample
+with the **equal-precision eligible subset after the original omission rule**;
+differences can reflect both eligibility and omission.
+
+`RoundingMatters::min.max.z()` supplies diagnostic bounds for every valid pair
+with known precision, including unequal precision. Its separate `mu.dec` and
+`sigma.dec` arguments do not justify altering the paper's omission criterion.
+Those bounds do not determine `kp_keep`. The audit now records the significand,
+common-precision eligibility and status; the custom `kp_reference_z_lower`
+column has been removed.
+
+The rule follows Kranz and Pütz
+([doi:10.1257/aer.20210121](https://doi.org/10.1257/aer.20210121)) and the authors'
+package implementation. It reduces rounding problems but does not guarantee
+that every retained observation is correctly classified. Its interpretation
+requires reporting precision not to be systematically related to the underlying
+z distribution. Observed `yi/sqrt(vi)` values are unchanged; no random derounding
+or simulated replacements are used.
 
 ## Caliper estimates and intervals
 
@@ -90,15 +101,17 @@ Derived outputs are stored under `data/derived_data/`:
   counts, observed shares, bootstrap bounds and retention counts,
   with a `Notes` sheet describing the calculation;
 - `caliper_coverage.xlsx`: input, valid/excluded and article counts, plus known/
-  unknown reporting precision and omission counts;
+  unknown reporting precision, equal/unequal precision eligibility and omission
+  counts;
 - `caliper_rounding_risks.xlsx`: possible significance switches and uncertain
   window membership under the package bounds, counted over each entire sample
   rather than just its observed window members; these are not confirmed errors;
 - `caliper_analysis.rds`: the results, settings and row audit, including original
-  entries, decimal counts, precision sources, ratio bounds and omission status.
+  entries, decimal counts, precision sources, ratio bounds, SE significands,
+  common-precision eligibility and omission status.
 
 Figure S6 is saved as PDF and SVG under `results/supplement/`. It has a two-column,
-two-row layout: full sample above, Kranz–Pütz omission sample below. The left
+two-row layout: full sample above, Kranz–Pütz equal-precision omission sample below. The left
 panels show histograms within the largest caliper, on shared x/y scales; the
 right panels show observed caliper shares and their bootstrap intervals. Each
 x-axis tick gives `(n = ...)` for that window. The caliper y range is 0.45–0.65;
@@ -116,5 +129,6 @@ Rscript tests/test_calipers.R
 
 Tests cover window counts, article dependence under within-article duplication,
 bootstrap percentiles, unchanged numeric values, t calibration, invalid rows,
-Excel precision extraction, unequal-precision ratio bounds, the common-precision
-37 boundary, unknown precision, derived-data handoff and the four-panel figure.
+Excel precision extraction, unequal-precision ratio bounds, unchanged original
+36/37 omission boundary, equal-precision eligibility, unknown precision, option
+preservation, derived-data handoff and the four-panel figure.

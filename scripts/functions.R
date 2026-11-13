@@ -712,11 +712,10 @@ prepare_caliper_data <- function(data, estimate_col = "yi", variance_col = "vi",
     exclusion_reason=reason,stringsAsFactors=FALSE)
 }
 
-## Unequal-precision extension of the Kranz-Puetz omission criterion. As in the
-## paper, assess classification at the benchmark z = 2, rather than selectively
-## removing observed statistics close to the significance cutoff. With common
-## coefficient/SE decimal places and cutoff 1.96 this retains significands >= 37.
-prepare_rounding_calipers <- function(audit, entries, cutoff = qnorm(.975)) {
+## Keep the published Kranz-Puetz significand >= 37 rule unchanged. Its common-
+## precision assumption is checked separately; unequal precision is inapplicable,
+## rather than a reason to invent a different omission criterion.
+prepare_rounding_calipers <- function(audit, entries) {
   if (!requireNamespace("RoundingMatters", quietly=TRUE)) {
     stop("Restore the project library with renv::restore() to install RoundingMatters.")
   }
@@ -739,8 +738,9 @@ prepare_rounding_calipers <- function(audit, entries, cutoff = qnorm(.975)) {
     stop("Reporting decimal counts must be integers between -300 and 300.")
   }
   audit$kp_precision_known <- known
+  audit$kp_common_precision <- known & audit$kp_mu_decimals==audit$kp_sigma_decimals
   audit$rounding_abs_z_lower <- audit$rounding_abs_z_upper <- NA_real_
-  audit$kp_reference_z_lower <- NA_real_
+  audit$kp_se_significand <- NA_real_
   audit$kp_keep <- FALSE
   rows <- which(audit$valid & known)
   if (length(rows)) {
@@ -751,15 +751,19 @@ prepare_rounding_calipers <- function(audit, entries, cutoff = qnorm(.975)) {
       mu.dec=audit$kp_mu_decimals[rows],sigma.dec=audit$kp_sigma_decimals[rows])
     audit$rounding_abs_z_lower[rows] <- pmax(0,bounds$z.min)
     audit$rounding_abs_z_upper[rows] <- pmax(abs(bounds$z.min),abs(bounds$z.max))
-    reference <- RoundingMatters::min.max.z(
-      mu=2*audit$standard_error[rows],sigma=audit$standard_error[rows],
-      mu.dec=audit$kp_mu_decimals[rows],sigma.dec=audit$kp_sigma_decimals[rows])
-    audit$kp_reference_z_lower[rows] <- reference$z.min
-    audit$kp_keep[rows] <- is.finite(reference$z.min) & reference$z.min>=cutoff
+    # The package's significand helper changes scipen. Restore the caller's
+    # option so this diagnostic cannot affect later manuscript output formatting.
+    old_options <- options("scipen")
+    on.exit(options(old_options),add=TRUE)
+    audit$kp_se_significand[rows] <- RoundingMatters::significand(
+      audit$standard_error[rows],num.deci=audit$kp_sigma_decimals[rows])
+    audit$kp_keep[rows] <- audit$kp_common_precision[rows] &
+      is.finite(audit$kp_se_significand[rows]) & audit$kp_se_significand[rows]>=37
   }
   audit$kp_status <- ifelse(!audit$valid,"invalid_observation",
     ifelse(!known,"unknown_reporting_precision",
-      ifelse(audit$kp_keep,"retained","omitted_by_precision_rule")))
+      ifelse(!audit$kp_common_precision,"unequal_precision_not_applicable",
+        ifelse(audit$kp_keep,"retained","omitted_by_precision_rule"))))
   audit
 }
 
@@ -786,7 +790,7 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
     if (!is.null(statistic_col) || !is.null(df_col) || estimate_col!="yi" || variance_col!="vi") {
       stop("The workbook omission analysis requires the observed yi / sqrt(vi) normal statistics.")
     }
-    audit <- prepare_rounding_calipers(audit,reporting_entries,cutoff)
+    audit <- prepare_rounding_calipers(audit,reporting_entries)
   }
   valid <- audit[audit$valid,,drop=FALSE]
   if (!nrow(valid)) stop("No valid observations remain for caliper analysis.")
@@ -813,8 +817,10 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
   if (use_rounding) {
     coverage$n_known_reporting_precision <- sum(valid$kp_precision_known)
     coverage$n_unknown_reporting_precision <- sum(!valid$kp_precision_known)
+    coverage$n_equal_reporting_precision <- sum(valid$kp_common_precision)
+    coverage$n_unequal_reporting_precision <- sum(valid$kp_precision_known & !valid$kp_common_precision)
     coverage$n_retained_kranz_puetz <- sum(valid$kp_keep)
-    coverage$n_omitted_by_precision_rule <- sum(valid$kp_precision_known & !valid$kp_keep)
+    coverage$n_omitted_by_precision_rule <- sum(valid$kp_common_precision & !valid$kp_keep)
   }
   risks <- NULL
   if (use_rounding) risks <- do.call(rbind,lapply(names(samples),function(method) {
@@ -835,7 +841,7 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
       reference=if (is.null(df_col)) "normal_approximation" else "student_t_to_equivalent_z",
       rounding_adjustment=use_rounding,
       rounding_package=if (use_rounding) as.character(utils::packageVersion("RoundingMatters")) else NULL,
-      omission_rule=if (use_rounding) "RoundingMatters lower z bound at benchmark z=2 >= cutoff; mu.dec=d_yi; sigma.dec=min(d_vi,d_sei)" else "none"))
+      omission_rule=if (use_rounding) "Published SE significand >= 37; applicable only when mu.dec == sigma.dec; no unequal-precision extension" else "none"))
 }
 
 save_caliper_analysis <- function(analysis, derived_dir) {
@@ -844,11 +850,14 @@ save_caliper_analysis <- function(analysis, derived_dir) {
     paste0("Source: ",analysis$settings$source_data),
     "Pooled empirical estimates; every valid observation is retained in the empirical sample.",
     if (isTRUE(analysis$settings$rounding_adjustment)) c(
-      "Kranz-Puetz omission sample uses RoundingMatters::min.max.z with separate coefficient and SE precision.",
+      "Kranz-Puetz omission sample uses the published SE significand >= 37 rule, computed with RoundingMatters::significand.",
       "mu.dec = reported yi decimals; sigma.dec = min(reported vi decimals, reported sei decimals).",
       "The selected minimum is used on the SE scale, centered at sqrt(vi); it is not a variance-to-SE precision transformation.",
-      "Retain when the package lower z bound at benchmark mu = 2*sqrt(vi) is at/above the cutoff. With common precision and cutoff 1.96, this is the published significand >= 37 rule.",
-      "This unequal-precision extension keeps a single omission sample across all windows. Point estimates yi/sqrt(vi) are unchanged; no random derounding is used.",
+      "Apply the original rule only where the selected coefficient and SE decimal counts match. Unequal-precision observations are outside its scope and are reported separately, not counted as omissions under the rule.",
+      "SE significand = round(sqrt(vi) * 10^sigma.dec), following the package implementation; threshold is exactly 37, independent of caliper cutoff or width.",
+      "No benchmark-z rule or unequal-precision extension is used. Point estimates yi/sqrt(vi) are unchanged; no random derounding is used.",
+      "The omission panels concern the equal-precision eligible subset after the original rule; comparisons with the full sample also reflect this eligibility restriction.",
+      "RoundingMatters::min.max.z still supplies diagnostic bounds for all known precision pairs, including unequal precision; those bounds do not determine omission.",
       "Missing yi/vi/sei reporting precision is excluded from the adjusted sample only; see coverage and audit status.",
       "Precision is extracted from original Excel strings, stored numeric entries or explicit number formats. General numeric cells cannot recover trailing zeros that Excel has already discarded.",
       paste0("RoundingMatters version: ",analysis$settings$rounding_package)
@@ -900,7 +909,7 @@ make_caliper_sample_plots <- function(analysis, font_size = 12, method = "empiri
     ggplot2::scale_x_continuous(limits=limits,expand=ggplot2::expansion(mult=0))+
     ggplot2::scale_y_continuous(limits=histogram_ylim,
       expand=ggplot2::expansion(mult=if (is.null(histogram_ylim)) c(0,.05) else 0))+
-    ggplot2::labs(title=if (adjusted) "Kranz-Pütz omission sample" else "Full empirical sample",
+    ggplot2::labs(title=if (adjusted) "Kranz-Pütz: equal precision" else "Full empirical sample",
       subtitle=paste0("n = ",format(length(z),big.mark=",",trim=TRUE)),
       x="|z|",y="Frequency")+theme
   tests <- analysis$tests[analysis$tests$method==method,,drop=FALSE]

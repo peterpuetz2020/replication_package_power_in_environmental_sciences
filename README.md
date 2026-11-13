@@ -220,8 +220,10 @@ The standard data-preparation and supplementary-rendering stages now compute
 and plot pooled empirical and Kranz–Pütz omission calipers as Figure S6. The
 omission calculation uses `RoundingMatters` with coefficient precision from
 `yi` and SE precision set to the lower reported decimal count of `vi` and `sei`
-for each observation, allowing unequal coefficient/SE precision. The full
-empirical sample retains all valid observed estimates. Half-widths are 0.05,
+for each observation. The published SE-significand rule `s >= 37` is applied
+only where the selected coefficient and SE precision match. Unequal-precision
+rows receive diagnostic bounds and remain in the full empirical sample, which
+retains all valid observed estimates. Half-widths are 0.05,
 0.10, 0.15 and 0.20; only cluster-bootstrap percentile intervals from 1,000
 article resamples are computed, without p-values. Numerical results and the
 row audit are saved in `data/derived_data/`; Figure S6 is saved as PDF and SVG
