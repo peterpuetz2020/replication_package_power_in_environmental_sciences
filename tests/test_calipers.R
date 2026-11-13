@@ -77,8 +77,9 @@ stopifnot(identical(adjusted$audit$kp_mu_decimals,c(4,1,4,4)),
   identical(adjusted$audit$kp_common_precision,c(TRUE,FALSE,TRUE,TRUE)),
   identical(adjusted$audit$kp_precision_match,c("both","none","sei","vi")),
   identical(adjusted$audit$kp_se_significand,c(1000,1000,1000,1000)),
-  identical(adjusted$audit$kp_keep,c(TRUE,FALSE,TRUE,TRUE)),
-  adjusted$audit$kp_status[2]=="unequal_precision_not_applicable",
+  identical(adjusted$audit$kp_rule_applied,c(TRUE,FALSE,TRUE,TRUE)),
+  all(adjusted$audit$kp_keep),
+  adjusted$audit$kp_status[2]=="retained_no_precision_match",
   adjusted$coverage$n_unequal_reporting_precision==1,
   adjusted$coverage$n_matches_sei_only==1,
   adjusted$coverage$n_matches_vi_only==1,
@@ -87,8 +88,8 @@ stopifnot(identical(adjusted$audit$kp_mu_decimals,c(4,1,4,4)),
   !"kp_reference_z_lower" %in% names(adjusted$audit),
   identical(compute_caliper_analysis(paired,cutoff=2.1,reporting_entries=entries)$audit$kp_keep,
     adjusted$audit$kp_keep),
-  nrow(adjusted$tests)==8L,
-  all(adjusted$tests$n_retained[adjusted$tests$method=="kranz_puetz"]==3),
+  nrow(adjusted$tests)==12L,
+  all(adjusted$tests$n_retained[adjusted$tests$method=="kranz_puetz"]==4),
   identical(adjusted$audit$variance,paired$vi),
   identical(adjusted$audit$standard_error,sqrt(paired$vi)),
   identical(adjusted$audit$kp_keep,negative_audit$kp_keep),
@@ -101,10 +102,12 @@ stopifnot(identical(adjusted$audit$kp_mu_decimals,c(4,1,4,4)),
 ## A missing nonmatching column must not invalidate a match in the other one.
 without_vi <- entries; without_vi$vi$decimals[] <- NA_real_
 without_sei <- entries; without_sei$sei$decimals[] <- NA_real_
-stopifnot(identical(prepare_rounding_calipers(prepare_caliper_data(paired),without_vi)$kp_keep,
+stopifnot(identical(prepare_rounding_calipers(prepare_caliper_data(paired),without_vi)$kp_rule_applied,
     c(TRUE,FALSE,TRUE,FALSE)),
-  identical(prepare_rounding_calipers(prepare_caliper_data(paired),without_sei)$kp_keep,
-    c(TRUE,FALSE,FALSE,TRUE)))
+  identical(prepare_rounding_calipers(prepare_caliper_data(paired),without_sei)$kp_rule_applied,
+    c(TRUE,FALSE,FALSE,TRUE)),
+  all(prepare_rounding_calipers(prepare_caliper_data(paired),without_vi)$kp_keep),
+  all(prepare_rounding_calipers(prepare_caliper_data(paired),without_sei)$kp_keep))
 
 ## Recover the published common-precision boundary (36 omitted, 37 retained).
 common <- data.frame(yi=c(.072,.074),vi=c(.036,.037)^2,metaID=1:2)
@@ -116,10 +119,60 @@ stopifnot(identical(common_audit$kp_se_significand,c(36,37)),
   identical(common_audit$kp_status,c("omitted_by_precision_rule","retained")))
 missing <- entries; missing$yi$decimals[] <- NA_real_
 empty <- compute_caliper_analysis(paired,reporting_entries=missing)
-stopifnot(all(empty$tests$n_window[empty$tests$method=="kranz_puetz"]==0),
+stopifnot(all(empty$tests$n_window[empty$tests$method=="kranz_puetz"]==4),
+  all(empty$audit$kp_keep),!any(empty$audit$kp_rule_applied),
+  all(empty$audit$kp_status=="retained_unknown_precision"),
+  all(empty$audit$rounding_filter_keep),
+  all(empty$audit$rounding_filter_status=="retained_unknown_precision"),
   empty$coverage$n_unknown_reporting_precision==4,
   identical(empty$tests[empty$tests$method=="empirical",names(analysis$tests)],
     compute_caliper_analysis(paired)$tests))
+
+## Remove only matched failures; the same low SE significand is not an omission
+## when coefficient precision does not match. Invalid observations stay excluded.
+conditional <- data.frame(yi=c(.072,.074,.072,.074),vi=c(.036,.037,.036,.037)^2,metaID=1:4)
+conditional_entries <- list(yi=metadata(conditional$yi,c(3,3,2,2)),
+  vi=metadata(conditional$vi,rep(3,4)),sei=metadata(sqrt(conditional$vi),rep(3,4)))
+selected <- compute_caliper_analysis(conditional,reporting_entries=conditional_entries)
+stopifnot(identical(selected$audit$kp_keep,c(FALSE,TRUE,TRUE,TRUE)),
+  identical(selected$audit$kp_rule_applied,c(TRUE,TRUE,FALSE,FALSE)),
+  selected$coverage$n_rule_applied==2,
+  selected$coverage$n_retained_after_kp_rule==1,
+  selected$coverage$n_retained_without_kp_rule==2,
+  selected$coverage$n_retained_kranz_puetz==3,
+  selected$coverage$n_omitted_by_precision_rule==1,
+  all(selected$tests$n_window[selected$tests$method=="kranz_puetz"]==3))
+conditional$vi[3] <- 0
+stopifnot(!prepare_rounding_calipers(prepare_caliper_data(conditional),conditional_entries)$kp_keep[3])
+
+## The independent third sample uses min(vi,sei) precision even when KP matches
+## the more precise input. Exclude only intervals spanning the cutoff, on either
+## sign of the coefficient; keep intervals certainly below or certainly above.
+ambiguous <- data.frame(yi=c(.196,.18,.22,.196,-.196,0),vi=.01,metaID=1:6)
+ambiguity_entries <- list(yi=metadata(ambiguous$yi,c(4,2,2,3,3,0)),
+  vi=metadata(ambiguous$vi,c(2,4,4,2,2,4)),
+  sei=metadata(sqrt(ambiguous$vi),c(4,3,2,4,4,3)))
+sensitivity <- compute_caliper_analysis(ambiguous,reporting_entries=ambiguity_entries)
+a <- sensitivity$audit
+stopifnot(identical(a$rounding_filter_sigma_decimals,c(2,3,2,2,2,3)),
+  a$kp_sigma_decimals[1]==4,a$rounding_filter_sigma_decimals[1]==2,
+  identical(a$rounding_filter_straddles_cutoff,c(TRUE,FALSE,FALSE,TRUE,TRUE,TRUE)),
+  identical(a$rounding_filter_keep,c(FALSE,TRUE,TRUE,FALSE,FALSE,FALSE)),
+  !a$kp_keep[3],a$rounding_filter_keep[3],
+  sensitivity$coverage$n_omitted_straddling_cutoff==4,
+  sensitivity$coverage$n_retained_rounding_ambiguity==2,
+  all(sensitivity$rounding_risks$n_potential_significance_switch[
+    sensitivity$rounding_risks$method=="rounding_ambiguity"]==0))
+expected_lo <- pmax(0,abs(ambiguous$yi)-.5*10^(-a$reported_yi_decimals))/
+  (sqrt(ambiguous$vi)+.5*10^(-a$rounding_filter_sigma_decimals))
+expected_hi <- (abs(ambiguous$yi)+.5*10^(-a$reported_yi_decimals))/
+  pmax(0,sqrt(ambiguous$vi)-.5*10^(-a$rounding_filter_sigma_decimals))
+stopifnot(max(abs(a$rounding_filter_abs_z_lower-expected_lo))<1e-12,
+  max(abs(a$rounding_filter_abs_z_upper-expected_hi))<1e-12,
+  prepare_rounding_ambiguity_filter(a,cutoff=a$rounding_filter_abs_z_upper[2])$
+    rounding_filter_straddles_cutoff[2],
+  !prepare_rounding_ambiguity_filter(a,cutoff=a$rounding_filter_abs_z_lower[3])$
+    rounding_filter_straddles_cutoff[3])
 
 ## Read precision from workbook entries/formatting, including trailing zeros,
 ## instead of using the digits of computed sqrt(vi) or formatted R doubles.
@@ -140,18 +193,22 @@ stopifnot(identical(xentries$yi$decimals,c(4,5)),
 xdata <- as.data.frame(lapply(readxl::read_excel(path),as.numeric)); xdata$metaID <- 1:2
 xanalysis <- compute_caliper_analysis(xdata,workbook_path=path)
 stopifnot(identical(xanalysis$audit$kp_sigma_decimals,c(3,5)),
-  identical(xanalysis$audit$kp_keep,c(FALSE,TRUE)))
+  all(xanalysis$audit$kp_keep),
+  identical(xanalysis$audit$kp_rule_applied,c(FALSE,TRUE)))
 unlink(path)
 
 folder <- tempfile("caliper-adjusted-")
 save_caliper_analysis(adjusted,folder)
 saved <- openxlsx::read.xlsx(file.path(folder,"caliper_tests.xlsx"),sheet="Results")
 plots <- make_caliper_plots(adjusted)
-stopifnot(nrow(saved)==8L,length(plots)==4L,
-  nrow(openxlsx::read.xlsx(file.path(folder,"caliper_rounding_risks.xlsx"),sheet="Results"))==8L,
-  sum(plots[[1]]$data$count)==4L,sum(plots[[3]]$data$count)==3L,
+stopifnot(nrow(saved)==12L,length(plots)==6L,
+  nrow(openxlsx::read.xlsx(file.path(folder,"caliper_rounding_risks.xlsx"),sheet="Results"))==12L,
+  sum(plots[[1]]$data$count)==4L,sum(plots[[3]]$data$count)==4L,
+  sum(plots[[5]]$data$count)==adjusted$tests$n_window[
+    adjusted$tests$method=="rounding_ambiguity" & adjusted$tests$half_width==.2],
   identical(plots[[2]]$coordinates$limits$y,c(.45,.65)),
   identical(plots[[4]]$coordinates$limits$y,c(.45,.65)),
+  identical(plots[[6]]$coordinates$limits$y,c(.45,.65)),
   !any(grepl("p_value|binom|holm|cluster_ci",names(saved))))
 unlink(folder,recursive=TRUE)
-cat("PASS: yi matches sei OR vi, matching precision used for unchanged >=37 rule, Excel decimals, article bootstrap and Figure S6.\n")
+cat("PASS: conditional KP omissions, retained nonmatches, independent min-precision cutoff filter, original thresholds, bootstrap and six-panel Figure S6.\n")

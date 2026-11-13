@@ -714,7 +714,7 @@ prepare_caliper_data <- function(data, estimate_col = "yi", variance_col = "vi",
 
 ## Keep the published Kranz-Puetz significand >= 37 rule unchanged. Its common-
 ## precision match is checked against sei OR vi separately. Use the matching
-## decimal count for the rule, rather than requiring a match to their minimum.
+## decimal count for the rule. Keep observations without a match unchanged.
 prepare_rounding_calipers <- function(audit, entries) {
   if (!requireNamespace("RoundingMatters", quietly=TRUE)) {
     stop("Restore the project library with renv::restore() to install RoundingMatters.")
@@ -755,7 +755,8 @@ prepare_rounding_calipers <- function(audit, entries) {
   audit$kp_sigma_decimals <- ifelse(audit$kp_common_precision,audit$kp_mu_decimals,fallback)
   audit$rounding_abs_z_lower <- audit$rounding_abs_z_upper <- NA_real_
   audit$kp_se_significand <- NA_real_
-  audit$kp_keep <- FALSE
+  audit$kp_rule_applied <- audit$valid & audit$kp_common_precision
+  audit$kp_keep <- audit$valid
   rows <- which(audit$valid & known)
   if (length(rows)) {
     ## Use the package's explicit, separate precision arguments. Do not infer
@@ -771,13 +772,45 @@ prepare_rounding_calipers <- function(audit, entries) {
     on.exit(options(old_options),add=TRUE)
     audit$kp_se_significand[rows] <- RoundingMatters::significand(
       audit$standard_error[rows],num.deci=audit$kp_sigma_decimals[rows])
-    audit$kp_keep[rows] <- audit$kp_common_precision[rows] &
-      is.finite(audit$kp_se_significand[rows]) & audit$kp_se_significand[rows]>=37
+    applied <- which(audit$kp_rule_applied)
+    audit$kp_keep[applied] <- is.finite(audit$kp_se_significand[applied]) &
+      audit$kp_se_significand[applied]>=37
   }
   audit$kp_status <- ifelse(!audit$valid,"invalid_observation",
-    ifelse(!known,"unknown_reporting_precision",
-      ifelse(!audit$kp_common_precision,"unequal_precision_not_applicable",
+    ifelse(!known,"retained_unknown_precision",
+      ifelse(!audit$kp_common_precision,"retained_no_precision_match",
         ifelse(audit$kp_keep,"retained","omitted_by_precision_rule"))))
+  audit
+}
+
+## Separate sensitivity: remove only observations whose possible absolute z
+## values span the significance cutoff. Always use min(d_vi,d_sei) here,
+## independently of the precision match and the KP omission rule.
+prepare_rounding_ambiguity_filter <- function(audit, cutoff = qnorm(.975)) {
+  decimals <- pmin(audit$reported_vi_decimals,audit$reported_sei_decimals,na.rm=TRUE)
+  decimals[!is.finite(decimals)] <- NA_real_
+  known <- is.finite(audit$reported_yi_decimals) & is.finite(decimals)
+  audit$rounding_filter_sigma_decimals <- decimals
+  audit$rounding_filter_precision_known <- known
+  audit$rounding_filter_abs_z_lower <- audit$rounding_filter_abs_z_upper <- NA_real_
+  audit$rounding_filter_straddles_cutoff <- NA
+  rows <- which(audit$valid & known)
+  if (length(rows)) {
+    bounds <- RoundingMatters::min.max.z(
+      mu=abs(audit$estimate[rows]),sigma=audit$standard_error[rows],
+      mu.dec=audit$reported_yi_decimals[rows],sigma.dec=decimals[rows])
+    lo <- pmax(0,bounds$z.min)
+    hi <- pmax(abs(bounds$z.min),abs(bounds$z.max))
+    audit$rounding_filter_abs_z_lower[rows] <- lo
+    audit$rounding_filter_abs_z_upper[rows] <- hi
+    # Exact cutoff ties belong to the above-cutoff side, as in the calipers.
+    audit$rounding_filter_straddles_cutoff[rows] <- lo<cutoff & hi>=cutoff
+  }
+  audit$rounding_filter_keep <- audit$valid &
+    (is.na(audit$rounding_filter_straddles_cutoff) | !audit$rounding_filter_straddles_cutoff)
+  audit$rounding_filter_status <- ifelse(!audit$valid,"invalid_observation",
+    ifelse(!known,"retained_unknown_precision",
+      ifelse(audit$rounding_filter_straddles_cutoff,"omitted_straddles_cutoff","retained_one_side")))
   audit
 }
 
@@ -805,11 +838,13 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
       stop("The workbook omission analysis requires the observed yi / sqrt(vi) normal statistics.")
     }
     audit <- prepare_rounding_calipers(audit,reporting_entries)
+    audit <- prepare_rounding_ambiguity_filter(audit,cutoff)
   }
   valid <- audit[audit$valid,,drop=FALSE]
   if (!nrow(valid)) stop("No valid observations remain for caliper analysis.")
   samples <- list(empirical=valid)
   if (use_rounding) samples$kranz_puetz <- valid[valid$kp_keep,,drop=FALSE]
+  if (use_rounding) samples$rounding_ambiguity <- valid[valid$rounding_filter_keep,,drop=FALSE]
   tests <- do.call(rbind,lapply(names(samples),function(method) {
     selected <- samples[[method]]
     labels <- if (is.null(cluster_col)) NULL else selected$cluster
@@ -820,7 +855,7 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
     result$group <- "All"
     result$method <- method
     result$n_retained <- nrow(selected)
-    result$n_omitted_or_unknown <- nrow(valid)-nrow(selected)
+    result$n_omitted <- nrow(valid)-nrow(selected)
     result
   }))
   rownames(tests) <- NULL
@@ -836,18 +871,29 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
     coverage$n_matches_sei_only <- sum(valid$kp_precision_match=="sei")
     coverage$n_matches_vi_only <- sum(valid$kp_precision_match=="vi")
     coverage$n_matches_both <- sum(valid$kp_precision_match=="both")
+    coverage$n_rule_applied <- sum(valid$kp_rule_applied)
+    coverage$n_retained_after_kp_rule <- sum(valid$kp_rule_applied & valid$kp_keep)
+    coverage$n_retained_without_kp_rule <- sum(!valid$kp_rule_applied & valid$kp_keep)
     coverage$n_retained_kranz_puetz <- sum(valid$kp_keep)
-    coverage$n_omitted_by_precision_rule <- sum(valid$kp_common_precision & !valid$kp_keep)
+    coverage$n_omitted_by_precision_rule <- sum(valid$kp_rule_applied & !valid$kp_keep)
+    coverage$n_rounding_filter_known_precision <- sum(valid$rounding_filter_precision_known)
+    coverage$n_rounding_filter_unknown_precision <- sum(!valid$rounding_filter_precision_known)
+    coverage$n_omitted_straddling_cutoff <- sum(!valid$rounding_filter_keep)
+    coverage$n_retained_rounding_ambiguity <- sum(valid$rounding_filter_keep)
   }
   risks <- NULL
   if (use_rounding) risks <- do.call(rbind,lapply(names(samples),function(method) {
     selected <- samples[[method]]
-    known <- is.finite(selected$rounding_abs_z_lower) & !is.na(selected$rounding_abs_z_upper)
-    lo <- selected$rounding_abs_z_lower[known]; hi <- selected$rounding_abs_z_upper[known]
+    prefix <- if (method=="rounding_ambiguity") "rounding_filter_abs_z_" else "rounding_abs_z_"
+    lower <- selected[[paste0(prefix,"lower")]]; upper <- selected[[paste0(prefix,"upper")]]
+    known <- is.finite(lower) & !is.na(upper)
+    lo <- lower[known]; hi <- upper[known]
     do.call(rbind,lapply(half_widths,function(h) {
       definitely_in <- lo>=cutoff-h & hi<=cutoff+h
       definitely_out <- hi<cutoff-h | lo>cutoff+h
-      data.frame(method=method,half_width=h,n_with_rounding_bounds=sum(known),
+      data.frame(method=method,half_width=h,
+        precision_basis=if (method=="rounding_ambiguity") "min_vi_sei" else "kp_match_or_min_fallback",
+        n_with_rounding_bounds=sum(known),
         n_potential_significance_switch=sum(lo<cutoff & hi>=cutoff),
         n_uncertain_window_membership=sum(!definitely_in & !definitely_out))
     }))
@@ -858,7 +904,8 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
       reference=if (is.null(df_col)) "normal_approximation" else "student_t_to_equivalent_z",
       rounding_adjustment=use_rounding,
       rounding_package=if (use_rounding) as.character(utils::packageVersion("RoundingMatters")) else NULL,
-      omission_rule=if (use_rounding) "SE significand >= 37 using matching precision; eligible when d_yi == d_sei OR d_yi == d_vi" else "none"))
+      omission_rule=if (use_rounding) "Apply SE significand >= 37 only when d_yi == d_sei OR d_yi == d_vi; retain all valid nonmatching/unknown-precision observations unchanged" else "none",
+      ambiguity_rule=if (use_rounding) "Independently remove lower < cutoff <= upper using yi precision and min(d_vi,d_sei), regardless of precision match" else "none"))
 }
 
 save_caliper_analysis <- function(analysis, derived_dir) {
@@ -872,10 +919,14 @@ save_caliper_analysis <- function(analysis, derived_dir) {
       "Matched observations use sigma.dec = mu.dec = reported yi decimals for the KP rule and rounding bounds. The audit records which input matched (sei, vi or both).",
       "For unmatched observations, the minimum available vi/sei decimal count is used for diagnostic bounds only; it does not make them eligible for the KP rule.",
       "Precision is used on the SE scale, centered at sqrt(vi); matching vi decimals is the requested precision convention, not a variance-to-SE precision transformation.",
-      "Apply the original >=37 threshold to matched observations only. No-match rows are reported separately and are not counted as omissions under the threshold.",
+      "Apply the original >=37 threshold to matched observations only. Retain every valid observation with no precision match or unknown precision unchanged; only matched failures are omitted.",
       "SE significand = round(sqrt(vi) * 10^sigma.dec), following the package implementation; threshold is exactly 37, independent of caliper cutoff or width.",
       "No benchmark-z rule or unequal-precision extension is used. Point estimates yi/sqrt(vi) are unchanged; no random derounding is used.",
-      "The omission panels concern the precision-matched eligible subset after the original rule; comparisons with the full sample also reflect this eligibility restriction.",
+      "The adjusted panels retain all valid observations except matching-precision observations that fail the KP threshold. No-match observations are not removed.",
+      "kp_rule_applied distinguishes threshold application from sample inclusion (kp_keep). Status retained_no_precision_match or retained_unknown_precision means kept without applying KP, not a passed KP test.",
+      "The separate rounding_ambiguity sample starts from all valid observations and removes intervals with lower < cutoff <= upper; it does not apply KP first.",
+      "Rounding-ambiguity bounds always use the reported yi decimal count and min(reported vi decimals, reported sei decimals) on the SE scale, including unequal-precision observations.",
+      "rounding_filter_* audit columns record that separate calculation and inclusion decision. Unknown precision is retained unchanged and flagged; no unresolved case is claimed to be certainly on one side.",
       "RoundingMatters::min.max.z still supplies diagnostic bounds for all known precision pairs, including unequal precision; those bounds do not determine omission.",
       "Known yi precision and one matching sei or vi precision are sufficient; missing precision in the other column does not disqualify the match.",
       "Precision is extracted from original Excel strings, stored numeric entries or explicit number formats. General numeric cells cannot recover trailing zeros that Excel has already discarded.",
@@ -910,7 +961,9 @@ make_caliper_sample_plots <- function(analysis, font_size = 12, method = "empiri
   settings <- analysis$settings
   valid <- analysis$audit[analysis$audit$valid,,drop=FALSE]
   adjusted <- method=="kranz_puetz"
+  ambiguity <- method=="rounding_ambiguity"
   if (adjusted) valid <- valid[valid$kp_keep,,drop=FALSE]
+  if (ambiguity) valid <- valid[valid$rounding_filter_keep,,drop=FALSE]
   limits <- settings$cutoff+c(-1,1)*max(settings$half_widths)
   z <- valid$abs_z[valid$abs_z>=limits[1] & valid$abs_z<=limits[2]]
   breaks <- seq(limits[1],limits[2],length.out=81)
@@ -928,7 +981,7 @@ make_caliper_sample_plots <- function(analysis, font_size = 12, method = "empiri
     ggplot2::scale_x_continuous(limits=limits,expand=ggplot2::expansion(mult=0))+
     ggplot2::scale_y_continuous(limits=histogram_ylim,
       expand=ggplot2::expansion(mult=if (is.null(histogram_ylim)) c(0,.05) else 0))+
-    ggplot2::labs(title=if (adjusted) "Kranz-Pütz: matched precision" else "Full empirical sample",
+    ggplot2::labs(title=if (ambiguity) "Rounding-ambiguity filter" else if (adjusted) "Kranz-Pütz adjustment" else "Full empirical sample",
       subtitle=paste0("n = ",format(length(z),big.mark=",",trim=TRUE)),
       x="|z|",y="Frequency")+theme
   tests <- analysis$tests[analysis$tests$method==method,,drop=FALSE]
@@ -944,7 +997,7 @@ make_caliper_sample_plots <- function(analysis, font_size = 12, method = "empiri
     ggplot2::scale_y_continuous(breaks=seq(.45,.65,.05),labels=sprintf("%.2f",seq(.45,.65,.05)),
       expand=ggplot2::expansion(mult=0))+
     ggplot2::coord_cartesian(ylim=c(.45,.65))+
-    ggplot2::labs(title=if (adjusted) "Calipers: Kranz-Pütz" else "Calipers: full sample",
+    ggplot2::labs(title=if (ambiguity) "Calipers: rounding filter" else if (adjusted) "Calipers: Kranz-Pütz" else "Calipers: full sample",
       subtitle=paste0("95% cluster-bootstrap CIs; ",
       format(settings$bootstrap_iterations,big.mark=",",trim=TRUE)," resamples"),
       x="Caliper half-width (z units)",y="Share above cutoff")+theme
@@ -954,8 +1007,11 @@ make_caliper_sample_plots <- function(analysis, font_size = 12, method = "empiri
 
 make_caliper_plots <- function(analysis, font_size = 12) {
   full <- make_caliper_sample_plots(analysis,font_size)
-  if (!"kranz_puetz" %in% analysis$tests$method) return(full)
+  methods <- intersect(c("empirical","kranz_puetz","rounding_ambiguity"),analysis$tests$method)
+  if (length(methods)==1L) return(full)
   histogram_ylim <- c(0,max(1,full[[1]]$data$count)*1.05)
-  c(make_caliper_sample_plots(analysis,font_size,histogram_ylim=histogram_ylim),
-    make_caliper_sample_plots(analysis,font_size,method="kranz_puetz",histogram_ylim=histogram_ylim))
+  plots <- list()
+  for (method in methods) plots <- c(plots,make_caliper_sample_plots(
+    analysis,font_size,method=method,histogram_ylim=histogram_ylim))
+  plots
 }

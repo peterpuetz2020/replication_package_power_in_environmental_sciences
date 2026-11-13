@@ -649,14 +649,14 @@ save_supplement_plot(
   width = 10, height = 8, draw = function() print(esr_plot)
 )
 
-## Figure S6: empirical and Kranz-Puetz calipers, article-cluster bootstrap CIs.
+## Figure S6: empirical, KP and rounding-ambiguity calipers; cluster bootstrap CIs.
 caliper_inputs_path <- here("data", "derived_data", "caliper_analysis.rds")
 if (!file.exists(caliper_inputs_path)) {
   stop("Figure S6 inputs are unavailable. Run create_analysis_data.R first.")
 }
 caliper_analysis <- readRDS(caliper_inputs_path)
 save_supplement_plot(
-  file.path(supplement_dir, "Figure_S6"), width = 10, height = 8,
+  file.path(supplement_dir, "Figure_S6"), width = 10, height = 12,
   draw = function() gridExtra::grid.arrange(
     grobs = make_caliper_plots(caliper_analysis, supplement_font_size), ncol = 2
   )

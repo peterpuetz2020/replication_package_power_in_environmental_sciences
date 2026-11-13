@@ -182,7 +182,7 @@ summaries are saved under `data/derived_data/`; Figure S5 displays the results.
 | Figure S1 | Heterogeneity distributions |
 | Figures S2–S4 | Counterfactual sensitivities at multipliers 0.25, 0.75, 1 |
 | Figure S5 | ESR comparisons for all four multipliers, arranged in two columns |
-| Figure S6 | Empirical and Kranz–Pütz calipers with article-cluster bootstrap intervals |
+| Figure S6 | Empirical, KP and rounding-ambiguity calipers with cluster-bootstrap intervals |
 
 Table S6 has exactly Table 2's layout: 13 p-value-bin rows, the two
 `ESR_0.05` measures (among all results and among significant results), and
@@ -217,13 +217,18 @@ iteration count as its first argument when checking a smaller run.
 ## Empirical calipers and Figure S6
 
 The standard data-preparation and supplementary-rendering stages now compute
-and plot pooled empirical and Kranz–Pütz omission calipers as Figure S6. The
+and plot pooled empirical, Kranz–Pütz and rounding-ambiguity calipers as Figure S6. The
 omission calculation uses `RoundingMatters` with coefficient precision from
 `yi`. An observation is eligible when its reported `yi` decimal count equals
 the reported count of **either `sei` or `vi`**. The matching count supplies SE
-precision for the unchanged SE-significand rule `s >= 37`. Rows matching neither
-column receive diagnostic bounds and remain in the full empirical sample, which
-retains all valid observed estimates. Half-widths are 0.05,
+precision for the unchanged SE-significand rule `s >= 37`. **Only matched
+observations that fail this rule are omitted.** Nonmatching observations and
+observations with unknown precision remain unchanged in the adjusted sample.
+A separate third figure row removes observations whose possible absolute
+z interval spans `qnorm(0.975)`, using `yi` precision and the lower decimal
+count of `vi`/`sei` for every observation. It starts from the full sample,
+independently of KP. The full empirical sample retains all valid observed
+estimates. Half-widths are 0.05,
 0.10, 0.15 and 0.20; only cluster-bootstrap percentile intervals from 1,000
 article resamples are computed, without p-values. Numerical results and the
 row audit are saved in `data/derived_data/`; Figure S6 is saved as PDF and SVG
