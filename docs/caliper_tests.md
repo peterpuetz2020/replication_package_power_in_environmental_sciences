@@ -23,17 +23,34 @@ the stored XML spelling supplies the available precision; trailing zeros already
 discarded by Excel cannot be recovered. Formula cells with General formatting
 have unknown precision.
 
-For each observation, pass separate precisions to `RoundingMatters::min.max.z()`:
+For each observation, let `d_yi`, `d_sei` and `d_vi` be the separately extracted
+reported decimal counts. Eligibility is
 
-- `mu.dec = decimals(yi)`;
-- `sigma.dec = min(decimals(vi), decimals(sei))`.
+```r
+(d_yi == d_sei) | (d_yi == d_vi)
+```
 
-The center of the coefficient interval is the stored `yi`, and the center of the
-SE interval is `sqrt(vi)`, consistent with the rest of the analysis. The requested
-minimum decimal count is used **on the SE scale**; this replaces the earlier
-custom variance-to-SE precision propagation. Neither center is rounded to its
-selected precision. Consequently, the adjusted sample can differ from earlier
-runs of that custom implementation.
+Each equality uses known decimal counts. Compare `yi` against **either column
+separately**, rather than comparing it against the minimum of `vi` and `sei`.
+For an eligible observation, the matching count is necessarily `d_yi`; set
+`mu.dec = sigma.dec = d_yi` for the KP calculation. When both inputs match, they
+supply the same count. A match in one column remains eligible if the other
+column's precision is missing.
+
+For example, `d_yi = 4`, `d_sei = 4`, `d_vi = 2` is eligible through `sei` and
+uses four decimals. Likewise, `d_yi = 4`, `d_sei = 3`, `d_vi = 4` is eligible
+through `vi` and uses four decimals. The earlier minimum-based check incorrectly
+rejected both of these examples.
+
+`RoundingMatters::min.max.z()` receives `mu.dec` and `sigma.dec` separately.
+For unmatched rows, its diagnostic bounds use `mu.dec = d_yi` and
+`sigma.dec = min(d_vi, d_sei)` over the available counts; that fallback does not
+make the row eligible for the omission analysis.
+
+The coefficient center remains stored `yi`, and the SE center remains `sqrt(vi)`.
+Matching the reported decimal count of `vi` is the requested precision convention
+**on the SE scale**, not a variance-to-SE precision transformation. Neither
+center is rounded for the observed point statistics.
 
 The omission criterion is the **unchanged published rule**:
 
@@ -48,21 +65,22 @@ There is no hypothetical-z criterion and no extension of the rule to unequal
 coefficient/SE precision.
 
 The rule's common-precision assumption is checked separately: it is applied only
-where `mu.dec == sigma.dec` under the selected precision convention above.
-Unequal-precision observations remain in the full empirical sample and receive
-rounding bounds, but have `kp_status = "unequal_precision_not_applicable"` and do
+where `d_yi == d_sei` **or** `d_yi == d_vi`, using the matching count.
+Observations matching neither column remain in the full empirical sample and
+receive rounding bounds, but have `kp_status = "unequal_precision_not_applicable"` and do
 not enter the omission panels. They are counted separately from observations
 omitted by the published rule. Missing precision likewise makes the omission
 analysis unavailable for that row. The plots therefore compare the full sample
-with the **equal-precision eligible subset after the original omission rule**;
+with the **precision-matched eligible subset after the original omission rule**;
 differences can reflect both eligibility and omission.
 
 `RoundingMatters::min.max.z()` supplies diagnostic bounds for every valid pair
 with known precision, including unequal precision. Its separate `mu.dec` and
 `sigma.dec` arguments do not justify altering the paper's omission criterion.
 Those bounds do not determine `kp_keep`. The audit now records the significand,
-common-precision eligibility and status; the custom `kp_reference_z_lower`
-column has been removed.
+match flags (`kp_matches_sei_precision`, `kp_matches_vi_precision`), match source
+(`kp_precision_match`: `sei`, `vi`, `both`, `none` or `unknown`), eligibility and
+status; the custom `kp_reference_z_lower` column has been removed.
 
 The rule follows Kranz and Pütz
 ([doi:10.1257/aer.20210121](https://doi.org/10.1257/aer.20210121)) and the authors'
@@ -101,18 +119,18 @@ Derived outputs are stored under `data/derived_data/`:
   counts, observed shares, bootstrap bounds and retention counts,
   with a `Notes` sheet describing the calculation;
 - `caliper_coverage.xlsx`: input, valid/excluded and article counts, plus known/
-  unknown reporting precision, equal/unequal precision eligibility and omission
-  counts;
+  unknown reporting precision, matching/no-match eligibility, counts of
+  sei-only, vi-only and both matches, and omission counts;
 - `caliper_rounding_risks.xlsx`: possible significance switches and uncertain
   window membership under the package bounds, counted over each entire sample
   rather than just its observed window members; these are not confirmed errors;
 - `caliper_analysis.rds`: the results, settings and row audit, including original
   entries, decimal counts, precision sources, ratio bounds, SE significands,
-  common-precision eligibility and omission status.
+  match source, eligibility and omission status.
 
 Figure S6 is saved as PDF and SVG under `results/supplement/`. It has a two-column,
-two-row layout: full sample above, Kranz–Pütz equal-precision omission sample below. The left
-panels show histograms within the largest caliper, on shared x/y scales; the
+two-row layout: full sample above, Kranz–Pütz precision-matched omission sample
+below. The left panels show histograms within the largest caliper, on shared x/y scales; the
 right panels show observed caliper shares and their bootstrap intervals. Each
 x-axis tick gives `(n = ...)` for that window. The caliper y range is 0.45–0.65;
 complete interval bounds are retained in the workbook when this zoom clips a
@@ -130,5 +148,6 @@ Rscript tests/test_calipers.R
 Tests cover window counts, article dependence under within-article duplication,
 bootstrap percentiles, unchanged numeric values, t calibration, invalid rows,
 Excel precision extraction, unequal-precision ratio bounds, unchanged original
-36/37 omission boundary, equal-precision eligibility, unknown precision, option
+36/37 omission boundary, matches through sei or vi independently, unknown
+precision in the nonmatching input, option
 preservation, derived-data handoff and the four-panel figure.

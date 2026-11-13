@@ -713,8 +713,8 @@ prepare_caliper_data <- function(data, estimate_col = "yi", variance_col = "vi",
 }
 
 ## Keep the published Kranz-Puetz significand >= 37 rule unchanged. Its common-
-## precision assumption is checked separately; unequal precision is inapplicable,
-## rather than a reason to invent a different omission criterion.
+## precision match is checked against sei OR vi separately. Use the matching
+## decimal count for the rule, rather than requiring a match to their minimum.
 prepare_rounding_calipers <- function(audit, entries) {
   if (!requireNamespace("RoundingMatters", quietly=TRUE)) {
     stop("Restore the project library with renv::restore() to install RoundingMatters.")
@@ -730,15 +730,29 @@ prepare_rounding_calipers <- function(audit, entries) {
     audit[[paste0(column,"_precision_source")]] <- entry$source
   }
   audit$kp_mu_decimals <- audit$reported_yi_decimals
-  audit$kp_sigma_decimals <- pmin(audit$reported_vi_decimals,audit$reported_sei_decimals)
-  known <- is.finite(audit$kp_mu_decimals) & is.finite(audit$kp_sigma_decimals)
-  if (any(known & (audit$kp_mu_decimals!=trunc(audit$kp_mu_decimals) |
-                  audit$kp_sigma_decimals!=trunc(audit$kp_sigma_decimals) |
-                  abs(audit$kp_mu_decimals)>300 | abs(audit$kp_sigma_decimals)>300))) {
+  digits <- unlist(audit[c("reported_yi_decimals","reported_vi_decimals","reported_sei_decimals")],
+    use.names=FALSE)
+  if (any(is.finite(digits) & (digits!=trunc(digits) | abs(digits)>300))) {
     stop("Reporting decimal counts must be integers between -300 and 300.")
   }
+  known <- is.finite(audit$kp_mu_decimals) &
+    (is.finite(audit$reported_vi_decimals) | is.finite(audit$reported_sei_decimals))
   audit$kp_precision_known <- known
-  audit$kp_common_precision <- known & audit$kp_mu_decimals==audit$kp_sigma_decimals
+  audit$kp_matches_sei_precision <- is.finite(audit$kp_mu_decimals) &
+    is.finite(audit$reported_sei_decimals) & audit$kp_mu_decimals==audit$reported_sei_decimals
+  audit$kp_matches_vi_precision <- is.finite(audit$kp_mu_decimals) &
+    is.finite(audit$reported_vi_decimals) & audit$kp_mu_decimals==audit$reported_vi_decimals
+  audit$kp_common_precision <- audit$kp_matches_sei_precision | audit$kp_matches_vi_precision
+  audit$kp_precision_match <- ifelse(!known,"unknown",
+    ifelse(audit$kp_matches_sei_precision & audit$kp_matches_vi_precision,"both",
+      ifelse(audit$kp_matches_sei_precision,"sei",
+        ifelse(audit$kp_matches_vi_precision,"vi","none"))))
+  # Matched rows use the matching count, including when the other input has
+  # fewer digits. For unmatched rows, retain the minimum available count for
+  # diagnostic bounds only; this fallback never makes them eligible for KP.
+  fallback <- pmin(audit$reported_vi_decimals,audit$reported_sei_decimals,na.rm=TRUE)
+  fallback[!is.finite(fallback)] <- NA_real_
+  audit$kp_sigma_decimals <- ifelse(audit$kp_common_precision,audit$kp_mu_decimals,fallback)
   audit$rounding_abs_z_lower <- audit$rounding_abs_z_upper <- NA_real_
   audit$kp_se_significand <- NA_real_
   audit$kp_keep <- FALSE
@@ -819,6 +833,9 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
     coverage$n_unknown_reporting_precision <- sum(!valid$kp_precision_known)
     coverage$n_equal_reporting_precision <- sum(valid$kp_common_precision)
     coverage$n_unequal_reporting_precision <- sum(valid$kp_precision_known & !valid$kp_common_precision)
+    coverage$n_matches_sei_only <- sum(valid$kp_precision_match=="sei")
+    coverage$n_matches_vi_only <- sum(valid$kp_precision_match=="vi")
+    coverage$n_matches_both <- sum(valid$kp_precision_match=="both")
     coverage$n_retained_kranz_puetz <- sum(valid$kp_keep)
     coverage$n_omitted_by_precision_rule <- sum(valid$kp_common_precision & !valid$kp_keep)
   }
@@ -841,7 +858,7 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
       reference=if (is.null(df_col)) "normal_approximation" else "student_t_to_equivalent_z",
       rounding_adjustment=use_rounding,
       rounding_package=if (use_rounding) as.character(utils::packageVersion("RoundingMatters")) else NULL,
-      omission_rule=if (use_rounding) "Published SE significand >= 37; applicable only when mu.dec == sigma.dec; no unequal-precision extension" else "none"))
+      omission_rule=if (use_rounding) "SE significand >= 37 using matching precision; eligible when d_yi == d_sei OR d_yi == d_vi" else "none"))
 }
 
 save_caliper_analysis <- function(analysis, derived_dir) {
@@ -851,14 +868,16 @@ save_caliper_analysis <- function(analysis, derived_dir) {
     "Pooled empirical estimates; every valid observation is retained in the empirical sample.",
     if (isTRUE(analysis$settings$rounding_adjustment)) c(
       "Kranz-Puetz omission sample uses the published SE significand >= 37 rule, computed with RoundingMatters::significand.",
-      "mu.dec = reported yi decimals; sigma.dec = min(reported vi decimals, reported sei decimals).",
-      "The selected minimum is used on the SE scale, centered at sqrt(vi); it is not a variance-to-SE precision transformation.",
-      "Apply the original rule only where the selected coefficient and SE decimal counts match. Unequal-precision observations are outside its scope and are reported separately, not counted as omissions under the rule.",
+      "Eligibility: reported yi decimals equal reported sei decimals OR reported vi decimals; compare each column separately, not the minimum of vi/sei decimals.",
+      "Matched observations use sigma.dec = mu.dec = reported yi decimals for the KP rule and rounding bounds. The audit records which input matched (sei, vi or both).",
+      "For unmatched observations, the minimum available vi/sei decimal count is used for diagnostic bounds only; it does not make them eligible for the KP rule.",
+      "Precision is used on the SE scale, centered at sqrt(vi); matching vi decimals is the requested precision convention, not a variance-to-SE precision transformation.",
+      "Apply the original >=37 threshold to matched observations only. No-match rows are reported separately and are not counted as omissions under the threshold.",
       "SE significand = round(sqrt(vi) * 10^sigma.dec), following the package implementation; threshold is exactly 37, independent of caliper cutoff or width.",
       "No benchmark-z rule or unequal-precision extension is used. Point estimates yi/sqrt(vi) are unchanged; no random derounding is used.",
-      "The omission panels concern the equal-precision eligible subset after the original rule; comparisons with the full sample also reflect this eligibility restriction.",
+      "The omission panels concern the precision-matched eligible subset after the original rule; comparisons with the full sample also reflect this eligibility restriction.",
       "RoundingMatters::min.max.z still supplies diagnostic bounds for all known precision pairs, including unequal precision; those bounds do not determine omission.",
-      "Missing yi/vi/sei reporting precision is excluded from the adjusted sample only; see coverage and audit status.",
+      "Known yi precision and one matching sei or vi precision are sufficient; missing precision in the other column does not disqualify the match.",
       "Precision is extracted from original Excel strings, stored numeric entries or explicit number formats. General numeric cells cannot recover trailing zeros that Excel has already discarded.",
       paste0("RoundingMatters version: ",analysis$settings$rounding_package)
     ),
@@ -909,7 +928,7 @@ make_caliper_sample_plots <- function(analysis, font_size = 12, method = "empiri
     ggplot2::scale_x_continuous(limits=limits,expand=ggplot2::expansion(mult=0))+
     ggplot2::scale_y_continuous(limits=histogram_ylim,
       expand=ggplot2::expansion(mult=if (is.null(histogram_ylim)) c(0,.05) else 0))+
-    ggplot2::labs(title=if (adjusted) "Kranz-Pütz: equal precision" else "Full empirical sample",
+    ggplot2::labs(title=if (adjusted) "Kranz-Pütz: matched precision" else "Full empirical sample",
       subtitle=paste0("n = ",format(length(z),big.mark=",",trim=TRUE)),
       x="|z|",y="Frequency")+theme
   tests <- analysis$tests[analysis$tests$method==method,,drop=FALSE]

@@ -60,8 +60,8 @@ stopifnot(length(plots)==2L,
   sum(plots[[1]]$data$count)==analysis$tests$n_window[which.max(analysis$tests$half_width)])
 unlink(folder,recursive=TRUE)
 
-## The published omission rule is unchanged and is applied only where the
-## selected coefficient and SE precision match. Unequal pairs still get bounds.
+## Check yi against sei OR vi separately, then use the matching decimal count.
+## In particular, a match must not fail because the other input is coarser.
 metadata <- function(values,digits) data.frame(entry=as.character(values),decimals=digits,
   source="supplied_original_entries")
 paired <- data.frame(yi=rep(.2,4),vi=rep(.01,4),sei=rep(.1,4),metaID=1:4)
@@ -73,18 +73,22 @@ negative <- paired; negative$yi <- -paired$yi
 negative_audit <- prepare_rounding_calipers(prepare_caliper_data(negative),entries)
 stopifnot(identical(adjusted$audit$kp_mu_decimals,c(4,1,4,4)),
   identical(getOption("scipen"),previous_scipen),
-  identical(adjusted$audit$kp_sigma_decimals,c(4,4,2,3)),
-  identical(adjusted$audit$kp_common_precision,c(TRUE,FALSE,FALSE,FALSE)),
-  identical(adjusted$audit$kp_se_significand,c(1000,1000,10,100)),
-  identical(adjusted$audit$kp_keep,c(TRUE,FALSE,FALSE,FALSE)),
-  all(adjusted$audit$kp_status[2:4]=="unequal_precision_not_applicable"),
-  adjusted$coverage$n_unequal_reporting_precision==3,
+  identical(adjusted$audit$kp_sigma_decimals,c(4,4,4,4)),
+  identical(adjusted$audit$kp_common_precision,c(TRUE,FALSE,TRUE,TRUE)),
+  identical(adjusted$audit$kp_precision_match,c("both","none","sei","vi")),
+  identical(adjusted$audit$kp_se_significand,c(1000,1000,1000,1000)),
+  identical(adjusted$audit$kp_keep,c(TRUE,FALSE,TRUE,TRUE)),
+  adjusted$audit$kp_status[2]=="unequal_precision_not_applicable",
+  adjusted$coverage$n_unequal_reporting_precision==1,
+  adjusted$coverage$n_matches_sei_only==1,
+  adjusted$coverage$n_matches_vi_only==1,
+  adjusted$coverage$n_matches_both==1,
   adjusted$coverage$n_omitted_by_precision_rule==0,
   !"kp_reference_z_lower" %in% names(adjusted$audit),
   identical(compute_caliper_analysis(paired,cutoff=2.1,reporting_entries=entries)$audit$kp_keep,
     adjusted$audit$kp_keep),
   nrow(adjusted$tests)==8L,
-  all(adjusted$tests$n_retained[adjusted$tests$method=="kranz_puetz"]==1),
+  all(adjusted$tests$n_retained[adjusted$tests$method=="kranz_puetz"]==3),
   identical(adjusted$audit$variance,paired$vi),
   identical(adjusted$audit$standard_error,sqrt(paired$vi)),
   identical(adjusted$audit$kp_keep,negative_audit$kp_keep),
@@ -92,7 +96,15 @@ stopifnot(identical(adjusted$audit$kp_mu_decimals,c(4,1,4,4)),
   identical(adjusted$audit$rounding_abs_z_upper,negative_audit$rounding_abs_z_upper),
   max(abs(adjusted$audit$rounding_abs_z_lower-
     pmax(0,(paired$yi-.5*10^(-entries$yi$decimals))/
-      (sqrt(paired$vi)+.5*10^(-pmin(entries$vi$decimals,entries$sei$decimals))))))<1e-12)
+      (sqrt(paired$vi)+.5*10^(-adjusted$audit$kp_sigma_decimals)))))<1e-12)
+
+## A missing nonmatching column must not invalidate a match in the other one.
+without_vi <- entries; without_vi$vi$decimals[] <- NA_real_
+without_sei <- entries; without_sei$sei$decimals[] <- NA_real_
+stopifnot(identical(prepare_rounding_calipers(prepare_caliper_data(paired),without_vi)$kp_keep,
+    c(TRUE,FALSE,TRUE,FALSE)),
+  identical(prepare_rounding_calipers(prepare_caliper_data(paired),without_sei)$kp_keep,
+    c(TRUE,FALSE,FALSE,TRUE)))
 
 ## Recover the published common-precision boundary (36 omitted, 37 retained).
 common <- data.frame(yi=c(.072,.074),vi=c(.036,.037)^2,metaID=1:2)
@@ -137,9 +149,9 @@ saved <- openxlsx::read.xlsx(file.path(folder,"caliper_tests.xlsx"),sheet="Resul
 plots <- make_caliper_plots(adjusted)
 stopifnot(nrow(saved)==8L,length(plots)==4L,
   nrow(openxlsx::read.xlsx(file.path(folder,"caliper_rounding_risks.xlsx"),sheet="Results"))==8L,
-  sum(plots[[1]]$data$count)==4L,sum(plots[[3]]$data$count)==1L,
+  sum(plots[[1]]$data$count)==4L,sum(plots[[3]]$data$count)==3L,
   identical(plots[[2]]$coordinates$limits$y,c(.45,.65)),
   identical(plots[[4]]$coordinates$limits$y,c(.45,.65)),
   !any(grepl("p_value|binom|holm|cluster_ci",names(saved))))
 unlink(folder,recursive=TRUE)
-cat("PASS: unchanged published >=37 rule, equal-precision eligibility, separate rounding bounds, Excel decimals, article bootstrap and Figure S6.\n")
+cat("PASS: yi matches sei OR vi, matching precision used for unchanged >=37 rule, Excel decimals, article bootstrap and Figure S6.\n")
