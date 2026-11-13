@@ -253,6 +253,32 @@
       "Maintainer": "Dirk Eddelbuettel <edd@debian.org>",
       "Repository": "CRAN"
     },
+    "RoundingMatters": {
+      "Package": "RoundingMatters",
+      "Version": "0.1.0",
+      "Source": "GitHub",
+      "Type": "Package",
+      "Title": "Tools for adjusting for rounding problems in metastudies about p-hacking and publication bias",
+      "Author": "Sebastian Kranz, Peter Puetz",
+      "Maintainer": "Sebastian Kranz <sebastian.kranz@uni-ulm.de>",
+      "Description": "Tools for adjusting for rounding problems in metastudies about p-hacking and publication bias",
+      "License": "GPL (>= 2.0)",
+      "Encoding": "UTF-8",
+      "LazyData": "true",
+      "RoxygenNote": "7.1.1",
+      "Depends": [
+        "tidyr",
+        "dplyr",
+        "restorepoint",
+        "ggplot2"
+      ],
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "skranz",
+      "RemoteRepo": "RoundingMatters",
+      "RemoteRef": "ca9b1e2a086d7107167092bc112e26eb968de4cc",
+      "RemoteSha": "ca9b1e2a086d7107167092bc112e26eb968de4cc"
+    },
     "S7": {
       "Package": "S7",
       "Version": "0.2.0",
@@ -3941,6 +3967,32 @@
       "Author": "Jennifer Bryan [aut, cre] (<https://orcid.org/0000-0002-6983-2759>), Jim Hester [aut] (<https://orcid.org/0000-0002-2739-7082>), David Robinson [aut], Hadley Wickham [aut] (<https://orcid.org/0000-0003-4757-117X>), Christophe Dervieux [aut] (<https://orcid.org/0000-0003-4474-2498>), Posit Software, PBC [cph, fnd]",
       "Maintainer": "Jennifer Bryan <jenny@posit.co>",
       "Repository": "CRAN"
+    },
+    "restorepoint": {
+      "Package": "restorepoint",
+      "Version": "0.2",
+      "Source": "GitHub",
+      "Type": "Package",
+      "Title": "Debugging with Restore Points",
+      "Date": "2018-12-20",
+      "URL": "https://github.com/skranz/restorepoint",
+      "Author": "Sebastian Kranz [aut, cre], Roman Zenka [ctb]",
+      "Maintainer": "Roman Zenka <zenka.roman@mayo.edu>",
+      "Description": "Debugging with restore points instead of break points. A restore point stores all local variables when called inside a function. The stored values can later be retrieved and evaluated in a modified R console that replicates the function's environment. To debug step by step, one can simply copy & paste the function body from the R script. Particularly convenient in combination with \"RStudio\". See the \"Github\" page inst/vignettes for a tutorial.",
+      "License": "GPL (>= 2)",
+      "Collate": "'restorepoint.R'",
+      "Suggests": [
+        "testthat",
+        "knitr"
+      ],
+      "VignetteBuilder": "knitr",
+      "RoxygenNote": "6.0.1",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "skranz",
+      "RemoteRepo": "restorepoint",
+      "RemoteRef": "master",
+      "RemoteSha": "586ff0b271ca87d6b2e3c53ea93beac4fdf2d541"
     },
     "rlang": {
       "Package": "rlang",

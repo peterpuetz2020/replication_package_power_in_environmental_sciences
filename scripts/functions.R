@@ -491,6 +491,111 @@ cf.disagg <- function(dat, z.grid) {
 }
 
 
+## Use only with genuinely reported character strings, not numeric-to-text
+## conversions of transformed estimates. Preserves zeros in "0.0400".
+reported_decimal_places <- function(x) {
+  if (!is.character(x)) stop("Use original reported strings to preserve trailing zeros.")
+  vapply(trimws(x), function(text) {
+    if (is.na(text) || !nzchar(text)) return(NA_real_)
+    if (!grepl("^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)([eE][+-]?[0-9]+)?$", text)) {
+      stop("Invalid reported numeric string: ", text)
+    }
+    parts <- strsplit(tolower(text), "e", fixed = TRUE)[[1]]
+    pos <- regexpr(".", parts[[1]], fixed = TRUE)[[1]]
+    decimals <- if (pos < 0) 0L else nchar(parts[[1]]) - pos
+    decimals - if (length(parts) == 2L) as.integer(parts[[2]]) else 0L
+  }, numeric(1), USE.NAMES = FALSE)
+}
+
+## Read the first sheet's reported entries before conversion to R doubles.
+## General numeric cells retain their stored XML spelling; string cells retain
+## trailing zeros. Simple fixed/scientific number formats retain displayed zeros.
+excel_reporting_entries <- function(path, columns, n_rows) {
+  if (!requireNamespace("xml2", quietly = TRUE)) stop("Install/restore xml2 first.")
+  read_part <- function(member) {
+    con <- unz(path, member, open = "rb")
+    on.exit(close(con))
+    xml2::read_xml(con)
+  }
+  ns <- c(s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+          r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+          p = "http://schemas.openxmlformats.org/package/2006/relationships")
+  workbook <- read_part("xl/workbook.xml")
+  sheet <- xml2::xml_find_first(workbook, ".//s:sheets/s:sheet[1]", ns)
+  rid <- xml2::xml_attr(sheet, "r:id", ns)
+  rels <- read_part("xl/_rels/workbook.xml.rels")
+  target <- xml2::xml_attr(xml2::xml_find_first(rels,
+    paste0("./p:Relationship[@Id='", rid, "']"), ns), "Target")
+  member <- if (startsWith(target, "/")) sub("^/", "", target) else paste0("xl/", target)
+  doc <- read_part(member)
+  shared <- character()
+  if ("xl/sharedStrings.xml" %in% unzip(path, list = TRUE)$Name) {
+    shared <- xml2::xml_text(xml2::xml_find_all(read_part("xl/sharedStrings.xml"), ".//s:si", ns))
+  }
+  cell_text <- function(cells) {
+    values <- xml2::xml_text(xml2::xml_find_first(cells, "./s:v", ns))
+    type <- xml2::xml_attr(cells, "t")
+    strings <- which(type == "s")
+    values[strings] <- shared[as.integer(values[strings]) + 1L]
+    inline <- which(type == "inlineStr")
+    values[inline] <- xml2::xml_text(xml2::xml_find_first(cells[inline], "./s:is", ns))
+    values
+  }
+  header <- xml2::xml_find_all(doc, ".//s:sheetData/s:row[@r='1']/s:c", ns)
+  labels <- cell_text(header)
+  letters <- sub("[0-9]+$", "", xml2::xml_attr(header, "r"))
+  if (any(!columns %in% labels) || anyDuplicated(labels[labels %in% columns])) {
+    stop("Excel reporting precision requires unique requested headers in worksheet row 1.")
+  }
+  styles <- read_part("xl/styles.xml")
+  formats <- c(`0` = "General", `1` = "0", `2` = "0.00", `3` = "#,##0",
+               `4` = "#,##0.00", `11` = "0.00E+00")
+  custom <- xml2::xml_find_all(styles, ".//s:numFmts/s:numFmt", ns)
+  formats[xml2::xml_attr(custom, "numFmtId")] <- xml2::xml_attr(custom, "formatCode")
+  style_formats <- xml2::xml_attr(xml2::xml_find_all(styles, ".//s:cellXfs/s:xf", ns), "numFmtId")
+  out <- lapply(columns, function(column) {
+    letter <- letters[match(column, labels)]
+    cells <- xml2::xml_find_all(doc, paste0(
+      ".//s:sheetData/s:row/s:c[translate(@r,'0123456789','')='", letter, "']"), ns)
+    row <- as.integer(sub("^[A-Z]+", "", xml2::xml_attr(cells, "r"))) - 1L
+    keep <- row >= 1L & row <= n_rows
+    cells <- cells[keep]; row <- row[keep]
+    values <- cell_text(cells)
+    type <- xml2::xml_attr(cells, "t")
+    style <- suppressWarnings(as.integer(xml2::xml_attr(cells, "s")))
+    style[is.na(style)] <- 0L
+    codes <- unname(formats[style_formats[style + 1L]])
+    formula <- !is.na(xml2::xml_text(xml2::xml_find_first(cells, "./s:f", ns)))
+    decimals <- rep(NA_real_, length(values))
+    source <- rep("unavailable_format_or_value", length(values))
+    for (i in seq_along(values)) {
+      value <- suppressWarnings(as.numeric(values[i]))
+      if (!is.finite(value)) next
+      string <- !is.na(type[i]) && type[i] %in% c("s", "inlineStr")
+      code <- codes[i]
+      if (string || (!formula[i] && !is.na(code) && code == "General")) {
+        digits <- tryCatch(reported_decimal_places(values[i]), error = function(e) NA_real_)
+        decimals[i] <- digits
+        source[i] <- if (string) "excel_reported_string" else "excel_stored_numeric_entry"
+      } else if (!is.na(code) && grepl("^[#0,]+(\\.0+)?$", code)) {
+        d <- if (grepl(".", code, fixed = TRUE)) nchar(sub("^[^.]*\\.", "", code)) else 0L
+        values[i] <- formatC(value, format = "f", digits = d)
+        decimals[i] <- d; source[i] <- "excel_fixed_decimal_format"
+      } else if (!is.na(code) && grepl("^0\\.0+[eE][+-]0+$", code)) {
+        d <- nchar(sub("^0\\.(0+)[eE].*$", "\\1", code))
+        values[i] <- formatC(value, format = "e", digits = d)
+        decimals[i] <- reported_decimal_places(values[i])
+        source[i] <- "excel_scientific_format"
+      }
+    }
+    result <- data.frame(entry = rep(NA_character_, n_rows), decimals = NA_real_,
+                         source = "missing_cell", formula = FALSE)
+    result[row, ] <- data.frame(entry = values, decimals = decimals, source = source, formula = formula)
+    result
+  })
+  setNames(out, columns)
+}
+
 ## Empirical caliper diagnostics: all observed estimates, article-cluster bootstrap.
 cluster_bootstrap_calipers <- function(z, cluster, half_widths, cutoff = qnorm(.975),
                                        iterations = 1000L, seed = 20261107L) {
@@ -607,12 +712,64 @@ prepare_caliper_data <- function(data, estimate_col = "yi", variance_col = "vi",
     exclusion_reason=reason,stringsAsFactors=FALSE)
 }
 
+## Unequal-precision extension of the Kranz-Puetz omission criterion. As in the
+## paper, assess classification at the benchmark z = 2, rather than selectively
+## removing observed statistics close to the significance cutoff. With common
+## coefficient/SE decimal places and cutoff 1.96 this retains significands >= 37.
+prepare_rounding_calipers <- function(audit, entries, cutoff = qnorm(.975)) {
+  if (!requireNamespace("RoundingMatters", quietly=TRUE)) {
+    stop("Restore the project library with renv::restore() to install RoundingMatters.")
+  }
+  for (column in c("yi","vi","sei")) {
+    entry <- entries[[column]]
+    if (is.null(entry) || nrow(entry)!=nrow(audit) ||
+        !all(c("entry","decimals","source") %in% names(entry))) {
+      stop("Reporting entries must contain aligned yi, vi and sei precision metadata.")
+    }
+    audit[[paste0("reported_",column,"_entry")]] <- entry$entry
+    audit[[paste0("reported_",column,"_decimals")]] <- entry$decimals
+    audit[[paste0(column,"_precision_source")]] <- entry$source
+  }
+  audit$kp_mu_decimals <- audit$reported_yi_decimals
+  audit$kp_sigma_decimals <- pmin(audit$reported_vi_decimals,audit$reported_sei_decimals)
+  known <- is.finite(audit$kp_mu_decimals) & is.finite(audit$kp_sigma_decimals)
+  if (any(known & (audit$kp_mu_decimals!=trunc(audit$kp_mu_decimals) |
+                  audit$kp_sigma_decimals!=trunc(audit$kp_sigma_decimals) |
+                  abs(audit$kp_mu_decimals)>300 | abs(audit$kp_sigma_decimals)>300))) {
+    stop("Reporting decimal counts must be integers between -300 and 300.")
+  }
+  audit$kp_precision_known <- known
+  audit$rounding_abs_z_lower <- audit$rounding_abs_z_upper <- NA_real_
+  audit$kp_reference_z_lower <- NA_real_
+  audit$kp_keep <- FALSE
+  rows <- which(audit$valid & known)
+  if (length(rows)) {
+    ## Use the package's explicit, separate precision arguments. Do not infer
+    ## digits from sqrt(vi), force common decimals, or round the point estimates.
+    bounds <- RoundingMatters::min.max.z(
+      mu=abs(audit$estimate[rows]),sigma=audit$standard_error[rows],
+      mu.dec=audit$kp_mu_decimals[rows],sigma.dec=audit$kp_sigma_decimals[rows])
+    audit$rounding_abs_z_lower[rows] <- pmax(0,bounds$z.min)
+    audit$rounding_abs_z_upper[rows] <- pmax(abs(bounds$z.min),abs(bounds$z.max))
+    reference <- RoundingMatters::min.max.z(
+      mu=2*audit$standard_error[rows],sigma=audit$standard_error[rows],
+      mu.dec=audit$kp_mu_decimals[rows],sigma.dec=audit$kp_sigma_decimals[rows])
+    audit$kp_reference_z_lower[rows] <- reference$z.min
+    audit$kp_keep[rows] <- is.finite(reference$z.min) & reference$z.min>=cutoff
+  }
+  audit$kp_status <- ifelse(!audit$valid,"invalid_observation",
+    ifelse(!known,"unknown_reporting_precision",
+      ifelse(audit$kp_keep,"retained","omitted_by_precision_rule")))
+  audit
+}
+
 compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
                                      cutoff = qnorm(.975), bootstrap_iterations = 1000L,
                                      bootstrap_seed = 20261107L,
                                      estimate_col = "yi", variance_col = "vi",
                                      statistic_col = NULL, df_col = NULL, cluster_col = "metaID",
-                                     source_data = "supplied data") {
+                                     source_data = "supplied data", workbook_path = NULL,
+                                     reporting_entries = NULL) {
   if (length(cutoff)!=1L || !is.finite(cutoff) || cutoff<=0 ||
       !length(half_widths) || any(!is.finite(half_widths) | half_widths<=0 |
                                  half_widths>.2 | half_widths>=cutoff)) {
@@ -620,30 +777,82 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
   }
   half_widths <- sort(unique(half_widths))
   audit <- prepare_caliper_data(data,estimate_col,variance_col,statistic_col,df_col,cluster_col)
+  if (!is.null(workbook_path)) {
+    if (!is.null(reporting_entries)) stop("Supply either workbook_path or reporting_entries.")
+    reporting_entries <- excel_reporting_entries(workbook_path,c("yi","vi","sei"),nrow(data))
+  }
+  use_rounding <- !is.null(reporting_entries)
+  if (use_rounding) {
+    if (!is.null(statistic_col) || !is.null(df_col) || estimate_col!="yi" || variance_col!="vi") {
+      stop("The workbook omission analysis requires the observed yi / sqrt(vi) normal statistics.")
+    }
+    audit <- prepare_rounding_calipers(audit,reporting_entries,cutoff)
+  }
   valid <- audit[audit$valid,,drop=FALSE]
   if (!nrow(valid)) stop("No valid observations remain for caliper analysis.")
-  labels <- if (is.null(cluster_col)) NULL else valid$cluster
-  bootstrap <- cluster_bootstrap_calipers(valid$abs_z,labels,half_widths,cutoff,
-    bootstrap_iterations,bootstrap_seed)
-  counts <- do.call(rbind,lapply(half_widths,function(h)caliper_test(valid$abs_z,labels,cutoff,h)))
-  tests <- cbind(counts,bootstrap[,setdiff(names(bootstrap),"half_width"),drop=FALSE])
-  tests$group <- "All"
-  tests$method <- "empirical"
+  samples <- list(empirical=valid)
+  if (use_rounding) samples$kranz_puetz <- valid[valid$kp_keep,,drop=FALSE]
+  tests <- do.call(rbind,lapply(names(samples),function(method) {
+    selected <- samples[[method]]
+    labels <- if (is.null(cluster_col)) NULL else selected$cluster
+    bootstrap <- cluster_bootstrap_calipers(selected$abs_z,labels,half_widths,cutoff,
+      bootstrap_iterations,bootstrap_seed)
+    counts <- do.call(rbind,lapply(half_widths,function(h)caliper_test(selected$abs_z,labels,cutoff,h)))
+    result <- cbind(counts,bootstrap[,setdiff(names(bootstrap),"half_width"),drop=FALSE])
+    result$group <- "All"
+    result$method <- method
+    result$n_retained <- nrow(selected)
+    result$n_omitted_or_unknown <- nrow(valid)-nrow(selected)
+    result
+  }))
+  rownames(tests) <- NULL
   coverage <- data.frame(n_input=nrow(audit),n_valid=nrow(valid),
     n_excluded_invalid=sum(!audit$valid),
     n_articles=length(unique(valid$cluster[!is.na(valid$cluster) & nzchar(trimws(valid$cluster))])),
     n_missing_cluster_ids=sum(is.na(valid$cluster) | !nzchar(trimws(valid$cluster))))
-  list(tests=tests,coverage=coverage,audit=audit,
+  if (use_rounding) {
+    coverage$n_known_reporting_precision <- sum(valid$kp_precision_known)
+    coverage$n_unknown_reporting_precision <- sum(!valid$kp_precision_known)
+    coverage$n_retained_kranz_puetz <- sum(valid$kp_keep)
+    coverage$n_omitted_by_precision_rule <- sum(valid$kp_precision_known & !valid$kp_keep)
+  }
+  risks <- NULL
+  if (use_rounding) risks <- do.call(rbind,lapply(names(samples),function(method) {
+    selected <- samples[[method]]
+    known <- is.finite(selected$rounding_abs_z_lower) & !is.na(selected$rounding_abs_z_upper)
+    lo <- selected$rounding_abs_z_lower[known]; hi <- selected$rounding_abs_z_upper[known]
+    do.call(rbind,lapply(half_widths,function(h) {
+      definitely_in <- lo>=cutoff-h & hi<=cutoff+h
+      definitely_out <- hi<cutoff-h | lo>cutoff+h
+      data.frame(method=method,half_width=h,n_with_rounding_bounds=sum(known),
+        n_potential_significance_switch=sum(lo<cutoff & hi>=cutoff),
+        n_uncertain_window_membership=sum(!definitely_in & !definitely_out))
+    }))
+  }))
+  list(tests=tests,coverage=coverage,rounding_risks=risks,audit=audit,
     settings=list(half_widths=half_widths,cutoff=cutoff,bootstrap_iterations=bootstrap_iterations,
       bootstrap_seed=bootstrap_seed,cluster_col=cluster_col,source_data=source_data,
-      reference=if (is.null(df_col)) "normal_approximation" else "student_t_to_equivalent_z"))
+      reference=if (is.null(df_col)) "normal_approximation" else "student_t_to_equivalent_z",
+      rounding_adjustment=use_rounding,
+      rounding_package=if (use_rounding) as.character(utils::packageVersion("RoundingMatters")) else NULL,
+      omission_rule=if (use_rounding) "RoundingMatters lower z bound at benchmark z=2 >= cutoff; mu.dec=d_yi; sigma.dec=min(d_vi,d_sei)" else "none"))
 }
 
 save_caliper_analysis <- function(analysis, derived_dir) {
   dir.create(derived_dir,recursive=TRUE,showWarnings=FALSE)
   notes <- data.frame(note=c(
     paste0("Source: ",analysis$settings$source_data),
-    "Pooled empirical estimates; every valid observation is retained. No reporting-precision selection is used.",
+    "Pooled empirical estimates; every valid observation is retained in the empirical sample.",
+    if (isTRUE(analysis$settings$rounding_adjustment)) c(
+      "Kranz-Puetz omission sample uses RoundingMatters::min.max.z with separate coefficient and SE precision.",
+      "mu.dec = reported yi decimals; sigma.dec = min(reported vi decimals, reported sei decimals).",
+      "The selected minimum is used on the SE scale, centered at sqrt(vi); it is not a variance-to-SE precision transformation.",
+      "Retain when the package lower z bound at benchmark mu = 2*sqrt(vi) is at/above the cutoff. With common precision and cutoff 1.96, this is the published significand >= 37 rule.",
+      "This unequal-precision extension keeps a single omission sample across all windows. Point estimates yi/sqrt(vi) are unchanged; no random derounding is used.",
+      "Missing yi/vi/sei reporting precision is excluded from the adjusted sample only; see coverage and audit status.",
+      "Precision is extracted from original Excel strings, stored numeric entries or explicit number formats. General numeric cells cannot recover trailing zeros that Excel has already discarded.",
+      paste0("RoundingMatters version: ",analysis$settings$rounding_package)
+    ),
     paste0("Cutoff: ",format(analysis$settings$cutoff,digits=16),
       "; half-widths: ",paste(analysis$settings$half_widths,collapse=", ")),
     "Point estimate: observed fraction at/above cutoff among observations in the caliper, equally weighted per estimate.",
@@ -660,13 +869,20 @@ save_caliper_analysis <- function(analysis, derived_dir) {
     file.path(derived_dir,"caliper_tests.xlsx"),asTable=TRUE,firstRow=TRUE,colWidths="auto",overwrite=TRUE)
   openxlsx::write.xlsx(list(Results=analysis$coverage,Notes=notes),
     file.path(derived_dir,"caliper_coverage.xlsx"),asTable=TRUE,firstRow=TRUE,colWidths="auto",overwrite=TRUE)
+  if (!is.null(analysis$rounding_risks)) openxlsx::write.xlsx(
+    list(Results=analysis$rounding_risks,Notes=data.frame(note=c(
+      "Possible rounding risks over the entire sample for each method, not just observed window members; conditional bounds, not confirmed errors.",notes$note))),
+    file.path(derived_dir,"caliper_rounding_risks.xlsx"),asTable=TRUE,firstRow=TRUE,colWidths="auto",overwrite=TRUE)
   saveRDS(analysis,file.path(derived_dir,"caliper_analysis.rds"))
   invisible(analysis)
 }
 
-make_caliper_plots <- function(analysis, font_size = 12) {
+make_caliper_sample_plots <- function(analysis, font_size = 12, method = "empirical",
+                                      histogram_ylim = NULL) {
   settings <- analysis$settings
   valid <- analysis$audit[analysis$audit$valid,,drop=FALSE]
+  adjusted <- method=="kranz_puetz"
+  if (adjusted) valid <- valid[valid$kp_keep,,drop=FALSE]
   limits <- settings$cutoff+c(-1,1)*max(settings$half_widths)
   z <- valid$abs_z[valid$abs_z>=limits[1] & valid$abs_z<=limits[2]]
   breaks <- seq(limits[1],limits[2],length.out=81)
@@ -682,10 +898,12 @@ make_caliper_plots <- function(analysis, font_size = 12) {
     ggplot2::aes(xmin=xmin,xmax=xmax,ymin=0,ymax=count),fill="grey75",colour="grey20",linewidth=.25)+
     ggplot2::geom_vline(xintercept=settings$cutoff,colour="red3",linewidth=.6)+
     ggplot2::scale_x_continuous(limits=limits,expand=ggplot2::expansion(mult=0))+
-    ggplot2::scale_y_continuous(expand=ggplot2::expansion(mult=c(0,.05)))+
-    ggplot2::labs(title="Observed |z| distribution",subtitle=paste0("n = ",format(length(z),big.mark=",",trim=TRUE)),
+    ggplot2::scale_y_continuous(limits=histogram_ylim,
+      expand=ggplot2::expansion(mult=if (is.null(histogram_ylim)) c(0,.05) else 0))+
+    ggplot2::labs(title=if (adjusted) "Kranz-Pütz omission sample" else "Full empirical sample",
+      subtitle=paste0("n = ",format(length(z),big.mark=",",trim=TRUE)),
       x="|z|",y="Frequency")+theme
-  tests <- analysis$tests
+  tests <- analysis$tests[analysis$tests$method==method,,drop=FALSE]
   ci <- is.finite(tests$bootstrap_ci_lower) & is.finite(tests$bootstrap_ci_upper)
   calipers <- ggplot2::ggplot(tests,ggplot2::aes(x=half_width,y=share_above))+
     ggplot2::geom_hline(yintercept=.5,colour="red3",linetype="dashed")+
@@ -698,9 +916,18 @@ make_caliper_plots <- function(analysis, font_size = 12) {
     ggplot2::scale_y_continuous(breaks=seq(.45,.65,.05),labels=sprintf("%.2f",seq(.45,.65,.05)),
       expand=ggplot2::expansion(mult=0))+
     ggplot2::coord_cartesian(ylim=c(.45,.65))+
-    ggplot2::labs(title="Caliper estimates",subtitle=paste0("95% cluster-bootstrap CIs; ",
+    ggplot2::labs(title=if (adjusted) "Calipers: Kranz-Pütz" else "Calipers: full sample",
+      subtitle=paste0("95% cluster-bootstrap CIs; ",
       format(settings$bootstrap_iterations,big.mark=",",trim=TRUE)," resamples"),
       x="Caliper half-width (z units)",y="Share above cutoff")+theme
   if (nrow(tests)>1L) calipers <- calipers+ggplot2::geom_line(colour="#0072B2",na.rm=TRUE)
   list(histogram,calipers)
+}
+
+make_caliper_plots <- function(analysis, font_size = 12) {
+  full <- make_caliper_sample_plots(analysis,font_size)
+  if (!"kranz_puetz" %in% analysis$tests$method) return(full)
+  histogram_ylim <- c(0,max(1,full[[1]]$data$count)*1.05)
+  c(make_caliper_sample_plots(analysis,font_size,histogram_ylim=histogram_ylim),
+    make_caliper_sample_plots(analysis,font_size,method="kranz_puetz",histogram_ylim=histogram_ylim))
 }

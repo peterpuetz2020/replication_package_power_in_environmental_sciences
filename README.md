@@ -22,7 +22,8 @@ install.packages("renv")
 renv::restore()
 ```
 
-The lockfile pins the CRAN dependencies and the GitHub package `orchaRd`.
+The lockfile pins the CRAN dependencies and the GitHub packages `orchaRd`,
+`RoundingMatters` and its dependency `restorepoint`.
 
 ## Reproduce the results
 
@@ -181,7 +182,7 @@ summaries are saved under `data/derived_data/`; Figure S5 displays the results.
 | Figure S1 | Heterogeneity distributions |
 | Figures S2–S4 | Counterfactual sensitivities at multipliers 0.25, 0.75, 1 |
 | Figure S5 | ESR comparisons for all four multipliers, arranged in two columns |
-| Figure S6 | Empirical caliper estimates with article-cluster bootstrap intervals |
+| Figure S6 | Empirical and Kranz–Pütz calipers with article-cluster bootstrap intervals |
 
 Table S6 has exactly Table 2's layout: 13 p-value-bin rows, the two
 `ESR_0.05` measures (among all results and among significant results), and
@@ -216,8 +217,11 @@ iteration count as its first argument when checking a smaller run.
 ## Empirical calipers and Figure S6
 
 The standard data-preparation and supplementary-rendering stages now compute
-and plot pooled empirical calipers as Figure S6. The calculation uses all valid
-observed estimates with no reporting-precision selection. Half-widths are 0.05,
+and plot pooled empirical and Kranz–Pütz omission calipers as Figure S6. The
+omission calculation uses `RoundingMatters` with coefficient precision from
+`yi` and SE precision set to the lower reported decimal count of `vi` and `sei`
+for each observation, allowing unequal coefficient/SE precision. The full
+empirical sample retains all valid observed estimates. Half-widths are 0.05,
 0.10, 0.15 and 0.20; only cluster-bootstrap percentile intervals from 1,000
 article resamples are computed, without p-values. Numerical results and the
 row audit are saved in `data/derived_data/`; Figure S6 is saved as PDF and SVG

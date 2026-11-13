@@ -59,4 +59,75 @@ plots <- make_caliper_plots(analysis)
 stopifnot(length(plots)==2L,
   sum(plots[[1]]$data$count)==analysis$tests$n_window[which.max(analysis$tests$half_width)])
 unlink(folder,recursive=TRUE)
-cat("PASS: pooled window counts, unchanged observed data, article bootstrap, t calibration, derived-data handoff and two-panel figure.\n")
+
+## Independent decimal counts matter on both sides of the ratio. The same SE
+## precision must not retain a coarsely reported coefficient by ignoring it.
+metadata <- function(values,digits) data.frame(entry=as.character(values),decimals=digits,
+  source="supplied_original_entries")
+paired <- data.frame(yi=rep(.2,4),vi=rep(.01,4),sei=rep(.1,4),metaID=1:4)
+entries <- list(yi=metadata(paired$yi,c(4,1,4,4)),
+  vi=metadata(paired$vi,c(4,4,2,4)),sei=metadata(paired$sei,c(4,4,4,2)))
+adjusted <- compute_caliper_analysis(paired,reporting_entries=entries)
+negative <- paired; negative$yi <- -paired$yi
+negative_audit <- prepare_rounding_calipers(prepare_caliper_data(negative),entries)
+stopifnot(identical(adjusted$audit$kp_mu_decimals,c(4,1,4,4)),
+  identical(adjusted$audit$kp_sigma_decimals,c(4,4,2,2)),
+  identical(adjusted$audit$kp_keep,c(TRUE,FALSE,FALSE,FALSE)),
+  nrow(adjusted$tests)==8L,
+  all(adjusted$tests$n_retained[adjusted$tests$method=="kranz_puetz"]==1),
+  identical(adjusted$audit$variance,paired$vi),
+  identical(adjusted$audit$standard_error,sqrt(paired$vi)),
+  identical(adjusted$audit$kp_keep,negative_audit$kp_keep),
+  identical(adjusted$audit$rounding_abs_z_lower,negative_audit$rounding_abs_z_lower),
+  identical(adjusted$audit$rounding_abs_z_upper,negative_audit$rounding_abs_z_upper),
+  max(abs(adjusted$audit$rounding_abs_z_lower-
+    pmax(0,(paired$yi-.5*10^(-entries$yi$decimals))/
+      (sqrt(paired$vi)+.5*10^(-pmin(entries$vi$decimals,entries$sei$decimals))))))<1e-12)
+
+## Recover the published common-precision boundary (36 omitted, 37 retained).
+common <- data.frame(yi=c(.072,.074),vi=c(.036,.037)^2,metaID=1:2)
+common_entries <- setNames(lapply(c("yi","vi","sei"),function(column)
+  metadata(c(0,0),c(3,3))),c("yi","vi","sei"))
+common_audit <- prepare_rounding_calipers(prepare_caliper_data(common),common_entries,cutoff=1.96)
+stopifnot(identical(common_audit$kp_keep,c(FALSE,TRUE)))
+missing <- entries; missing$yi$decimals[] <- NA_real_
+empty <- compute_caliper_analysis(paired,reporting_entries=missing)
+stopifnot(all(empty$tests$n_window[empty$tests$method=="kranz_puetz"]==0),
+  empty$coverage$n_unknown_reporting_precision==4,
+  identical(empty$tests[empty$tests$method=="empirical",names(analysis$tests)],
+    compute_caliper_analysis(paired)$tests))
+
+## Read precision from workbook entries/formatting, including trailing zeros,
+## instead of using the digits of computed sqrt(vi) or formatted R doubles.
+stopifnot(identical(reported_decimal_places(c("0.0400","1.20e-3","100","1e3",NA)),
+  c(4,5,0,-3,NA_real_)))
+wb <- openxlsx::createWorkbook()
+openxlsx::addWorksheet(wb,"Reported")
+openxlsx::writeData(wb,"Reported",data.frame(yi="0.0800",vi="0.001600",sei="0.040"))
+openxlsx::writeData(wb,"Reported",data.frame(yi=.08,vi=.0016,sei=.04),startRow=3,colNames=FALSE)
+openxlsx::addStyle(wb,"Reported",openxlsx::createStyle(numFmt="0.00000"),rows=3,cols=1:3,gridExpand=TRUE)
+path <- tempfile(fileext=".xlsx")
+openxlsx::saveWorkbook(wb,path)
+xentries <- excel_reporting_entries(path,c("yi","vi","sei"),2L)
+stopifnot(identical(xentries$yi$decimals,c(4,5)),
+  identical(xentries$vi$decimals,c(6,5)),
+  identical(xentries$sei$decimals,c(3,5)),
+  xentries$yi$entry[1]=="0.0800",xentries$sei$source[2]=="excel_fixed_decimal_format")
+xdata <- as.data.frame(lapply(readxl::read_excel(path),as.numeric)); xdata$metaID <- 1:2
+xanalysis <- compute_caliper_analysis(xdata,workbook_path=path)
+stopifnot(identical(xanalysis$audit$kp_sigma_decimals,c(3,5)),
+  all(xanalysis$audit$kp_keep))
+unlink(path)
+
+folder <- tempfile("caliper-adjusted-")
+save_caliper_analysis(adjusted,folder)
+saved <- openxlsx::read.xlsx(file.path(folder,"caliper_tests.xlsx"),sheet="Results")
+plots <- make_caliper_plots(adjusted)
+stopifnot(nrow(saved)==8L,length(plots)==4L,
+  nrow(openxlsx::read.xlsx(file.path(folder,"caliper_rounding_risks.xlsx"),sheet="Results"))==8L,
+  sum(plots[[1]]$data$count)==4L,sum(plots[[3]]$data$count)==1L,
+  identical(plots[[2]]$coordinates$limits$y,c(.45,.65)),
+  identical(plots[[4]]$coordinates$limits$y,c(.45,.65)),
+  !any(grepl("p_value|binom|holm|cluster_ci",names(saved))))
+unlink(folder,recursive=TRUE)
+cat("PASS: empirical/unequal-precision omission counts, reported Excel decimals, RoundingMatters bounds, article bootstrap and four-panel Figure S6.\n")

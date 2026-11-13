@@ -216,7 +216,8 @@ ensure_output_dirs()
 ## Keep their numerical inputs with the other derived analysis data.
 caliper_analysis <- compute_caliper_analysis(
   readxl::read_excel(here("data", "MasterData.xlsx")),
-  source_data = "data/MasterData.xlsx"
+  source_data = "data/MasterData.xlsx",
+  workbook_path = here("data", "MasterData.xlsx")
 )
 save_caliper_analysis(caliper_analysis, here("data", "derived_data"))
 
