@@ -674,7 +674,8 @@ save_supplement_plot(
 library(officer)
 
 
-write_word_table <- function(x, number, alignment = NULL, title = NULL, note = NULL) {
+write_word_table <- function(x, number, alignment = NULL, title = NULL, note = NULL,
+                             latex_data = x) {
   if (is.null(alignment)) alignment <- c("left", rep("center", ncol(x) - 1))
   doc <- officer::read_docx()
   if (!is.null(title)) doc <- officer::body_add_par(doc, title, style = "heading 1")
@@ -682,7 +683,7 @@ write_word_table <- function(x, number, alignment = NULL, title = NULL, note = N
     alignment = alignment, align_table = "center")
   if (!is.null(note)) doc <- officer::body_add_par(doc, note)
   print(doc, target = file.path(supplement_dir, paste0("Table_S", number, ".docx")))
-  write_latex_table(x, file.path(supplement_dir, paste0("Table_S", number, ".tex")))
+  write_latex_table(latex_data, file.path(supplement_dir, paste0("Table_S", number, ".tex")))
 }
 
 write_subfield_esr_table <- function(x, number, alignment = NULL) {
@@ -1060,6 +1061,16 @@ write_word_table(
     "ECO = Ecology; ENC = Environmental Chemistry; ENE = Environmental Engineering;",
     "HTM = Health, Toxicology and Mutagenesis; MPL = Management, Monitoring, Policy and Law;",
     "NLC = Nature and Landscape Conservation; WST = Water Science and Technology."
+  ),
+  latex_data = table_s6 %>% mutate(
+    `Effect size` = dplyr::recode(
+      `Effect size`,
+      "Cohen’s d" = "Cohen's $d$",
+      "Correlation coefficient (r)" = "Correlation coefficient ($r$)",
+      "Fisher’s z" = "Fisher's $z$",
+      "Hedges’s g" = "Hedges's $g$",
+      "Regression coefficient (β)" = "Regression coefficient ($\\beta$)"
+    )
   )
 )
 write_word_table(

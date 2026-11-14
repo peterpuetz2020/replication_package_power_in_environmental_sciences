@@ -46,8 +46,8 @@ method settings. The ignored `data/derived_data/WAAP_WLS_estimates.xlsx` records
 CR2 standard errors, degrees of freedom, confidence intervals, adequate/selected
 counts, independent study counts, inference status and WLS fallback use.
 WAAP estimates are saved only under derived data; Figure S6 is the manuscript
-output displaying them. Set `n_iterations <- 1000` before the manuscript
-workflow for 1,000 article-cluster bootstrap replications of the ESR intervals.
+output displaying them. The manuscript workflow uses 1,000 article-cluster
+bootstrap replications of the ESR intervals by default (`n_iterations <- 1000`).
 The renderer reads `data/derived_data/Figure_S6_inputs.rds`, written by
 `scripts/create_tables_and_figures.R`, rather than reusing R-session objects.
 

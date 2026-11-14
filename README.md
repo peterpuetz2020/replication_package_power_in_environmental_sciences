@@ -81,7 +81,7 @@ Define options before sourcing `scripts/main.R` or
 | Option | Default | Purpose |
 |---|---:|---|
 | `n_cores` | `3` | Parallel workers. Leave at least one CPU core free. |
-| `n_iterations` | `100` | Counterfactual bootstrap iterations for confidence intervals. |
+| `n_iterations` | `1000` | Counterfactual bootstrap iterations for confidence intervals. |
 | `meta_average_multiplier` | `c(0.25, 0.5, 0.75, 1)` | Multipliers applied to the meta-analytic average in power calculations. |
 | `heterogeneity_multiplier` | `c(0, 0.25, 0.5, 0.75)` | Multipliers applied to between-effect heterogeneity in counterfactual calculations. |
 | `run_classification` | `FALSE` | Recreate the classification CSV files. |
@@ -93,14 +93,15 @@ For example, a small exploratory run can use:
 
 ```r
 n_cores <- 2
-n_iterations <- 100
+n_iterations <- 1000
 meta_average_multiplier <- 0.5
 heterogeneity_multiplier <- c(0, 0.5)
 source("scripts/main.R")
 ```
 
-Use `n_iterations <- 1000` for the manuscript results. Both multiplier options
-accept vectors; the data-creation workflow evaluates every combination.
+Counterfactual and caliper intervals use 1,000 bootstrap replicates by default.
+Both multiplier options accept vectors; the data-creation workflow evaluates
+every combination.
 
 To reproduce all main-text outputs, retain the manuscript’s `0.5` meta-average 
 setups with heterogeneity multipliers `0` and `0.5`.

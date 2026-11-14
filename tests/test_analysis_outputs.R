@@ -59,6 +59,13 @@ stopifnot(
   sum(as.numeric(effect_sizes[-1, 3:9])) == as.numeric(small_studies[2, 2]),
   all(colSums(matrix(as.numeric(effect_sizes[-1, 3:9]), ncol = 7)) ==
         as.numeric(small_studies[3:9, 2])))
+effect_size_latex <- readLines("results/supplement/Table_S6.tex")
+for (label in c("Cohen's $d$", "Correlation coefficient ($r$)",
+                "Fisher's $z$", "Hedges's $g$",
+                "Regression coefficient ($\\beta$)")) {
+  stopifnot(any(grepl(label, effect_size_latex, fixed = TRUE)))
+}
+stopifnot(!any(grepl("β", effect_size_latex, fixed = TRUE)))
 for (number in 2:4) {
   path <- paste0("results/supplement/Table_S",number,".docx")
   doc_dir <- tempfile("power-docx-"); dir.create(doc_dir)
@@ -68,4 +75,4 @@ for (number in 2:4) {
   stopifnot(grepl(paste0("Statistical power at ",multiplier," x the meta-average"),text,fixed=TRUE))
   unlink(doc_dir,recursive=TRUE)
 }
-cat("PASS: descriptive Tables S6/S7, consecutive outputs, power sensitivities and counterfactual iterations verified\n")
+cat("PASS: descriptive Tables S6/S7, LaTeX math, consecutive outputs, power sensitivities and counterfactual iterations verified\n")
