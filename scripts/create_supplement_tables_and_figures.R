@@ -578,31 +578,38 @@ write_counterfactual_figure(meta_multiplier = 1, figure_number = 5)
 ## Figure S6: excess-significance estimates across all analysis setups. The
 ## estimates are calculated with Table 2 in create_tables_and_figures.R, while
 ## all supplementary output is deliberately written here.
-if (!exists("all_combination_results") || !exists("all_esr_results")) {
-  figure_s6_inputs_path <- here(
-    "data", "derived_data", "Figure_S6_inputs.rds"
+## Always load the saved inputs. An interactive session can still contain
+## similarly named objects from an older run without WAAP-WLS.
+figure_s6_inputs_path <- here(
+  "data", "derived_data", "Figure_S6_inputs.rds"
+)
+if (!file.exists(figure_s6_inputs_path)) {
+  stop(
+    "Figure S6 inputs are unavailable. Run create_tables_and_figures.R first ",
+    "to create ", figure_s6_inputs_path, "."
   )
-  if (!file.exists(figure_s6_inputs_path)) {
-    stop(
-      "Figure S6 inputs are unavailable. Run create_tables_and_figures.R first ",
-      "to create ", figure_s6_inputs_path, "."
-    )
-  }
-  figure_s6_inputs <- readRDS(figure_s6_inputs_path)
-  required_figure_s6_inputs <- c(
-    "all_combination_results", "all_esr_results"
-  )
-  if (!all(required_figure_s6_inputs %in% names(figure_s6_inputs))) {
-    stop(
-      "Figure S6 input file is incomplete. Rerun create_tables_and_figures.R ",
-      "to recreate ", figure_s6_inputs_path, "."
-    )
-  }
-  all_combination_results <- figure_s6_inputs$all_combination_results
-  all_esr_results <- figure_s6_inputs$all_esr_results
 }
-if (!"waap_wls" %in% all_esr_results$estimator) {
-  stop("Figure S6 inputs lack WAAP-WLS. Run compute_meta_estimates.R and create_tables_and_figures.R first.")
+figure_s6_inputs <- readRDS(figure_s6_inputs_path)
+required_figure_s6_inputs <- c(
+  "all_combination_results", "all_esr_results"
+)
+if (!all(required_figure_s6_inputs %in% names(figure_s6_inputs))) {
+  stop(
+    "Figure S6 input file is incomplete. Rerun create_tables_and_figures.R ",
+    "to recreate ", figure_s6_inputs_path, "."
+  )
+}
+all_combination_results <- figure_s6_inputs$all_combination_results
+all_esr_results <- figure_s6_inputs$all_esr_results
+required_estimators <- c("pet_peese", "multilevel_random", "fixed_effect", "waap_wls")
+missing_estimators <- union(
+  setdiff(required_estimators, all_esr_results$estimator),
+  setdiff(required_estimators, all_combination_results$estimator)
+)
+if (length(missing_estimators)) {
+  stop("Figure S6 inputs lack: ", paste(missing_estimators, collapse = ", "),
+    ". Run scripts/create_tables_and_figures.R to rebuild ", figure_s6_inputs_path,
+    "; existing meta-estimate and counterfactual caches will be reused.")
 }
 if (any(all_esr_results$estimator %in% c("fixed_effect", "waap_wls") &
         all_esr_results$heterogeneity_multiplier != 0)) {

@@ -3,6 +3,8 @@
 WAAP-WLS is an inverse-variance weighted mean, not a multilevel model. It is
 included alongside PET–PEESE, random effects and fixed effects in Figure S6.
 Both WAAP-WLS and fixed effects appear **only at zero genuine heterogeneity**.
+Their zero-heterogeneity comparisons are included for each configured
+meta-average multiplier, even when the random-effects grid excludes zero.
 
 For every `cID` and both shared samples (all data and the existing RE outlier
 screen), the estimator first calculates the full-sample inverse-variance mean.
@@ -46,10 +48,13 @@ counts, independent study counts, inference status and WLS fallback use.
 WAAP estimates are saved only under derived data; Figure S6 is the manuscript
 output displaying them. Set `n_iterations <- 1000` before the manuscript
 workflow for 1,000 article-cluster bootstrap replications of the ESR intervals.
+The renderer reads `data/derived_data/Figure_S6_inputs.rds`, written by
+`scripts/create_tables_and_figures.R`, rather than reusing R-session objects.
 
 ```sh
 Rscript tests/test_waap_wls.R
 Rscript tests/test_waap_outputs.R
+Rscript tests/test_figure_s6_inputs.R
 ```
 
 Tests cover adequate-subset selection, WLS fallback, sign symmetry, unavailable
