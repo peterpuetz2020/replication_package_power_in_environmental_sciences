@@ -51,10 +51,9 @@ stopifnot(detected$bootstrap_ci_lower>.5)
 
 folder <- tempfile("caliper-derived-")
 save_caliper_analysis(analysis,folder)
-saved <- openxlsx::read.xlsx(file.path(folder,"caliper_tests.xlsx"),sheet="Results")
-stopifnot(isTRUE(all.equal(saved$share_above,analysis$tests$share_above)),
-  file.exists(file.path(folder,"caliper_coverage.xlsx")),
-  identical(readRDS(file.path(folder,"caliper_analysis.rds"))$settings,analysis$settings))
+saved <- readRDS(file.path(folder,"caliper_analysis.rds"))
+stopifnot(identical(saved,analysis),
+  identical(list.files(folder),"caliper_analysis.rds"))
 plots <- make_caliper_plots(analysis)
 stopifnot(length(plots)==2L,
   sum(plots[[1]]$data$count)==analysis$tests$n_window[which.max(analysis$tests$half_width)])
@@ -168,10 +167,11 @@ unlink(path)
 
 folder <- tempfile("caliper-adjusted-")
 save_caliper_analysis(adjusted,folder)
-saved <- openxlsx::read.xlsx(file.path(folder,"caliper_tests.xlsx"),sheet="Results")
+saved <- readRDS(file.path(folder,"caliper_analysis.rds"))
 plots <- make_caliper_plots(adjusted)
-stopifnot(nrow(saved)==8L,length(plots)==4L,
-  nrow(openxlsx::read.xlsx(file.path(folder,"caliper_rounding_risks.xlsx"),sheet="Results"))==8L,
+stopifnot(nrow(saved$tests)==8L,length(plots)==4L,
+  nrow(saved$rounding_risks)==8L,identical(saved,adjusted),
+  identical(list.files(folder),"caliper_analysis.rds"),
   sum(plots[[1]]$data$count)==4L,sum(plots[[2]]$data$count)==4L,
   identical(plots[[1]]$labels$title,"Full empirical sample"),
   identical(plots[[2]]$labels$title,"Kranz-Pütz adjustment"),
@@ -179,7 +179,7 @@ stopifnot(nrow(saved)==8L,length(plots)==4L,
   is.null(plots[[3]]$labels$subtitle),is.null(plots[[4]]$labels$subtitle),
   identical(plots[[3]]$coordinates$limits$y,c(.45,.65)),
   identical(plots[[4]]$coordinates$limits$y,c(.45,.65)),
-  !any(grepl("p_value|binom|holm|cluster_ci",names(saved))))
+  !any(grepl("p_value|binom|holm|cluster_ci",names(saved$tests))))
 unlink(folder,recursive=TRUE)
 stopifnot(setequal(adjusted$tests$method,c("empirical","kranz_puetz")),
   !any(grepl("rounding_filter_",names(adjusted$audit))))

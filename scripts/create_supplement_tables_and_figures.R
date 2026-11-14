@@ -566,13 +566,7 @@ caliper_analysis <- readRDS(caliper_inputs_path)
 save_supplement_plot(
   file.path(supplement_dir, "Figure_S2"), width = 10, height = 8,
   draw = function() gridExtra::grid.arrange(
-    grobs = make_caliper_plots(caliper_analysis, supplement_font_size), ncol = 2,
-    bottom = grid::textGrob(
-      paste0("95% article-cluster bootstrap percentile CIs; ",
-        format(caliper_analysis$settings$bootstrap_iterations,big.mark=",",trim=TRUE),
-        " resamples"),
-      gp = grid::gpar(fontsize=supplement_font_size)
-    )
+    grobs = make_caliper_plots(caliper_analysis, supplement_font_size), ncol = 2
   )
 )
 

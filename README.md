@@ -225,10 +225,11 @@ precision for the unchanged SE-significand rule `s >= 37`. **Only matched
 observations that fail this rule are omitted.** Nonmatching observations and
 observations with unknown precision remain unchanged in the adjusted sample.
 The figure uses one column per sample, with histograms above caliper estimates,
-one title per column and a shared bootstrap-interval caption. The full empirical
+one title per column and no bottom caption or legend. The full empirical
 sample retains all valid observed estimates. Half-widths are 0.05,
 0.10, 0.15 and 0.20; only cluster-bootstrap percentile intervals from 1,000
 article resamples are computed, without p-values. Numerical results and the
-row audit are saved in `data/derived_data/`; Figure S2 is saved as PDF and SVG
+row audit are saved only in `data/derived_data/caliper_analysis.rds`, without
+caliper XLSX outputs; Figure S2 is saved as PDF and SVG
 under `results/supplement/`.
 See [the method and output descriptions](docs/caliper_tests.md).

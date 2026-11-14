@@ -871,46 +871,10 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
 
 save_caliper_analysis <- function(analysis, derived_dir) {
   dir.create(derived_dir,recursive=TRUE,showWarnings=FALSE)
-  notes <- data.frame(note=c(
-    paste0("Source: ",analysis$settings$source_data),
-    "Pooled empirical estimates; every valid observation is retained in the empirical sample.",
-    if (isTRUE(analysis$settings$rounding_adjustment)) c(
-      "Kranz-Puetz omission sample uses the published SE significand >= 37 rule, computed with RoundingMatters::significand.",
-      "Eligibility: reported yi decimals equal reported sei decimals OR reported vi decimals; compare each column separately, not the minimum of vi/sei decimals.",
-      "Matched observations use sigma.dec = mu.dec = reported yi decimals for the KP rule and rounding bounds. The audit records which input matched (sei, vi or both).",
-      "For unmatched observations, the minimum available vi/sei decimal count is used for diagnostic bounds only; it does not make them eligible for the KP rule.",
-      "Precision is used on the SE scale, centered at sqrt(vi); matching vi decimals is the requested precision convention, not a variance-to-SE precision transformation.",
-      "Apply the original >=37 threshold to matched observations only. Retain every valid observation with no precision match or unknown precision unchanged; only matched failures are omitted.",
-      "SE significand = round(sqrt(vi) * 10^sigma.dec), following the package implementation; threshold is exactly 37, independent of caliper cutoff or width.",
-      "No benchmark-z rule or unequal-precision extension is used. Point estimates yi/sqrt(vi) are unchanged; no random derounding is used.",
-      "The adjusted panels retain all valid observations except matching-precision observations that fail the KP threshold. No-match observations are not removed.",
-      "kp_rule_applied distinguishes threshold application from sample inclusion (kp_keep). Status retained_no_precision_match or retained_unknown_precision means kept without applying KP, not a passed KP test.",
-      "RoundingMatters::min.max.z still supplies diagnostic bounds for all known precision pairs, including unequal precision; those bounds do not determine omission.",
-      "Known yi precision and one matching sei or vi precision are sufficient; missing precision in the other column does not disqualify the match.",
-      "Precision is extracted from original Excel strings, stored numeric entries or explicit number formats. General numeric cells cannot recover trailing zeros that Excel has already discarded.",
-      paste0("RoundingMatters version: ",analysis$settings$rounding_package)
-    ),
-    paste0("Cutoff: ",format(analysis$settings$cutoff,digits=16),
-      "; half-widths: ",paste(analysis$settings$half_widths,collapse=", ")),
-    "Point estimate: observed fraction at/above cutoff among observations in the caliper, equally weighted per estimate.",
-    paste0("Pointwise 95% article-cluster bootstrap percentile CIs; ",analysis$settings$bootstrap_iterations,
-      " resamples; seed ",analysis$settings$bootstrap_seed,"; cluster identifier: ",
-      if (is.null(analysis$settings$cluster_col)) "none" else analysis$settings$cluster_col),
-    "Whole articles are resampled, including those with no observations in a given window; each draw recomputes its own ratio.",
-    "No caliper p-values, analytical t intervals, binomial intervals or field-specific calipers are returned.",
-    "Empty bootstrap windows are counted; intervals require at least 95% valid draws.",
-    "metaID identifies meta-analysis articles; shared primary studies across articles are not captured by this clustering.",
-    "Finite-window probability balance is stronger than density continuity; the diagnostics do not establish publication bias."
-  ))
-  openxlsx::write.xlsx(list(Results=analysis$tests,Notes=notes),
-    file.path(derived_dir,"caliper_tests.xlsx"),asTable=TRUE,firstRow=TRUE,colWidths="auto",overwrite=TRUE)
-  openxlsx::write.xlsx(list(Results=analysis$coverage,Notes=notes),
-    file.path(derived_dir,"caliper_coverage.xlsx"),asTable=TRUE,firstRow=TRUE,colWidths="auto",overwrite=TRUE)
-  if (!is.null(analysis$rounding_risks)) openxlsx::write.xlsx(
-    list(Results=analysis$rounding_risks,Notes=data.frame(note=c(
-      "Possible rounding risks over the entire sample for each method, not just observed window members; conditional bounds, not confirmed errors.",notes$note))),
-    file.path(derived_dir,"caliper_rounding_risks.xlsx"),asTable=TRUE,firstRow=TRUE,colWidths="auto",overwrite=TRUE)
   saveRDS(analysis,file.path(derived_dir,"caliper_analysis.rds"))
+  # Retire the generated workbooks from earlier versions of this workflow.
+  unlink(file.path(derived_dir,c("caliper_tests.xlsx","caliper_coverage.xlsx",
+    "caliper_rounding_risks.xlsx")))
   invisible(analysis)
 }
 
