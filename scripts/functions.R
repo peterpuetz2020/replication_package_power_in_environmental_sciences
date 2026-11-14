@@ -589,8 +589,8 @@ excel_reporting_entries <- function(path, columns, n_rows) {
       }
     }
     result <- data.frame(entry = rep(NA_character_, n_rows), decimals = NA_real_,
-                         source = "missing_cell", formula = FALSE)
-    result[row, ] <- data.frame(entry = values, decimals = decimals, source = source, formula = formula)
+                         source = "missing_cell")
+    result[row, ] <- data.frame(entry = values, decimals = decimals, source = source)
     result
   })
   setNames(out, columns)
@@ -668,8 +668,7 @@ caliper_test <- function(z, cluster = NULL, cutoff = qnorm(.975), half_width = .
   out
 }
 
-prepare_caliper_data <- function(data, estimate_col = "yi", variance_col = "vi",
-                                 statistic_col = NULL, df_col = NULL, cluster_col = "metaID") {
+prepare_caliper_data <- function(data) {
   n <- nrow(data)
   if (!n) stop("Caliper input data are empty.")
   numeric_col <- function(name) {
@@ -677,39 +676,16 @@ prepare_caliper_data <- function(data, estimate_col = "yi", variance_col = "vi",
     values <- data[[name]]
     suppressWarnings(as.numeric(if (is.factor(values)) as.character(values) else values))
   }
-  if (is.null(statistic_col)) {
-    estimate <- numeric_col(estimate_col)
-    variance <- numeric_col(variance_col)
-    se <- suppressWarnings(sqrt(variance))
-    statistic <- estimate/se
-    valid <- is.finite(estimate) & is.finite(variance) & variance>0 & is.finite(statistic)
-    reason <- ifelse(valid,"included","invalid_estimate_or_variance")
-  } else {
-    estimate <- variance <- se <- rep(NA_real_,n)
-    statistic <- numeric_col(statistic_col)
-    valid <- is.finite(statistic)
-    reason <- ifelse(valid,"included","nonfinite_statistic")
-  }
-  z <- abs(statistic)
-  df <- rep(NA_real_,n)
-  if (!is.null(df_col)) {
-    df <- numeric_col(df_col)
-    bad <- !is.finite(df) | df<=0
-    valid <- valid & !bad
-    reason[bad] <- "invalid_degrees_of_freedom"
-    z <- suppressWarnings(qnorm(pt(abs(statistic),df,lower.tail=FALSE,log.p=TRUE),
-      lower.tail=FALSE,log.p=TRUE))
-  }
-  valid <- valid & is.finite(z)
-  reason[reason=="included" & !valid] <- "nonfinite_equivalent_z"
-  cluster <- rep(NA_character_,n)
-  if (!is.null(cluster_col)) {
-    if (!cluster_col %in% names(data)) stop("Missing column: ",cluster_col)
-    cluster <- as.character(data[[cluster_col]])
-  }
+  estimate <- numeric_col("yi")
+  variance <- numeric_col("vi")
+  se <- suppressWarnings(sqrt(variance))
+  statistic <- estimate/se
+  valid <- is.finite(estimate) & is.finite(variance) & variance>0 & is.finite(statistic)
+  reason <- ifelse(valid,"included","invalid_estimate_or_variance")
+  if (!"metaID" %in% names(data)) stop("Missing column: metaID")
   data.frame(row_id=seq_len(n),estimate=estimate,variance=variance,standard_error=se,
-    raw_statistic=statistic,abs_z=z,df=df,cluster=cluster,valid=valid,
-    exclusion_reason=reason,stringsAsFactors=FALSE)
+    raw_statistic=statistic,abs_z=abs(statistic),cluster=as.character(data$metaID),
+    valid=valid,exclusion_reason=reason,stringsAsFactors=FALSE)
 }
 
 ## Keep the published Kranz-Puetz significand >= 37 rule unchanged. Its common-
@@ -747,34 +723,21 @@ prepare_rounding_calipers <- function(audit, entries) {
     ifelse(audit$kp_matches_sei_precision & audit$kp_matches_vi_precision,"both",
       ifelse(audit$kp_matches_sei_precision,"sei",
         ifelse(audit$kp_matches_vi_precision,"vi","none"))))
-  # Matched rows use the matching count, including when the other input has
-  # fewer digits. For unmatched rows, retain the minimum available count for
-  # diagnostic bounds only; this fallback never makes them eligible for KP.
-  fallback <- pmin(audit$reported_vi_decimals,audit$reported_sei_decimals,na.rm=TRUE)
-  fallback[!is.finite(fallback)] <- NA_real_
-  audit$kp_sigma_decimals <- ifelse(audit$kp_common_precision,audit$kp_mu_decimals,fallback)
-  audit$rounding_abs_z_lower <- audit$rounding_abs_z_upper <- NA_real_
-  audit$kp_se_significand <- NA_real_
   audit$kp_rule_applied <- audit$valid & audit$kp_common_precision
+  # Only applicable rows need a decimal count or significand for the KP rule.
+  audit$kp_sigma_decimals <- ifelse(audit$kp_rule_applied,audit$kp_mu_decimals,NA_real_)
+  audit$kp_se_significand <- NA_real_
   audit$kp_keep <- audit$valid
-  rows <- which(audit$valid & known)
+  rows <- which(audit$kp_rule_applied)
   if (length(rows)) {
-    ## Use the package's explicit, separate precision arguments. Do not infer
-    ## digits from sqrt(vi), force common decimals, or round the point estimates.
-    bounds <- RoundingMatters::min.max.z(
-      mu=abs(audit$estimate[rows]),sigma=audit$standard_error[rows],
-      mu.dec=audit$kp_mu_decimals[rows],sigma.dec=audit$kp_sigma_decimals[rows])
-    audit$rounding_abs_z_lower[rows] <- pmax(0,bounds$z.min)
-    audit$rounding_abs_z_upper[rows] <- pmax(abs(bounds$z.min),abs(bounds$z.max))
     # The package's significand helper changes scipen. Restore the caller's
     # option so this diagnostic cannot affect later manuscript output formatting.
     old_options <- options("scipen")
     on.exit(options(old_options),add=TRUE)
     audit$kp_se_significand[rows] <- RoundingMatters::significand(
       audit$standard_error[rows],num.deci=audit$kp_sigma_decimals[rows])
-    applied <- which(audit$kp_rule_applied)
-    audit$kp_keep[applied] <- is.finite(audit$kp_se_significand[applied]) &
-      audit$kp_se_significand[applied]>=37
+    audit$kp_keep[rows] <- is.finite(audit$kp_se_significand[rows]) &
+      audit$kp_se_significand[rows]>=37
   }
   audit$kp_status <- ifelse(!audit$valid,"invalid_observation",
     ifelse(!known,"retained_unknown_precision",
@@ -786,8 +749,6 @@ prepare_rounding_calipers <- function(audit, entries) {
 compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
                                      cutoff = qnorm(.975), bootstrap_iterations = 1000L,
                                      bootstrap_seed = 20261107L,
-                                     estimate_col = "yi", variance_col = "vi",
-                                     statistic_col = NULL, df_col = NULL, cluster_col = "metaID",
                                      source_data = "supplied data", workbook_path = NULL,
                                      reporting_entries = NULL) {
   if (length(cutoff)!=1L || !is.finite(cutoff) || cutoff<=0 ||
@@ -796,16 +757,13 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
     stop("Caliper half-widths must be positive, no larger than 0.2, and smaller than the cutoff.")
   }
   half_widths <- sort(unique(half_widths))
-  audit <- prepare_caliper_data(data,estimate_col,variance_col,statistic_col,df_col,cluster_col)
+  audit <- prepare_caliper_data(data)
   if (!is.null(workbook_path)) {
     if (!is.null(reporting_entries)) stop("Supply either workbook_path or reporting_entries.")
     reporting_entries <- excel_reporting_entries(workbook_path,c("yi","vi","sei"),nrow(data))
   }
   use_rounding <- !is.null(reporting_entries)
   if (use_rounding) {
-    if (!is.null(statistic_col) || !is.null(df_col) || estimate_col!="yi" || variance_col!="vi") {
-      stop("The workbook omission analysis requires the observed yi / sqrt(vi) normal statistics.")
-    }
     audit <- prepare_rounding_calipers(audit,reporting_entries)
   }
   valid <- audit[audit$valid,,drop=FALSE]
@@ -814,12 +772,11 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
   if (use_rounding) samples$kranz_puetz <- valid[valid$kp_keep,,drop=FALSE]
   tests <- do.call(rbind,lapply(names(samples),function(method) {
     selected <- samples[[method]]
-    labels <- if (is.null(cluster_col)) NULL else selected$cluster
+    labels <- selected$cluster
     bootstrap <- cluster_bootstrap_calipers(selected$abs_z,labels,half_widths,cutoff,
       bootstrap_iterations,bootstrap_seed)
     counts <- do.call(rbind,lapply(half_widths,function(h)caliper_test(selected$abs_z,labels,cutoff,h)))
     result <- cbind(counts,bootstrap[,setdiff(names(bootstrap),"half_width"),drop=FALSE])
-    result$group <- "All"
     result$method <- method
     result$n_retained <- nrow(selected)
     result$n_omitted <- nrow(valid)-nrow(selected)
@@ -844,26 +801,10 @@ compute_caliper_analysis <- function(data, half_widths = c(.05,.1,.15,.2),
     coverage$n_retained_kranz_puetz <- sum(valid$kp_keep)
     coverage$n_omitted_by_precision_rule <- sum(valid$kp_rule_applied & !valid$kp_keep)
   }
-  risks <- NULL
-  if (use_rounding) risks <- do.call(rbind,lapply(names(samples),function(method) {
-    selected <- samples[[method]]
-    lower <- selected$rounding_abs_z_lower; upper <- selected$rounding_abs_z_upper
-    known <- is.finite(lower) & !is.na(upper)
-    lo <- lower[known]; hi <- upper[known]
-    do.call(rbind,lapply(half_widths,function(h) {
-      definitely_in <- lo>=cutoff-h & hi<=cutoff+h
-      definitely_out <- hi<cutoff-h | lo>cutoff+h
-      data.frame(method=method,half_width=h,
-        precision_basis="kp_match_or_min_fallback",
-        n_with_rounding_bounds=sum(known),
-        n_potential_significance_switch=sum(lo<cutoff & hi>=cutoff),
-        n_uncertain_window_membership=sum(!definitely_in & !definitely_out))
-    }))
-  }))
-  list(tests=tests,coverage=coverage,rounding_risks=risks,audit=audit,
+  list(tests=tests,coverage=coverage,audit=audit,
     settings=list(half_widths=half_widths,cutoff=cutoff,bootstrap_iterations=bootstrap_iterations,
-      bootstrap_seed=bootstrap_seed,cluster_col=cluster_col,source_data=source_data,
-      reference=if (is.null(df_col)) "normal_approximation" else "student_t_to_equivalent_z",
+      bootstrap_seed=bootstrap_seed,cluster_col="metaID",source_data=source_data,
+      reference="normal_approximation",
       rounding_adjustment=use_rounding,
       rounding_package=if (use_rounding) as.character(utils::packageVersion("RoundingMatters")) else NULL,
       omission_rule=if (use_rounding) "Apply SE significand >= 37 only when d_yi == d_sei OR d_yi == d_vi; retain all valid nonmatching/unknown-precision observations unchanged" else "none"))

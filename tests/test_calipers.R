@@ -28,7 +28,7 @@ d <- data.frame(yi=c(.08,.08,.074,.072),vi=c(.0016,.0016,.001369,.001296),
 analysis <- compute_caliper_analysis(d)
 stopifnot(analysis$coverage$n_valid==nrow(d),
   identical(analysis$audit$standard_error,sqrt(d$vi)),
-  nrow(analysis$tests)==4L,all(analysis$tests$group=="All"),
+  nrow(analysis$tests)==4L,
   all(analysis$tests$bootstrap_iterations==1000),
   !any(grepl("(^p_|_p_|p_value|holm|binom|cluster_ci|precision|kp_)",names(analysis$tests))))
 bad <- d; bad$vi[1:3] <- c(0,-1,NA)
@@ -36,12 +36,6 @@ stopifnot(sum(!prepare_caliper_data(bad)$valid)==3)
 precise <- d; precise$vi[1] <- 1.234567890123456e-10
 stopifnot(identical(prepare_caliper_data(precise)$variance,precise$vi))
 stopifnot(inherits(try(compute_caliper_analysis(d,half_widths=.3),silent=TRUE),"try-error"))
-
-## Supplied t degrees of freedom calibrate to the same normal threshold.
-tdata <- data.frame(t_value=qt(.975,c(5,10,100)),df=c(5,10,100),metaID=1:3)
-converted <- compute_caliper_analysis(tdata,statistic_col="t_value",df_col="df")
-stopifnot(max(abs(converted$audit$abs_z-c))<1e-12,
-  all(converted$tests$n_window==3))
 
 ## A planted jump is visible in the cluster-bootstrap confidence interval.
 set.seed(11)
@@ -72,10 +66,10 @@ negative <- paired; negative$yi <- -paired$yi
 negative_audit <- prepare_rounding_calipers(prepare_caliper_data(negative),entries)
 stopifnot(identical(adjusted$audit$kp_mu_decimals,c(4,1,4,4)),
   identical(getOption("scipen"),previous_scipen),
-  identical(adjusted$audit$kp_sigma_decimals,c(4,4,4,4)),
+  identical(adjusted$audit$kp_sigma_decimals,c(4,NA_real_,4,4)),
   identical(adjusted$audit$kp_common_precision,c(TRUE,FALSE,TRUE,TRUE)),
   identical(adjusted$audit$kp_precision_match,c("both","none","sei","vi")),
-  identical(adjusted$audit$kp_se_significand,c(1000,1000,1000,1000)),
+  identical(adjusted$audit$kp_se_significand,c(1000,NA_real_,1000,1000)),
   identical(adjusted$audit$kp_rule_applied,c(TRUE,FALSE,TRUE,TRUE)),
   all(adjusted$audit$kp_keep),
   adjusted$audit$kp_status[2]=="retained_no_precision_match",
@@ -92,11 +86,7 @@ stopifnot(identical(adjusted$audit$kp_mu_decimals,c(4,1,4,4)),
   identical(adjusted$audit$variance,paired$vi),
   identical(adjusted$audit$standard_error,sqrt(paired$vi)),
   identical(adjusted$audit$kp_keep,negative_audit$kp_keep),
-  identical(adjusted$audit$rounding_abs_z_lower,negative_audit$rounding_abs_z_lower),
-  identical(adjusted$audit$rounding_abs_z_upper,negative_audit$rounding_abs_z_upper),
-  max(abs(adjusted$audit$rounding_abs_z_lower-
-    pmax(0,(paired$yi-.5*10^(-entries$yi$decimals))/
-      (sqrt(paired$vi)+.5*10^(-adjusted$audit$kp_sigma_decimals)))))<1e-12)
+  identical(adjusted$audit$kp_se_significand,negative_audit$kp_se_significand))
 
 ## A missing nonmatching column must not invalidate a match in the other one.
 without_vi <- entries; without_vi$vi$decimals[] <- NA_real_
@@ -160,7 +150,7 @@ stopifnot(identical(xentries$yi$decimals,c(4,5)),
   xentries$yi$entry[1]=="0.0800",xentries$sei$source[2]=="excel_fixed_decimal_format")
 xdata <- as.data.frame(lapply(readxl::read_excel(path),as.numeric)); xdata$metaID <- 1:2
 xanalysis <- compute_caliper_analysis(xdata,workbook_path=path)
-stopifnot(identical(xanalysis$audit$kp_sigma_decimals,c(3,5)),
+stopifnot(identical(xanalysis$audit$kp_sigma_decimals,c(NA_real_,5)),
   all(xanalysis$audit$kp_keep),
   identical(xanalysis$audit$kp_rule_applied,c(FALSE,TRUE)))
 unlink(path)
@@ -170,7 +160,7 @@ save_caliper_analysis(adjusted,folder)
 saved <- readRDS(file.path(folder,"caliper_analysis.rds"))
 plots <- make_caliper_plots(adjusted)
 stopifnot(nrow(saved$tests)==8L,length(plots)==4L,
-  nrow(saved$rounding_risks)==8L,identical(saved,adjusted),
+  identical(saved,adjusted),
   identical(list.files(folder),"caliper_analysis.rds"),
   sum(plots[[1]]$data$count)==4L,sum(plots[[2]]$data$count)==4L,
   identical(plots[[1]]$labels$title,"Full empirical sample"),
@@ -182,5 +172,6 @@ stopifnot(nrow(saved$tests)==8L,length(plots)==4L,
   !any(grepl("p_value|binom|holm|cluster_ci",names(saved$tests))))
 unlink(folder,recursive=TRUE)
 stopifnot(setequal(adjusted$tests$method,c("empirical","kranz_puetz")),
-  !any(grepl("rounding_filter_",names(adjusted$audit))))
+  !any(grepl("rounding_filter_|rounding_abs_z_",names(adjusted$audit))),
+  !"rounding_risks" %in% names(adjusted),!"group" %in% names(adjusted$tests))
 cat("PASS: conditional KP omissions, retained nonmatches, unchanged bootstrap and two sample columns in Figure S2.\n")

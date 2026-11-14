@@ -33,24 +33,21 @@ reported decimal counts. Eligibility is
 Each equality uses known decimal counts. Compare `yi` against **either column
 separately**, rather than comparing it against the minimum of `vi` and `sei`.
 For an eligible observation, the matching count is necessarily `d_yi`; set
-`mu.dec = sigma.dec = d_yi` for the KP calculation. When both inputs match, they
+`sigma.dec = d_yi` for the KP calculation. When both inputs match, they
 supply the same count. A match in one column remains eligible if the other
 column's precision is missing.
 
 For example, `d_yi = 4`, `d_sei = 4`, `d_vi = 2` is eligible through `sei` and
 uses four decimals. Likewise, `d_yi = 4`, `d_sei = 3`, `d_vi = 4` is eligible
-through `vi` and uses four decimals. The earlier minimum-based check incorrectly
-rejected both of these examples.
+through `vi` and uses four decimals. Both matches are eligible even if the
+other input is coarser.
 
-`RoundingMatters::min.max.z()` receives `mu.dec` and `sigma.dec` separately.
-For unmatched rows, its diagnostic bounds use `mu.dec = d_yi` and
-`sigma.dec = min(d_vi, d_sei)` over the available counts; that fallback does not
-make the row eligible for the omission analysis.
-
-The coefficient center remains stored `yi`, and the SE center remains `sqrt(vi)`.
+The SE value remains `sqrt(vi)`, consistent with the rest of the analysis.
 Matching the reported decimal count of `vi` is the requested precision convention
-**on the SE scale**, not a variance-to-SE precision transformation. Neither
-center is rounded for the observed point statistics.
+**on the SE scale**, not a variance-to-SE precision transformation. Observed
+point statistics are not rounded. `kp_sigma_decimals` and `kp_se_significand`
+are calculated only when the KP rule applies; they are `NA` for nonmatching or
+unknown-precision observations, which are retained unchanged.
 
 The omission criterion is the **unchanged published rule**:
 
@@ -61,8 +58,6 @@ keep <- s >= 37
 
 The package computes the significand as `round(sqrt(vi) * 10^sigma.dec)`.
 The threshold remains exactly 37, independently of caliper cutoff or half-width.
-There is no hypothetical-z criterion and no extension of the rule to unequal
-coefficient/SE precision.
 
 The rule is applied only where `d_yi == d_sei` **or** `d_yi == d_vi`, using
 the matching count. A matching observation is omitted only when it fails the
@@ -86,13 +81,11 @@ The audit distinguishes rule application from final sample inclusion:
 Thus the adjusted sample equals the full valid sample **minus matched KP
 failures**. It is not restricted to precision-matched observations.
 
-`RoundingMatters::min.max.z()` supplies diagnostic bounds for every valid pair
-with known precision, including unequal precision. Its separate `mu.dec` and
-`sigma.dec` arguments do not justify altering the paper's omission criterion.
-Those bounds do not determine `kp_keep`. The audit now records the significand,
-match flags (`kp_matches_sei_precision`, `kp_matches_vi_precision`), match source
-(`kp_precision_match`: `sei`, `vi`, `both`, `none` or `unknown`), eligibility and
-status; the custom `kp_reference_z_lower` column has been removed.
+The audit records the significand, match flags (`kp_matches_sei_precision`,
+`kp_matches_vi_precision`), match source (`kp_precision_match`: `sei`, `vi`,
+`both`, `none` or `unknown`), rule application and inclusion status. No interval
+bounds or rounding-risk summaries are calculated: neither is needed for the
+current KP rule or Figure S2.
 
 The rule follows Kranz and Pütz
 ([doi:10.1257/aer.20210121](https://doi.org/10.1257/aer.20210121)) and the authors'
@@ -130,10 +123,9 @@ Numerical results are saved only in `data/derived_data/caliper_analysis.rds`:
   observed shares, bootstrap bounds, total `n_retained` and `n_omitted`;
 - `coverage`: input and valid/excluded counts, reporting-precision matches,
   counts retained after KP or without applying KP, and omission counts;
-- `rounding_risks`: possible significance switches and uncertain window
-  membership over each entire sample, conditional on the recorded precision;
-- `audit`: original entries, decimal counts, precision sources, ratio bounds,
-  SE significands, match source, `kp_rule_applied`, and KP inclusion/status;
+- `audit`: observed coefficients, variances and z values, original reported
+  entries, decimal counts, precision sources, applicable SE significands,
+  match source, `kp_rule_applied`, and KP inclusion/status;
 - `settings`: cutoff, half-widths, bootstrap settings, data source and KP rule.
 
 No caliper XLSX workbooks are written. Saving the RDS also removes the three
@@ -152,18 +144,13 @@ this zoom clips a tail. Only the full sample and KP-adjusted sample are calculat
 Figures S3–S5 show counterfactual sensitivities at multipliers 0.25, 0.75 and 1;
 Figure S6 compares the meta-analytic estimators.
 
-Shared helpers also accept directly supplied z values, or t values with actual
-degrees of freedom (`statistic_col`, `df_col`); t values are transformed to
-equivalent normal z values. No degrees of freedom are inferred from study counts.
-
 ```sh
 Rscript tests/test_calipers.R
 ```
 
 Tests cover window counts, article dependence under within-article duplication,
-bootstrap percentiles, unchanged numeric values, t calibration, invalid rows,
-Excel precision extraction, unequal-precision ratio bounds, unchanged original
-36/37 omission boundary, matches through sei or vi independently, unknown
+bootstrap percentiles, unchanged numeric values, invalid rows, Excel precision
+extraction, the original 36/37 omission boundary, matches through sei or vi independently, unknown
 precision in the nonmatching input, retention of nonmatches and unknown
 precision, option preservation, derived-data handoff and the two sample columns
 in Figure S2.
