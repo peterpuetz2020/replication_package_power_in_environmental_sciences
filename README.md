@@ -165,7 +165,8 @@ Caliper results and audit data are saved only in
 [caliper methods](docs/caliper_tests.md).
 
 Figure S6 compares significance overrepresentation (ESO) estimates from all four
-estimators across the four meta-average multipliers.
+estimators at meta-average multipliers 0.25, 0.5, 0.75 and 1, including when
+a smaller multiplier grid is configured for the other outputs.
 Fixed-effects and WAAP-WLS are shown only at zero genuine heterogeneity.
 WAAP-WLS uses the same primary-study clustering and CR2/Satterthwaite inference
 as fixed effects. See [WAAP-WLS methods](docs/waap_wls.md).

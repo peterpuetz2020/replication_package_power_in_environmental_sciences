@@ -575,7 +575,7 @@ save_supplement_plot(
   )
 )
 
-## Figure S6: excess-significance estimates across all analysis setups. The
+## Figure S6: excess-significance estimates at multipliers 0.25, 0.5, 0.75 and 1. The
 ## estimates are calculated with Table 2 in create_tables_and_figures.R, while
 ## all supplementary output is deliberately written here.
 ## Always load the saved inputs. An interactive session can still contain
@@ -611,6 +611,25 @@ if (length(missing_estimators)) {
     ". Run scripts/create_tables_and_figures.R to rebuild ", figure_s6_inputs_path,
     "; existing meta-estimate and counterfactual caches will be reused.")
 }
+required_figure_s6_panels <- tidyr::crossing(
+  meta_average_multiplier = c(0.25, 0.5, 0.75, 1),
+  estimator = required_estimators
+)
+missing_panels <- anti_join(
+  required_figure_s6_panels,
+  all_esr_results %>% filter(measure == "ESR_{0.05}^{sig}") %>%
+    distinct(meta_average_multiplier, estimator),
+  by = c("meta_average_multiplier", "estimator")
+)
+if (nrow(missing_panels)) {
+  stop(
+    "Figure S6 inputs lack multiplier/estimator combinations: ",
+    paste(paste(missing_panels$meta_average_multiplier, missing_panels$estimator,
+                sep = " / "), collapse = ", "),
+    ". Run scripts/create_tables_and_figures.R to rebuild ", figure_s6_inputs_path,
+    "; Figure S6 requires multipliers 0.25, 0.5, 0.75 and 1."
+  )
+}
 if (any(all_esr_results$estimator %in% c("fixed_effect", "waap_wls") &
         all_esr_results$heterogeneity_multiplier != 0)) {
   stop("Stale Figure S6 inputs: fixed effects and WAAP-WLS must use zero heterogeneity only. Rebuild the figure inputs.")
@@ -621,7 +640,8 @@ write.csv(
   row.names = FALSE
 )
 esr_plot_data <- all_esr_results %>%
-  filter(measure == "ESR_{0.05}^{sig}") %>%
+  filter(measure == "ESR_{0.05}^{sig}",
+         meta_average_multiplier %in% c(0.25, 0.5, 0.75, 1)) %>%
   mutate(
     estimate = as.numeric(estimate),
     ci_lower = as.numeric(stringr::str_match(confidence_interval, "\\[([^,]+),")[, 2]),

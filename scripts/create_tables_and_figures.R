@@ -540,16 +540,24 @@ calculate_table_2 <- function(meta_average_multiplier, heterogeneity_multiplier,
   )
 }
 
+## Figure S6 always compares the four manuscript meta-average assumptions,
+## including when the caller requests a smaller grid for other outputs.
+figure_s6_setups <- tidyr::expand_grid(
+  meta_average_multiplier = c(0.25, 0.5, 0.75, 1),
+  heterogeneity_multiplier = sort(unique(analysis_setups$heterogeneity_multiplier))
+) %>% mutate(
+  setup_label = make_setup_label(meta_average_multiplier, heterogeneity_multiplier)
+)
 table_2_parameters <- tidyr::crossing(
-  analysis_setups,
+  bind_rows(analysis_setups, figure_s6_setups) %>% distinct(),
   estimator = meta_analysis_estimators,
   outlier_variant = "outliers_removed"
 )
 ## Fixed effects and WAAP-WLS do not estimate genuine heterogeneity. Include
-## both at zero for each configured meta-average, even when the RE sensitivity
+## both at zero for each meta-average, even when the RE sensitivity
 ## grid does not include zero heterogeneity.
 figure_s6_zero_heterogeneity_parameters <- tidyr::crossing(
-  analysis_setups %>% distinct(meta_average_multiplier) %>%
+  bind_rows(analysis_setups, figure_s6_setups) %>% distinct(meta_average_multiplier) %>%
     mutate(
       heterogeneity_multiplier = 0,
       setup_label = make_setup_label(meta_average_multiplier, heterogeneity_multiplier)
