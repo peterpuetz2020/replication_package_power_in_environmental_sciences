@@ -162,14 +162,14 @@ meta-analysis methods.
 
 The default analysis evaluates **16 parameter combinations**: meta-average
 multipliers 0.25, 0.5, 0.75 and 1, crossed with four heterogeneity multipliers.
-Figure S5 includes all four meta-average values in a two-column, two-row layout. Main Tables 1–3 and Figures
+Figure S6 includes all four meta-average values in a two-column, two-row layout. Main Tables 1–3 and Figures
 1–2 retain the manuscript's half-meta-average specification.
 
-Figure S5 additionally includes WAAP-WLS, with primary-study clustering and the
+Figure S6 additionally includes WAAP-WLS, with primary-study clustering and the
 same CR2/Satterthwaite correction as fixed effects. Both estimators are shown
 only at zero genuine heterogeneity; neither borrows random-effects variance estimates. See
 [WAAP-WLS estimation details](docs/waap_wls.md). All WAAP estimates and fitting
-summaries are saved under `data/derived_data/`; Figure S5 displays the results.
+summaries are saved under `data/derived_data/`; Figure S6 displays the results.
 
 | Supplement output | Contents |
 |---|---|
@@ -180,9 +180,9 @@ summaries are saved under `data/derived_data/`; Figure S5 displays the results.
 | Table S7 | Effect-size measures by subfield |
 | Table S8 | Small-study effects by subfield |
 | Figure S1 | Heterogeneity distributions |
-| Figures S2–S4 | Counterfactual sensitivities at multipliers 0.25, 0.75, 1 |
-| Figure S5 | ESR comparisons for all four multipliers, arranged in two columns |
-| Figure S6 | Empirical, KP and rounding-ambiguity calipers with cluster-bootstrap intervals |
+| Figure S2 | Full empirical sample and KP-adjusted calipers, arranged as columns |
+| Figures S3–S5 | Counterfactual sensitivities at multipliers 0.25, 0.75, 1 |
+| Figure S6 | ESR comparisons for all four multipliers, arranged in two columns |
 
 Table S6 has exactly Table 2's layout: 13 p-value-bin rows, the two
 `ESR_0.05` measures (among all results and among significant results), and
@@ -214,23 +214,21 @@ Table S6's intervals against the paired counterfactual caches.
 This output check defaults to 1,000 iterations; pass an exploratory run's
 iteration count as its first argument when checking a smaller run.
 
-## Empirical calipers and Figure S6
+## Empirical calipers and Figure S2
 
 The standard data-preparation and supplementary-rendering stages now compute
-and plot pooled empirical, Kranz–Pütz and rounding-ambiguity calipers as Figure S6. The
+and plot full empirical and Kranz–Pütz calipers as Figure S2. The
 omission calculation uses `RoundingMatters` with coefficient precision from
 `yi`. An observation is eligible when its reported `yi` decimal count equals
 the reported count of **either `sei` or `vi`**. The matching count supplies SE
 precision for the unchanged SE-significand rule `s >= 37`. **Only matched
 observations that fail this rule are omitted.** Nonmatching observations and
 observations with unknown precision remain unchanged in the adjusted sample.
-A separate third figure row removes observations whose possible absolute
-z interval spans `qnorm(0.975)`, using `yi` precision and the lower decimal
-count of `vi`/`sei` for every observation. It starts from the full sample,
-independently of KP. The full empirical sample retains all valid observed
-estimates. Half-widths are 0.05,
+The figure uses one column per sample, with histograms above caliper estimates,
+one title per column and a shared bootstrap-interval caption. The full empirical
+sample retains all valid observed estimates. Half-widths are 0.05,
 0.10, 0.15 and 0.20; only cluster-bootstrap percentile intervals from 1,000
 article resamples are computed, without p-values. Numerical results and the
-row audit are saved in `data/derived_data/`; Figure S6 is saved as PDF and SVG
+row audit are saved in `data/derived_data/`; Figure S2 is saved as PDF and SVG
 under `results/supplement/`.
 See [the method and output descriptions](docs/caliper_tests.md).

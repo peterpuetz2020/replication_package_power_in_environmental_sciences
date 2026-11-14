@@ -88,7 +88,7 @@ stopifnot(identical(adjusted$audit$kp_mu_decimals,c(4,1,4,4)),
   !"kp_reference_z_lower" %in% names(adjusted$audit),
   identical(compute_caliper_analysis(paired,cutoff=2.1,reporting_entries=entries)$audit$kp_keep,
     adjusted$audit$kp_keep),
-  nrow(adjusted$tests)==12L,
+  nrow(adjusted$tests)==8L,
   all(adjusted$tests$n_retained[adjusted$tests$method=="kranz_puetz"]==4),
   identical(adjusted$audit$variance,paired$vi),
   identical(adjusted$audit$standard_error,sqrt(paired$vi)),
@@ -122,8 +122,6 @@ empty <- compute_caliper_analysis(paired,reporting_entries=missing)
 stopifnot(all(empty$tests$n_window[empty$tests$method=="kranz_puetz"]==4),
   all(empty$audit$kp_keep),!any(empty$audit$kp_rule_applied),
   all(empty$audit$kp_status=="retained_unknown_precision"),
-  all(empty$audit$rounding_filter_keep),
-  all(empty$audit$rounding_filter_status=="retained_unknown_precision"),
   empty$coverage$n_unknown_reporting_precision==4,
   identical(empty$tests[empty$tests$method=="empirical",names(analysis$tests)],
     compute_caliper_analysis(paired)$tests))
@@ -144,35 +142,6 @@ stopifnot(identical(selected$audit$kp_keep,c(FALSE,TRUE,TRUE,TRUE)),
   all(selected$tests$n_window[selected$tests$method=="kranz_puetz"]==3))
 conditional$vi[3] <- 0
 stopifnot(!prepare_rounding_calipers(prepare_caliper_data(conditional),conditional_entries)$kp_keep[3])
-
-## The independent third sample uses min(vi,sei) precision even when KP matches
-## the more precise input. Exclude only intervals spanning the cutoff, on either
-## sign of the coefficient; keep intervals certainly below or certainly above.
-ambiguous <- data.frame(yi=c(.196,.18,.22,.196,-.196,0),vi=.01,metaID=1:6)
-ambiguity_entries <- list(yi=metadata(ambiguous$yi,c(4,2,2,3,3,0)),
-  vi=metadata(ambiguous$vi,c(2,4,4,2,2,4)),
-  sei=metadata(sqrt(ambiguous$vi),c(4,3,2,4,4,3)))
-sensitivity <- compute_caliper_analysis(ambiguous,reporting_entries=ambiguity_entries)
-a <- sensitivity$audit
-stopifnot(identical(a$rounding_filter_sigma_decimals,c(2,3,2,2,2,3)),
-  a$kp_sigma_decimals[1]==4,a$rounding_filter_sigma_decimals[1]==2,
-  identical(a$rounding_filter_straddles_cutoff,c(TRUE,FALSE,FALSE,TRUE,TRUE,TRUE)),
-  identical(a$rounding_filter_keep,c(FALSE,TRUE,TRUE,FALSE,FALSE,FALSE)),
-  !a$kp_keep[3],a$rounding_filter_keep[3],
-  sensitivity$coverage$n_omitted_straddling_cutoff==4,
-  sensitivity$coverage$n_retained_rounding_ambiguity==2,
-  all(sensitivity$rounding_risks$n_potential_significance_switch[
-    sensitivity$rounding_risks$method=="rounding_ambiguity"]==0))
-expected_lo <- pmax(0,abs(ambiguous$yi)-.5*10^(-a$reported_yi_decimals))/
-  (sqrt(ambiguous$vi)+.5*10^(-a$rounding_filter_sigma_decimals))
-expected_hi <- (abs(ambiguous$yi)+.5*10^(-a$reported_yi_decimals))/
-  pmax(0,sqrt(ambiguous$vi)-.5*10^(-a$rounding_filter_sigma_decimals))
-stopifnot(max(abs(a$rounding_filter_abs_z_lower-expected_lo))<1e-12,
-  max(abs(a$rounding_filter_abs_z_upper-expected_hi))<1e-12,
-  prepare_rounding_ambiguity_filter(a,cutoff=a$rounding_filter_abs_z_upper[2])$
-    rounding_filter_straddles_cutoff[2],
-  !prepare_rounding_ambiguity_filter(a,cutoff=a$rounding_filter_abs_z_lower[3])$
-    rounding_filter_straddles_cutoff[3])
 
 ## Read precision from workbook entries/formatting, including trailing zeros,
 ## instead of using the digits of computed sqrt(vi) or formatted R doubles.
@@ -201,14 +170,17 @@ folder <- tempfile("caliper-adjusted-")
 save_caliper_analysis(adjusted,folder)
 saved <- openxlsx::read.xlsx(file.path(folder,"caliper_tests.xlsx"),sheet="Results")
 plots <- make_caliper_plots(adjusted)
-stopifnot(nrow(saved)==12L,length(plots)==6L,
-  nrow(openxlsx::read.xlsx(file.path(folder,"caliper_rounding_risks.xlsx"),sheet="Results"))==12L,
-  sum(plots[[1]]$data$count)==4L,sum(plots[[3]]$data$count)==4L,
-  sum(plots[[5]]$data$count)==adjusted$tests$n_window[
-    adjusted$tests$method=="rounding_ambiguity" & adjusted$tests$half_width==.2],
-  identical(plots[[2]]$coordinates$limits$y,c(.45,.65)),
+stopifnot(nrow(saved)==8L,length(plots)==4L,
+  nrow(openxlsx::read.xlsx(file.path(folder,"caliper_rounding_risks.xlsx"),sheet="Results"))==8L,
+  sum(plots[[1]]$data$count)==4L,sum(plots[[2]]$data$count)==4L,
+  identical(plots[[1]]$labels$title,"Full empirical sample"),
+  identical(plots[[2]]$labels$title,"Kranz-Pütz adjustment"),
+  is.null(plots[[3]]$labels$title),is.null(plots[[4]]$labels$title),
+  is.null(plots[[3]]$labels$subtitle),is.null(plots[[4]]$labels$subtitle),
+  identical(plots[[3]]$coordinates$limits$y,c(.45,.65)),
   identical(plots[[4]]$coordinates$limits$y,c(.45,.65)),
-  identical(plots[[6]]$coordinates$limits$y,c(.45,.65)),
   !any(grepl("p_value|binom|holm|cluster_ci",names(saved))))
 unlink(folder,recursive=TRUE)
-cat("PASS: conditional KP omissions, retained nonmatches, independent min-precision cutoff filter, original thresholds, bootstrap and six-panel Figure S6.\n")
+stopifnot(setequal(adjusted$tests$method,c("empirical","kranz_puetz")),
+  !any(grepl("rounding_filter_",names(adjusted$audit))))
+cat("PASS: conditional KP omissions, retained nonmatches, unchanged bootstrap and two sample columns in Figure S2.\n")

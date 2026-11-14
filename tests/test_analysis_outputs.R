@@ -36,7 +36,7 @@ for (h in c(0, .25, .5, .75)) {
             max(abs(c(rows$ci_lower[15], rows$ci_upper[15]) - quantile(bootstrap_sig, c(.025,.975)))) < 1e-12,
             all(rows$estimate[16:17] == c(rows$n_meta_analyses[1], rows$n_effects[1])))
 }
-esr <- readRDS("data/derived_data/Figure_S5_inputs.rds")$all_esr_results
+esr <- readRDS("data/derived_data/Figure_S6_inputs.rds")$all_esr_results
 stopifnot(setequal(unique(esr$meta_average_multiplier), c(.25, .5, .75, 1)))
 
 power <- lapply(c(.5, .75, 1), function(m) {

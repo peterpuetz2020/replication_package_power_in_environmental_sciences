@@ -18,4 +18,4 @@ data/derived_data/*
 # or tex files, but do not commit or move them through Git.
 results/**/*.svg
 results/**/*.tex
-!results/supplement/Figure_S6.svg
+!results/supplement/Figure_S2.svg

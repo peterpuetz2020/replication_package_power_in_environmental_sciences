@@ -1,4 +1,4 @@
-## Integration checks after fitting WAAP and rebuilding Figure S5.
+## Integration checks after fitting WAAP and rebuilding Figure S6.
 source("scripts/functions.R")
 summary <- openxlsx::read.xlsx("data/derived_data/WAAP_WLS_estimates.xlsx",sheet="Estimates")
 stopifnot(!anyDuplicated(paste(summary$cID,summary$variant)))
@@ -20,7 +20,7 @@ for (variant in c("outliers_removed","all_data")) {
       max(abs(d$GE-weighted.mean(d$yi[keep],1/d$vi[keep])))<1e-9)
   }
 }
-rows <- readRDS("data/derived_data/Figure_S5_inputs.rds")$all_esr_results
+rows <- readRDS("data/derived_data/Figure_S6_inputs.rds")$all_esr_results
 waap <- subset(rows,estimator=="waap_wls" & measure=="ESR_{0.05}^{sig}")
 stopifnot(nrow(waap)==4L,setequal(waap$meta_average_multiplier,c(.25,.5,.75,1)),
   all(waap$heterogeneity_multiplier==0),

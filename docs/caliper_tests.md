@@ -1,8 +1,8 @@
-# Empirical calipers and Figure S6
+# Empirical calipers and Figure S2
 
 The standard workflow computes caliper diagnostics in
 `scripts/create_analysis_data.R`, using shared functions in `scripts/functions.R`.
-`scripts/create_supplement_tables_and_figures.R` renders **Figure S6**. Running
+`scripts/create_supplement_tables_and_figures.R` renders **Figure S2**. Running
 `scripts/main.R` runs both stages. There is no separate caliper analysis script.
 
 The full empirical sample uses every valid observed row of `data/MasterData.xlsx`,
@@ -102,47 +102,6 @@ requires reporting precision not to be systematically related to the underlying
 z distribution. Observed `yi/sqrt(vi)` values are unchanged; no random derounding
 or simulated replacements are used.
 
-## Separate rounding-ambiguity sensitivity
-
-The third Figure S6 row starts independently from the **full valid sample**.
-It does not first apply the KP omissions and does not require equal coefficient/
-SE precision. For every observation, including matches and nonmatches, use
-
-```r
-mu.dec <- reported_yi_decimals
-sigma.dec <- min(reported_vi_decimals, reported_sei_decimals)
-```
-
-As above, `sigma.dec` is applied on the SE scale centered at `sqrt(vi)`. The
-coefficient is centered at `abs(yi)`. `RoundingMatters::min.max.z()` gives the
-possible ratio bounds, which are converted to absolute z bounds. Let `L` and
-`U` denote those lower and upper absolute bounds. Remove the observation when
-
-```r
-L < qnorm(0.975) & U >= qnorm(0.975)
-```
-
-Both endpoints of the rounding intervals are considered. A value exactly at the
-cutoff belongs to the above-cutoff side, consistently with the calipers. An
-interval entirely below the cutoff, or entirely at/above it, is retained. No
-additional restriction on possible caliper-window membership is imposed.
-
-The `rounding_filter_*` audit columns record this calculation separately from
-KP: `sigma_decimals`, `precision_known`, `abs_z_lower`, `abs_z_upper`,
-`straddles_cutoff`, `keep` and `status`. In contrast, `rounding_abs_z_*` uses the
-KP matching/fallback precision convention described above. For the new filter,
-`status` is `omitted_straddles_cutoff`, `retained_one_side`,
-`retained_unknown_precision` or `invalid_observation`. Missing precision in one
-of vi/sei uses the other available count. Without usable precision the
-observation remains unchanged and is flagged; it is not claimed to have a
-certain classification.
-
-This is a separate sensitivity analysis of rounding ambiguity, rather than the
-published KP omission rule. Removing observations based on whether their bounds
-cross the significance cutoff can itself change the local distribution and
-caliper shares; the filtered result is not a corrected estimate of publication
-bias.
-
 ## Caliper estimates and intervals
 
 The cutoff is `qnorm(0.975)`, consistent with the main workflow's two-sided
@@ -152,8 +111,7 @@ The point estimate is the observed above-cutoff count divided by the observed
 window count. Each estimate has equal weight, so this is a test-level share,
 not an equal-weighted mean of article shares or a mean of bootstrap estimates.
 
-Only pooled calipers are calculated, separately for the full, KP-adjusted and rounding-ambiguity
-samples, without p-values. Confidence intervals are
+Only pooled calipers are calculated, separately for the full and KP-adjusted samples, without p-values. Confidence intervals are
 **pointwise 95% article-cluster bootstrap percentile intervals**, using **1,000
 resamples** and seed **20261107**. Whole `metaID` articles are resampled, including
 those with no observations in a window. Each draw recomputes its own numerator
@@ -168,34 +126,34 @@ than density continuity; a caliper imbalance is not proof of publication bias.
 
 Derived outputs are stored under `data/derived_data/`:
 
-- `caliper_tests.xlsx`: twelve pooled rows (three samples × four half-widths) of
+- `caliper_tests.xlsx`: eight pooled rows (two samples × four half-widths) of
   counts, observed shares, bootstrap bounds, `n_retained` (total sample size
   before window restriction) and `n_omitted` (removed from the valid sample),
   with a `Notes` sheet describing the calculation;
 - `caliper_coverage.xlsx`: input, valid/excluded and article counts, plus known/
   unknown reporting precision, matching/no-match eligibility, counts of
   sei-only, vi-only and both matches, counts retained after KP or without
-  applying KP, KP omission counts and rounding-ambiguity omission/retention
-  counts;
+  applying KP, and KP omission counts;
 - `caliper_rounding_risks.xlsx`: possible significance switches and uncertain
   window membership under the package bounds, counted over each entire sample
   rather than just its observed window members; `precision_basis` identifies
   the bounds convention used by each method. These are not confirmed errors;
 - `caliper_analysis.rds`: the results, settings and row audit, including original
   entries, decimal counts, precision sources, ratio bounds, SE significands,
-  match source, `kp_rule_applied`, KP inclusion/status, and the separate
-  `rounding_filter_*` bounds and inclusion/status.
+  match source, `kp_rule_applied`, and KP inclusion/status.
 
-Figure S6 is saved as PDF and SVG under `results/supplement/`. It has a two-column,
-three-row layout: full sample, KP-adjusted sample, then the independent
-rounding-ambiguity sample. The KP sample retains nonmatching observations
-unchanged. The left panels show histograms within the largest caliper, on shared
-x/y scales; the
-right panels show observed caliper shares and their bootstrap intervals. Each
-x-axis tick gives `(n = ...)` for that window. The caliper y range is 0.45–0.65;
-complete interval bounds are retained in the workbook when this zoom clips a
-tail. The calculation remains integrated into the main workflow, with numeric
-workbooks in derived data rather than a separate results directory.
+Figure S2 is saved as PDF and SVG under `results/supplement/`. Its two columns
+are **Full empirical sample** and **Kranz–Pütz adjustment**, with one title per
+column. Histograms are above the corresponding caliper estimates. Both
+histograms use the same bins and x/y scales within the largest caliper.
+The caliper panels have no titles or subtitles; a shared figure caption
+identifies the 95% article-cluster bootstrap percentile intervals and the number
+of resamples. Each x-axis tick gives `(n = ...)` for that window. The caliper y
+range is 0.45–0.65; complete interval bounds are retained in the workbook when
+this zoom clips a tail. Only the full sample and KP-adjusted sample are calculated.
+
+Figures S3–S5 show counterfactual sensitivities at multipliers 0.25, 0.75 and 1;
+Figure S6 compares the meta-analytic estimators.
 
 Shared helpers also accept directly supplied z values, or t values with actual
 degrees of freedom (`statistic_col`, `df_col`); t values are transformed to
@@ -210,5 +168,5 @@ bootstrap percentiles, unchanged numeric values, t calibration, invalid rows,
 Excel precision extraction, unequal-precision ratio bounds, unchanged original
 36/37 omission boundary, matches through sei or vi independently, unknown
 precision in the nonmatching input, retention of nonmatches and unknown
-precision, independent minimum-precision ambiguity filtering, cutoff ties,
-option preservation, derived-data handoff and the six-panel figure.
+precision, option preservation, derived-data handoff and the two sample columns
+in Figure S2.

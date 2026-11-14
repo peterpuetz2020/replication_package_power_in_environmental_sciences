@@ -557,47 +557,66 @@ heterogeneity_plot <- ggplot() +
 save_supplement_plot(file.path(supplement_dir, "Figure_S1"),
               10.5, 5.25, function() print(heterogeneity_plot))
 
-## Figures S2-S4: Figure 1 sensitivity analyses, ordered by multiplier.
-write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 2)
-write_counterfactual_figure(meta_multiplier = 0.75, figure_number = 3)
-write_counterfactual_figure(meta_multiplier = 1, figure_number = 4)
+## Figure S2: full-sample and KP calipers, with one title per sample column.
+caliper_inputs_path <- here("data", "derived_data", "caliper_analysis.rds")
+if (!file.exists(caliper_inputs_path)) {
+  stop("Figure S2 inputs are unavailable. Run create_analysis_data.R first.")
+}
+caliper_analysis <- readRDS(caliper_inputs_path)
+save_supplement_plot(
+  file.path(supplement_dir, "Figure_S2"), width = 10, height = 8,
+  draw = function() gridExtra::grid.arrange(
+    grobs = make_caliper_plots(caliper_analysis, supplement_font_size), ncol = 2,
+    bottom = grid::textGrob(
+      paste0("95% article-cluster bootstrap percentile CIs; ",
+        format(caliper_analysis$settings$bootstrap_iterations,big.mark=",",trim=TRUE),
+        " resamples"),
+      gp = grid::gpar(fontsize=supplement_font_size)
+    )
+  )
+)
 
-## Figure S5: excess-significance estimates across all analysis setups. The
+## Figures S3-S5: Figure 1 sensitivity analyses, ordered by multiplier.
+write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 3)
+write_counterfactual_figure(meta_multiplier = 0.75, figure_number = 4)
+write_counterfactual_figure(meta_multiplier = 1, figure_number = 5)
+
+## Figure S6: excess-significance estimates across all analysis setups. The
 ## estimates are calculated with Table 2 in create_tables_and_figures.R, while
 ## all supplementary output is deliberately written here.
 if (!exists("all_combination_results") || !exists("all_esr_results")) {
-  figure_s5_inputs_path <- here(
-    "data", "derived_data", "Figure_S5_inputs.rds"
+  figure_s6_inputs_path <- here(
+    "data", "derived_data", "Figure_S6_inputs.rds"
   )
-  if (!file.exists(figure_s5_inputs_path)) {
+  if (!file.exists(figure_s6_inputs_path)) {
     stop(
-      "Figure S5 inputs are unavailable. Run create_tables_and_figures.R first ",
-      "to create ", figure_s5_inputs_path, "."
+      "Figure S6 inputs are unavailable. Run create_tables_and_figures.R first ",
+      "to create ", figure_s6_inputs_path, "."
     )
   }
-  figure_s5_inputs <- readRDS(figure_s5_inputs_path)
-  required_figure_s5_inputs <- c(
+  figure_s6_inputs <- readRDS(figure_s6_inputs_path)
+  required_figure_s6_inputs <- c(
     "all_combination_results", "all_esr_results"
   )
-  if (!all(required_figure_s5_inputs %in% names(figure_s5_inputs))) {
+  if (!all(required_figure_s6_inputs %in% names(figure_s6_inputs))) {
     stop(
-      "Figure S5 input file is incomplete. Rerun create_tables_and_figures.R ",
-      "to recreate ", figure_s5_inputs_path, "."
+      "Figure S6 input file is incomplete. Rerun create_tables_and_figures.R ",
+      "to recreate ", figure_s6_inputs_path, "."
     )
   }
-  all_combination_results <- figure_s5_inputs$all_combination_results
-  all_esr_results <- figure_s5_inputs$all_esr_results
+  all_combination_results <- figure_s6_inputs$all_combination_results
+  all_esr_results <- figure_s6_inputs$all_esr_results
 }
 if (!"waap_wls" %in% all_esr_results$estimator) {
-  stop("Figure S5 inputs lack WAAP-WLS. Run compute_meta_estimates.R and create_tables_and_figures.R first.")
+  stop("Figure S6 inputs lack WAAP-WLS. Run compute_meta_estimates.R and create_tables_and_figures.R first.")
 }
 if (any(all_esr_results$estimator %in% c("fixed_effect", "waap_wls") &
         all_esr_results$heterogeneity_multiplier != 0)) {
-  stop("Stale Figure S5 inputs: fixed effects and WAAP-WLS must use zero heterogeneity only. Rebuild the figure inputs.")
+  stop("Stale Figure S6 inputs: fixed effects and WAAP-WLS must use zero heterogeneity only. Rebuild the figure inputs.")
 }
 write.csv(
   all_combination_results,
-  file.path(derived_data_dir, "Figure_S5_numbers.csv"),
+  file.path(derived_data_dir, "Figure_S6_numbers.csv"),
   row.names = FALSE
 )
 esr_plot_data <- all_esr_results %>%
@@ -645,21 +664,8 @@ esr_plot <- ggplot(
   supplement_figure_theme() +
   theme(legend.position = "bottom")
 save_supplement_plot(
-  file.path(supplement_dir, "Figure_S5"),
+  file.path(supplement_dir, "Figure_S6"),
   width = 10, height = 8, draw = function() print(esr_plot)
-)
-
-## Figure S6: empirical, KP and rounding-ambiguity calipers; cluster bootstrap CIs.
-caliper_inputs_path <- here("data", "derived_data", "caliper_analysis.rds")
-if (!file.exists(caliper_inputs_path)) {
-  stop("Figure S6 inputs are unavailable. Run create_analysis_data.R first.")
-}
-caliper_analysis <- readRDS(caliper_inputs_path)
-save_supplement_plot(
-  file.path(supplement_dir, "Figure_S6"), width = 10, height = 12,
-  draw = function() gridExtra::grid.arrange(
-    grobs = make_caliper_plots(caliper_analysis, supplement_font_size), ncol = 2
-  )
 )
 
 ## Tables and remaining figures follow the order of the supplementary material.

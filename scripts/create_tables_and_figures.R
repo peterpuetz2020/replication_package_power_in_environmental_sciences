@@ -546,15 +546,15 @@ table_2_parameters <- tidyr::crossing(
   outlier_variant = "outliers_removed"
 )
 ## Fixed effects and WAAP-WLS do not estimate genuine heterogeneity. Include
-## both only at zero heterogeneity for each meta-average multiplier in Figure S5.
-figure_s5_zero_heterogeneity_parameters <- tidyr::crossing(
+## both only at zero heterogeneity for each meta-average multiplier in Figure S6.
+figure_s6_zero_heterogeneity_parameters <- tidyr::crossing(
   analysis_setups %>% filter(heterogeneity_multiplier == 0),
   estimator = c("fixed_effect", "waap_wls"),
   outlier_variant = "outliers_removed"
 )
 table_2_parameters <- bind_rows(
   table_2_parameters,
-  figure_s5_zero_heterogeneity_parameters
+  figure_s6_zero_heterogeneity_parameters
 )
 table_2_results <- table_2_parameters %>%
   pmap(calculate_table_2)
@@ -580,15 +580,15 @@ all_combination_results <- map2_dfr(
     ) %>% dplyr::select(-any_of(c("estimator1", "meta_average_multiplier1", "heterogeneity_multiplier1", "setup_label1", "outlier_variant1")))
   }
 )
-figure_s5_inputs_path <- here(
-  "data", "derived_data", "Figure_S5_inputs.rds"
+figure_s6_inputs_path <- here(
+  "data", "derived_data", "Figure_S6_inputs.rds"
 )
 saveRDS(
   list(
     all_combination_results = all_combination_results,
     all_esr_results = all_esr_results
   ),
-  figure_s5_inputs_path
+  figure_s6_inputs_path
 )
 
 ## Calculate only the subfield counterfactuals needed for supplementary Table

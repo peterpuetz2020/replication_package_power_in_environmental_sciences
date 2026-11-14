@@ -1,7 +1,7 @@
-# WAAP-WLS and Figure S5
+# WAAP-WLS and Figure S6
 
 WAAP-WLS is an inverse-variance weighted mean, not a multilevel model. It is
-included alongside PET–PEESE, random effects and fixed effects in Figure S5.
+included alongside PET–PEESE, random effects and fixed effects in Figure S6.
 Both WAAP-WLS and fixed effects appear **only at zero genuine heterogeneity**.
 Main-text estimator choices are unchanged.
 
@@ -45,12 +45,12 @@ cached under the ignored `data/derived_data/waap_wls/` and
 method settings. The ignored `data/derived_data/WAAP_WLS_estimates.xlsx` records means,
 CR2 standard errors, degrees of freedom, confidence intervals, adequate/selected
 counts, independent study counts, inference status and WLS fallback use.
-WAAP estimates are saved only under derived data; Figure S5 is the manuscript
+WAAP estimates are saved only under derived data; Figure S6 is the manuscript
 output displaying them. An obsolete copy of the workbook in `results/supplement/`
 is removed after the derived-data workbook has been written successfully.
-Rebuilding the standard table/figure workflow adds WAAP to Figure S5 for all
+Rebuilding the standard table/figure workflow adds WAAP to Figure S6 for all
 four meta-average multipliers at zero genuine heterogeneity only.
-The updated Figure S5 uses 1,000 article-bootstrap replications, matching the
+The updated Figure S6 uses 1,000 article-bootstrap replications, matching the
 existing figure's caches. Set `n_iterations <- 1000` before the full manuscript
 workflow for that resolution.
 
