@@ -151,11 +151,11 @@ settings, bootstrap clusters, and iteration count, so incompatible cached
 counterfactual results are rebuilt automatically.
 
 Main outputs are Tables 1–3 and Figures 1–2. The supplement contains Tables
-S1–S8 and Figures S1–S6. Tables S2–S4 and Figures S2–S4 show sensitivities at
-meta-average multipliers 0.25, 0.75 and 1. Table S6 compares counterfactual
-distributions at multipliers 0.5 and 1, using Table 2's p-value bins and
-significance overrepresentation (ESO) measures with paired article-cluster
-bootstrap intervals.
+S1–S7 and Figures S1–S6. Tables S2–S4 and Figures S2–S4 show sensitivities at
+meta-average multipliers 0.25, 0.75 and 1. Table S6 reports the number of
+meta-analyses by effect-size type and subfield. Table S7 reports the share of
+meta-analyses with an indication of small-study effects, tested using multilevel
+Egger regression.
 
 Figure S5 shows full-sample and Kranz–Pütz-adjusted calipers at half-widths
 0.05, 0.10, 0.15 and 0.20, with 1,000 article-cluster bootstrap resamples.
@@ -163,7 +163,8 @@ Caliper results and audit data are saved only in
 `data/derived_data/caliper_analysis.rds`, without XLSX exports. See
 [caliper methods](docs/caliper_tests.md).
 
-Figure S6 compares all four estimators across the four meta-average multipliers.
+Figure S6 compares significance overrepresentation (ESO) estimates from all four
+estimators across the four meta-average multipliers.
 Fixed-effects and WAAP-WLS are shown only at zero genuine heterogeneity.
 WAAP-WLS uses the same primary-study clustering and CR2/Satterthwaite inference
 as fixed effects. See [WAAP-WLS methods](docs/waap_wls.md).

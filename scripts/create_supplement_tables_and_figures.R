@@ -909,9 +909,9 @@ significant_meta <- base_half %>% distinct(cID, sig_overall) %>%
   filter(!is.na(sig_overall), sig_overall < .05) %>% pull(cID)
 table_s5 <- make_power_table(base_half %>% filter(cID %in% significant_meta))
 
-## Table S8: share of meta-analyses with small-study effects by subfield.
+## Table S7: share of meta-analyses with small-study effects by subfield.
 small_study_effects <- load_small_study_effects("meta_0p5_heterogeneity_0")
-table_s8_meta <- base_half %>%
+table_s7_meta <- base_half %>%
   dplyr::select(-any_of(c("small_study_effect_pval", "sse_yn"))) %>%
   left_join(small_study_effects, by = "cID") %>%
   group_by(cID) %>% summarise(
@@ -919,7 +919,7 @@ table_s8_meta <- base_half %>%
     small_study_effect = first(small_study_effect_pval) <= .05,
     .groups = "drop"
   )
-table_s8_detail <- table_s8_meta %>%
+table_s7_detail <- table_s7_meta %>%
   group_by(Subfield) %>%
   summarise(
     `No. of meta-analyses` = n_distinct(cID),
@@ -929,13 +929,13 @@ table_s8_detail <- table_s8_meta %>%
   mutate(Subfield = factor(Subfield, subfield_levels)) %>%
   arrange(Subfield) %>%
   mutate(Subfield = as.character(Subfield))
-table_s8 <- bind_rows(
+table_s7 <- bind_rows(
   tibble(
     Subfield = "All meta-analyses",
-    `No. of meta-analyses` = n_distinct(table_s8_meta$cID),
-    `Small-study effects (%)` = 100 * mean(table_s8_meta$small_study_effect, na.rm = TRUE)
+    `No. of meta-analyses` = n_distinct(table_s7_meta$cID),
+    `Small-study effects (%)` = 100 * mean(table_s7_meta$small_study_effect, na.rm = TRUE)
   ),
-  table_s8_detail
+  table_s7_detail
 ) %>%
   mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
 
@@ -1009,81 +1009,18 @@ heterogeneity_columns <- setdiff(names(table_s1_columns), c("Subfield", "Measure
 names(table_s1_columns)[match(heterogeneity_columns, names(table_s1_columns))] <-
   paste0(100 * as.numeric(heterogeneity_columns), "%")
 
-## Table S6: compare two simulated counterfactual distributions directly.
-## Use identical effects and article clusters for both multipliers. cf.ci.cluster
-## seeds draws by iteration ID, so matched rows are paired article bootstraps.
-comparison_results <- map_dfr(
-  sort(unique(analysis_setups$heterogeneity_multiplier)),
-  function(heterogeneity) {
-    common_data <- filter_counterfactual_data(
-      base_half, heterogeneity, context = "Table S6 counterfactual comparison"
-    )
-    scenarios <- lapply(c(0.5, 1), function(multiplier) {
-      dat <- common_data %>% mutate(GE = multiplier * GE)
-      split_data <- split(dat, dat$cID)
-      clusters <- counterfactual_meta_clusters(split_data)
-      suffix <- paste(
-        make_setup_label(multiplier, heterogeneity),
-        "multilevel_random", "outliers_removed", sep = "_"
-      )
-      grid <- counterfactual_p_grid()
-      list(
-        counts = get_counterfactual(
-          file.path(derived_data_dir, paste0("p_tab_", suffix, ".rds")),
-          split_data, grid, heterogeneity_multiplier = heterogeneity
-        ),
-        draws = get_counterfactual(
-          file.path(derived_data_dir, paste0("p_tab_ci_", suffix, ".rds")),
-          split_data, grid, ci = TRUE, cluster = clusters,
-          heterogeneity_multiplier = heterogeneity
-        )[[1]]
-      )
-    })
-    compare_counterfactual_table(
-      reference_counts = scenarios[[2]]$counts,
-      counterfactual_counts = scenarios[[1]]$counts,
-      n_effects = nrow(common_data),
-      reference_draws = scenarios[[2]]$draws,
-      counterfactual_draws = scenarios[[1]]$draws,
-      n_meta_analyses = n_distinct(common_data$cID)
-    ) %>% mutate(
-      heterogeneity_multiplier = heterogeneity,
-      n_meta_analyses = n_distinct(common_data$cID),
-      n_effects = nrow(common_data), .before = 1
-    )
-  }
-)
-write.csv(
-  comparison_results,
-  file.path(derived_data_dir, "counterfactual_comparison_0p5_vs_1.csv"),
-  row.names = FALSE
-)
-table_s6 <- comparison_results %>%
-  mutate(
-    value = if_else(
-      is.na(ci_lower), as.character(estimate),
-      paste0(round(estimate, 3), " [", round(ci_lower, 3), ", ", round(ci_upper, 3), "]")
-    ),
-    measure = factor(measure, levels = table_2_display_measures()),
-    column = table_2_column_label(0.5, heterogeneity_multiplier)
-  ) %>%
-  dplyr::select(measure, column, value) %>%
-  pivot_wider(names_from = column, values_from = value) %>%
-  arrange(measure) %>%
-  mutate(measure = as.character(measure)) %>%
-  rename(`p-value interval` = measure)
-
-## Table S7 is descriptive and therefore uses all observations rather than an
+## Table S6: effect-size counts by subfield, as in the supplied supplement.
+## This table is descriptive and therefore uses all observations rather than an
 ## estimator-specific outlier-screened sample.
-table_s7_all_data <- load_multilevel_all_data()
-table_s7 <- table_s7_all_data %>% distinct(cID, etype, subfd) %>%
+table_s6_all_data <- load_multilevel_all_data()
+table_s6 <- table_s6_all_data %>% distinct(cID, etype, subfd) %>%
   mutate(
     etype = dplyr::recode(
       etype,
-      "cohen's d"              = "Cohen's $d$",
-      "hedge's g"              = "Hedges's $g$",
-      "correlation"            = "Correlation coefficient ($r$)",
-      "fisher's z"             = "Fisher's $z$",
+      "cohen's d"              = "Cohen’s d",
+      "hedge's g"              = "Hedges’s g",
+      "correlation"            = "Correlation coefficient (r)",
+      "fisher's z"             = "Fisher’s z",
       "lnRR"                   = "Log-response ratio (lnRR)",
       "log-mean ratio"         = "Log-response ratio (lnRR)",
       "logOR"                  = "Log-odds ratio (logOR)",
@@ -1093,14 +1030,17 @@ table_s7 <- table_s7_all_data %>% distinct(cID, etype, subfd) %>%
       "mean difference"        = "Raw mean or mean difference",
       "percentage change"      = "Percentage change",
       "excess risk"            = "Excess risk",
-      "regression coefficient" = "Regression coefficient ($\\beta$)",
+      "regression coefficient" = "Regression coefficient (β)",
       "ratio"                  = "Log-response ratio (lnRR)"
     )
   ) %>%
  count(etype, subfd) %>%
   complete(etype, subfd = subfield_levels, fill = list(n = 0)) %>%
   pivot_wider(names_from = subfd, values_from = n) %>% rename(`Effect size` = etype) %>%
-  arrange(`Effect size`) %>% mutate(No. = row_number(), .before = 1)
+  arrange(`Effect size`) %>% mutate(No. = row_number(), .before = 1) %>%
+  dplyr::select(No., `Effect size`, all_of(subfield_levels)) %>%
+  rename_with(~ c("ECO", "ENC", "ENE", "HTM", "MPL", "NLC", "WST"),
+              all_of(subfield_levels))
 
 ## Emit the supplementary tables in manuscript order. Keeping the writes in one
 ## place makes the filename-to-analysis mapping explicit and prevents a later
@@ -1115,15 +1055,24 @@ write_word_table(table_s4, 4,
 write_word_table(table_s5, 5)
 write_word_table(
   table_s6, 6,
-  title = "Table S6. Simulated counterfactual p-value distributions",
+  title = "Table S6. Number of meta-analyses by effect-size type and subfield",
   note = paste(
-    "Multilevel random-effects estimates, outliers removed. Same definitions and rows as Table 2,",
-    "replacing its empirical reference by the counterfactual at 1 x meta-average.",
-    "Difference = reference (1) minus counterfactual (0.5). ESR-all divides by all effects;",
-    "ESR-sig divides by the reference distribution's significant probability.",
-    "For each heterogeneity assumption, both distributions use the same effects",
-    "and paired article-cluster bootstrap draws for the 95% confidence interval."
+    "ECO = Ecology; ENC = Environmental Chemistry; ENE = Environmental Engineering;",
+    "HTM = Health, Toxicology and Mutagenesis; MPL = Management, Monitoring, Policy and Law;",
+    "NLC = Nature and Landscape Conservation; WST = Water Science and Technology."
   )
 )
-write_word_table(table_s7, 7)
-write_word_table(table_s8, 8)
+write_word_table(
+  table_s7, 7,
+  title = "Table S7. Share of meta-analyses with an indication of small-study effects",
+  note = paste(
+    "The share of meta-analyses with an indication of small-study effects is reported.",
+    "We use a multilevel version of Egger’s regression to test for small-study effects."
+  )
+)
+
+## Remove the retired comparison export and its former extra table number.
+unlink(c(
+  file.path(derived_data_dir, "counterfactual_comparison_0p5_vs_1.csv"),
+  file.path(supplement_dir, c("Table_S8.docx", "Table_S8.tex"))
+))
