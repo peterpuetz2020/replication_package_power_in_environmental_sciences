@@ -174,4 +174,4 @@ unlink(folder,recursive=TRUE)
 stopifnot(setequal(adjusted$tests$method,c("empirical","kranz_puetz")),
   !any(grepl("rounding_filter_|rounding_abs_z_",names(adjusted$audit))),
   !"rounding_risks" %in% names(adjusted),!"group" %in% names(adjusted$tests))
-cat("PASS: conditional KP omissions, retained nonmatches, unchanged bootstrap and two sample columns in Figure S2.\n")
+cat("PASS: conditional KP omissions, retained nonmatches, unchanged bootstrap and two sample columns in Figure S5.\n")

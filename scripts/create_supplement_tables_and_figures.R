@@ -557,23 +557,23 @@ heterogeneity_plot <- ggplot() +
 save_supplement_plot(file.path(supplement_dir, "Figure_S1"),
               10.5, 5.25, function() print(heterogeneity_plot))
 
-## Figure S2: full-sample and KP calipers, with one title per sample column.
+## Figures S2-S4: Figure 1 sensitivity analyses, ordered by multiplier.
+write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 2)
+write_counterfactual_figure(meta_multiplier = 0.75, figure_number = 3)
+write_counterfactual_figure(meta_multiplier = 1, figure_number = 4)
+
+## Figure S5: full-sample and KP calipers, with one title per sample column.
 caliper_inputs_path <- here("data", "derived_data", "caliper_analysis.rds")
 if (!file.exists(caliper_inputs_path)) {
-  stop("Figure S2 inputs are unavailable. Run create_analysis_data.R first.")
+  stop("Figure S5 inputs are unavailable. Run create_analysis_data.R first.")
 }
 caliper_analysis <- readRDS(caliper_inputs_path)
 save_supplement_plot(
-  file.path(supplement_dir, "Figure_S2"), width = 10, height = 8,
+  file.path(supplement_dir, "Figure_S5"), width = 10, height = 8,
   draw = function() gridExtra::grid.arrange(
     grobs = make_caliper_plots(caliper_analysis, supplement_font_size), ncol = 2
   )
 )
-
-## Figures S3-S5: Figure 1 sensitivity analyses, ordered by multiplier.
-write_counterfactual_figure(meta_multiplier = 0.25, figure_number = 3)
-write_counterfactual_figure(meta_multiplier = 0.75, figure_number = 4)
-write_counterfactual_figure(meta_multiplier = 1, figure_number = 5)
 
 ## Figure S6: excess-significance estimates across all analysis setups. The
 ## estimates are calculated with Table 2 in create_tables_and_figures.R, while

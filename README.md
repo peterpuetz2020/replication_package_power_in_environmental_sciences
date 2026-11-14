@@ -1,8 +1,7 @@
-# Replication package: power in environmental sciences
+# Statistical Power and Statistically Significant Findings in the Environmental Sciences
 
-Replication materials for **“Low statistical power and overrepresentation of
-statistically significant findings in the environmental sciences”** by Teshome
-K. Deressa, Peter Pütz, David I. Stern, Jaco Vangronsveld, Jan Minx, Sebastien
+Replication materials for the paper by Teshome K. Deressa, Peter Pütz,
+David I. Stern, Jaco Vangronsveld, Jan Minx, Sebastien
 Lizin, Robert Malina, Stephan B. Bruns.
 
 The repository contains the input data, R environment, analysis scripts, and
@@ -143,7 +142,7 @@ Main outputs are written to `results/main/` and Supporting Information outputs
 to `results/supplement/`. Tables are produced in editable manuscript formats
 (including DOCX, TeX, or XLSX as applicable), and figures are rendered as
 scalable PDF and SVG files. PDF, DOCX and XLSX manuscript outputs are versioned.
-SVG and LaTeX exports are recreated by the scripts; Figure S2's SVG is also
+SVG and LaTeX exports are recreated by the scripts; Figure S5's SVG is also
 versioned.
 
 Setup-specific intermediate filenames contain their multiplier choices, for
@@ -152,12 +151,13 @@ settings, bootstrap clusters, and iteration count, so incompatible cached
 counterfactual results are rebuilt automatically.
 
 Main outputs are Tables 1–3 and Figures 1–2. The supplement contains Tables
-S1–S8 and Figures S1–S6. Tables S2–S4 and Figures S3–S5 show sensitivities at
+S1–S8 and Figures S1–S6. Tables S2–S4 and Figures S2–S4 show sensitivities at
 meta-average multipliers 0.25, 0.75 and 1. Table S6 compares counterfactual
-distributions at multipliers 0.5 and 1, using Table 2's p-value bins and excess
-significance measures with paired article-cluster bootstrap intervals.
+distributions at multipliers 0.5 and 1, using Table 2's p-value bins and
+significance overrepresentation (ESO) measures with paired article-cluster
+bootstrap intervals.
 
-Figure S2 shows full-sample and Kranz–Pütz-adjusted calipers at half-widths
+Figure S5 shows full-sample and Kranz–Pütz-adjusted calipers at half-widths
 0.05, 0.10, 0.15 and 0.20, with 1,000 article-cluster bootstrap resamples.
 Caliper results and audit data are saved only in
 `data/derived_data/caliper_analysis.rds`, without XLSX exports. See

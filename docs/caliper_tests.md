@@ -1,8 +1,8 @@
-# Empirical calipers and Figure S2
+# Empirical calipers and Figure S5
 
 The standard workflow computes caliper diagnostics in
 `scripts/create_analysis_data.R`, using shared functions in `scripts/functions.R`.
-`scripts/create_supplement_tables_and_figures.R` renders **Figure S2**. Running
+`scripts/create_supplement_tables_and_figures.R` renders **Figure S5**. Running
 `scripts/main.R` runs both stages.
 
 The full empirical sample uses every valid observed row of `data/MasterData.xlsx`,
@@ -85,7 +85,7 @@ The audit records the significand, match flags (`kp_matches_sei_precision`,
 `kp_matches_vi_precision`), match source (`kp_precision_match`: `sei`, `vi`,
 `both`, `none` or `unknown`), rule application and inclusion status. No interval
 bounds or rounding-risk summaries are calculated: neither is needed for the
-current KP rule or Figure S2.
+current KP rule or Figure S5.
 
 The rule follows Kranz and Pütz
 ([doi:10.1257/aer.20210121](https://doi.org/10.1257/aer.20210121)) and the authors'
@@ -130,7 +130,7 @@ Numerical results are saved only in `data/derived_data/caliper_analysis.rds`:
 
 No caliper XLSX workbooks are written.
 
-Figure S2 is saved as PDF and SVG under `results/supplement/`. Its two columns
+Figure S5 is saved as PDF and SVG under `results/supplement/`. Its two columns
 are **Full empirical sample** and **Kranz–Pütz adjustment**, with one title per
 column. Histograms are above the corresponding caliper estimates. Both
 histograms use the same bins and x/y scales within the largest caliper.
@@ -140,7 +140,7 @@ the RDS settings. Each x-axis tick gives `(n = ...)` for that window. The calipe
 range is 0.45–0.65; complete interval bounds are retained in the RDS when
 this zoom clips a tail. Only the full sample and KP-adjusted sample are calculated.
 
-Figures S3–S5 show counterfactual sensitivities at multipliers 0.25, 0.75 and 1;
+Figures S2–S4 show counterfactual sensitivities at multipliers 0.25, 0.75 and 1;
 Figure S6 compares the meta-analytic estimators.
 
 ```sh
@@ -152,4 +152,4 @@ bootstrap percentiles, unchanged numeric values, invalid rows, Excel precision
 extraction, the original 36/37 omission boundary, matches through sei or vi independently, unknown
 precision in the nonmatching input, retention of nonmatches and unknown
 precision, option preservation, derived-data handoff and the two sample columns
-in Figure S2.
+in Figure S5.
