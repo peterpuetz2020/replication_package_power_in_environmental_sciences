@@ -679,9 +679,7 @@ esr_plot <- ggplot(
   ) +
   labs(
     x = "Share of genuine heterogeneity", y = expression(ESO[0.05]^sig),
-    color = "Estimator",
-    caption = "Fixed-effects and WAAP-WLS are shown only for zero genuine heterogeneity."
-  ) +
+    color = "Estimator") +
   supplement_figure_theme() +
   theme(legend.position = "bottom")
 save_supplement_plot(
