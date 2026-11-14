@@ -36,14 +36,14 @@ source("scripts/main.R")
 `main.R` performs the steps in dependency order:
 
 1. optionally recreates the subfield classifications;
-2. fits fixed-effects, PET-PEESE, WAAP-WLS and multilevel random-effects estimates when their derived
-   RDS inputs are missing;
+2. fits fixed-effects, PET-PEESE, WAAP-WLS and multilevel random-effects estimates
+   when their derived RDS inputs are missing;
 3. creates setup-specific analysis data and counterfactual simulations;
 4. writes the main and supplementary tables and figures.
 
-The supplied meta-estimate RDS files make refitting optional. To rerun that
-long stage, set `run_meta_analysis_fitting <- TRUE`; completed meta-analyses are
-cached individually so an interrupted fit can resume.
+Supplied meta-estimate RDS files and fitting caches are reused when available.
+To rerun model fitting, set `run_meta_analysis_fitting <- TRUE`; completed
+meta-analyses are cached individually so an interrupted fit can resume.
 
 ### Force a complete rebuild
 
@@ -81,8 +81,8 @@ Define options before sourcing `scripts/main.R` or
 
 | Option | Default | Purpose |
 |---|---:|---|
-| `n_cores` | `6` | Parallel workers. Leave at least one CPU core free. |
-| `n_iterations` | `1000` | Bootstrap iterations for confidence intervals. |
+| `n_cores` | `3` | Parallel workers. Leave at least one CPU core free. |
+| `n_iterations` | `100` | Counterfactual bootstrap iterations for confidence intervals. |
 | `meta_average_multiplier` | `c(0.25, 0.5, 0.75, 1)` | Multipliers applied to the meta-analytic average in power calculations. |
 | `heterogeneity_multiplier` | `c(0, 0.25, 0.5, 0.75)` | Multipliers applied to between-effect heterogeneity in counterfactual calculations. |
 | `run_classification` | `FALSE` | Recreate the classification CSV files. |
@@ -102,9 +102,6 @@ source("scripts/main.R")
 
 Use `n_iterations <- 1000` for the manuscript results. Both multiplier options
 accept vectors; the data-creation workflow evaluates every combination.
-Custom setup names can be supplied through an `analysis_setups` data frame with
-`meta_average_multiplier`, `heterogeneity_multiplier`, and unique `setup_label`
-columns.
 
 To reproduce all main-text outputs, retain the manuscript’s `0.5` meta-average 
 setups with heterogeneity multipliers `0` and `0.5`.
@@ -124,7 +121,7 @@ scripts/
   analysis_setup.R                        packages, settings, and shared setup
   runtime_settings.R                      handling of option defaults
   classification.R                        optional classification recreation
-  compute_meta_estimates.R                fixed-effects, PET-PEESE, WAAP-WLS and random-effects fitting
+  compute_meta_estimates.R                fixed-effects, PET-PEESE, WAAP-WLS and RE fitting
   create_analysis_data.R                  setup-specific derived data
   create_tables_and_figures.R             main manuscript outputs
   create_supplement_tables_and_figures.R  supplementary outputs
@@ -145,91 +142,28 @@ other derived files are ignored and recreated as needed.
 Main outputs are written to `results/main/` and Supporting Information outputs
 to `results/supplement/`. Tables are produced in editable manuscript formats
 (including DOCX, TeX, or XLSX as applicable), and figures are rendered as
-scalable PDF and SVG files. PDF, DOCX and XLSX manuscript outputs are versioned;
-SVG and LaTeX files are ignored by Git and recreated by the scripts.
+scalable PDF and SVG files. PDF, DOCX and XLSX manuscript outputs are versioned.
+SVG and LaTeX exports are recreated by the scripts; Figure S2's SVG is also
+versioned.
 
 Setup-specific intermediate filenames contain their multiplier choices, for
 example `meta_0p5_heterogeneity_0p25`. Cache keys include the data, grid,
 settings, bootstrap clusters, and iteration count, so incompatible cached
 counterfactual results are rebuilt automatically.
 
-## Current output numbering
+Main outputs are Tables 1–3 and Figures 1–2. The supplement contains Tables
+S1–S8 and Figures S1–S6. Tables S2–S4 and Figures S3–S5 show sensitivities at
+meta-average multipliers 0.25, 0.75 and 1. Table S6 compares counterfactual
+distributions at multipliers 0.5 and 1, using Table 2's p-value bins and excess
+significance measures with paired article-cluster bootstrap intervals.
 
-The exploratory negative-binomial/OLS regressions, their input workbooks,
-main Table 4, and their supplementary tables and diagnostic figures have been
-removed. PET-PEESE and Egger small-study-effect tests remain part of the
-meta-analysis methods.
+Figure S2 shows full-sample and Kranz–Pütz-adjusted calipers at half-widths
+0.05, 0.10, 0.15 and 0.20, with 1,000 article-cluster bootstrap resamples.
+Caliper results and audit data are saved only in
+`data/derived_data/caliper_analysis.rds`, without XLSX exports. See
+[caliper methods](docs/caliper_tests.md).
 
-The default analysis evaluates **16 parameter combinations**: meta-average
-multipliers 0.25, 0.5, 0.75 and 1, crossed with four heterogeneity multipliers.
-Figure S6 includes all four meta-average values in a two-column, two-row layout. Main Tables 1–3 and Figures
-1–2 retain the manuscript's half-meta-average specification.
-
-Figure S6 additionally includes WAAP-WLS, with primary-study clustering and the
-same CR2/Satterthwaite correction as fixed effects. Both estimators are shown
-only at zero genuine heterogeneity; neither borrows random-effects variance estimates. See
-[WAAP-WLS estimation details](docs/waap_wls.md). All WAAP estimates and fitting
-summaries are saved under `data/derived_data/`; Figure S6 displays the results.
-
-| Supplement output | Contents |
-|---|---|
-| Table S1 | Excess significance by subfield |
-| Tables S2–S4 | Power summaries at meta-average multipliers 0.25, 0.75, 1 |
-| Table S5 | Power after excluding non-significant meta-analyses |
-| Table S6 | Counterfactual p-value distributions at multipliers 0.5 versus 1 |
-| Table S7 | Effect-size measures by subfield |
-| Table S8 | Small-study effects by subfield |
-| Figure S1 | Heterogeneity distributions |
-| Figure S2 | Full empirical sample and KP-adjusted calipers, arranged as columns |
-| Figures S3–S5 | Counterfactual sensitivities at multipliers 0.25, 0.75, 1 |
-| Figure S6 | ESR comparisons for all four multipliers, arranged in two columns |
-
-Table S6 has exactly Table 2's layout: 13 p-value-bin rows, the two
-`ESR_0.05` measures (among all results and among significant results), and
-meta-analysis/test sample sizes, with genuine heterogeneity as columns.
-It retains the 0.5 counterfactual and replaces Table 2's empirical reference
-with the counterfactual at multiplier 1. Bin differences are therefore
-**reference (1) minus counterfactual (0.5)**. If `q_m` is the counterfactual
-probability of `p < 0.05` at multiplier `m`, the ESR rows are
-`ESR_all = q_1 - q_0.5` and `ESR_sig = (q_1 - q_0.5) / q_1`.
-
-Both distributions use identical valid effects and paired article-cluster
-bootstrap draws. Each significant-result ESR draw uses its own reference
-significant probability as denominator. The table reports estimates and
-95% percentile intervals, matching Table 2's formatting. Full-precision rows,
-including both counterfactual values and sample sizes, are saved to
-`data/derived_data/counterfactual_comparison_0p5_vs_1.csv`.
-
-Tables are written as DOCX and LaTeX, and figures as PDF and SVG. Use 1,000
-bootstrap iterations for final manuscript outputs. A quick numerical check is:
-
-```sh
-Rscript tests/test_counterfactual_comparison.R
-```
-
-`tests/test_bootstrap_parallel.R` checks that sequential, parallel and batched
-execution preserve the same bootstrap draws. After a default analysis run,
-`tests/test_analysis_outputs.R` checks the 16-setup output inventory and verifies
-Table S6's intervals against the paired counterfactual caches.
-This output check defaults to 1,000 iterations; pass an exploratory run's
-iteration count as its first argument when checking a smaller run.
-
-## Empirical calipers and Figure S2
-
-The standard data-preparation and supplementary-rendering stages now compute
-and plot full empirical and Kranz–Pütz calipers as Figure S2. The
-omission calculation uses `RoundingMatters` with coefficient precision from
-`yi`. An observation is eligible when its reported `yi` decimal count equals
-the reported count of **either `sei` or `vi`**. The matching count supplies SE
-precision for the unchanged SE-significand rule `s >= 37`. **Only matched
-observations that fail this rule are omitted.** Nonmatching observations and
-observations with unknown precision remain unchanged in the adjusted sample.
-The figure uses one column per sample, with histograms above caliper estimates,
-one title per column and no bottom caption or legend. The full empirical
-sample retains all valid observed estimates. Half-widths are 0.05,
-0.10, 0.15 and 0.20; only cluster-bootstrap percentile intervals from 1,000
-article resamples are computed, without p-values. Numerical results and the
-row audit are saved only in `data/derived_data/caliper_analysis.rds`, without
-caliper XLSX outputs; Figure S2 is saved as PDF and SVG
-under `results/supplement/`.
-See [the method and output descriptions](docs/caliper_tests.md).
+Figure S6 compares all four estimators across the four meta-average multipliers.
+Fixed-effects and WAAP-WLS are shown only at zero genuine heterogeneity.
+WAAP-WLS uses the same primary-study clustering and CR2/Satterthwaite inference
+as fixed effects. See [WAAP-WLS methods](docs/waap_wls.md).

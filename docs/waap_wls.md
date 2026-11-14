@@ -3,7 +3,6 @@
 WAAP-WLS is an inverse-variance weighted mean, not a multilevel model. It is
 included alongside PET–PEESE, random effects and fixed effects in Figure S6.
 Both WAAP-WLS and fixed effects appear **only at zero genuine heterogeneity**.
-Main-text estimator choices are unchanged.
 
 For every `cID` and both shared samples (all data and the existing RE outlier
 screen), the estimator first calculates the full-sample inverse-variance mean.
@@ -38,21 +37,15 @@ Rscript scripts/compute_meta_estimates.R
 
 `scripts/main.R` runs the common fitting stage automatically. When the other
 estimator inputs already exist, it uses the same script in its cached-input
-mode to update WAAP without refitting the other models. There is no separate
-WAAP calculation script. Individual results are
+mode to update WAAP without refitting the other models. Individual results are
 cached under the ignored `data/derived_data/waap_wls/` and
 `waap_wls_all_data/` directories; each cache includes its source-file hash and
 method settings. The ignored `data/derived_data/WAAP_WLS_estimates.xlsx` records means,
 CR2 standard errors, degrees of freedom, confidence intervals, adequate/selected
 counts, independent study counts, inference status and WLS fallback use.
 WAAP estimates are saved only under derived data; Figure S6 is the manuscript
-output displaying them. An obsolete copy of the workbook in `results/supplement/`
-is removed after the derived-data workbook has been written successfully.
-Rebuilding the standard table/figure workflow adds WAAP to Figure S6 for all
-four meta-average multipliers at zero genuine heterogeneity only.
-The updated Figure S6 uses 1,000 article-bootstrap replications, matching the
-existing figure's caches. Set `n_iterations <- 1000` before the full manuscript
-workflow for that resolution.
+output displaying them. Set `n_iterations <- 1000` before the manuscript
+workflow for 1,000 article-cluster bootstrap replications of the ESR intervals.
 
 ```sh
 Rscript tests/test_waap_wls.R
