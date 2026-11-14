@@ -50,6 +50,9 @@ read_word_table <- function(path) {
 }
 effect_sizes <- read_word_table("results/supplement/Table_S6.docx")
 small_studies <- read_word_table("results/supplement/Table_S7.docx")
+subfield_significance <- read_word_table("results/supplement/Table_S1.docx")
+stopifnot(any(grepl("^ESO", subfield_significance[, 2])),
+          !any(grepl("ESR", subfield_significance, fixed = TRUE)))
 stopifnot(
   identical(dim(effect_sizes), c(13L, 9L)),
   identical(effect_sizes[1, ], c("No.", "Effect size", "ECO", "ENC", "ENE", "HTM", "MPL", "NLC", "WST")),

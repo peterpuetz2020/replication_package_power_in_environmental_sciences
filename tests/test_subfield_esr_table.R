@@ -43,11 +43,15 @@ for (heterogeneity in list(c(.25, .5, .75), c(0, .25, .5, .75), .5, c(.125, .5))
   word <- do.call(rbind, lapply(word_rows, function(row) {
     xml2::xml_text(xml2::xml_find_all(row, "./w:tc"))
   }))
+  expected_word <- table_s1_columns
+  expected_word$Measure <- sub("^ESR", "ESO", expected_word$Measure)
   stopifnot(ncol(word) == 2 + length(heterogeneity),
     identical(as.character(word[1, ]), names(table_s1_columns)),
-    all(unname(word[-1, ]) == unname(as.matrix(table_s1_columns))))
+    all(unname(word[-1, ]) == unname(as.matrix(expected_word))))
   latex <- readLines(file.path(supplement_dir, "Table_S1.tex"))
-  stopifnot(any(grepl(paste0("*{", length(heterogeneity), "}{"), latex, fixed = TRUE)),
+  stopifnot(any(grepl("\\mathrm{ESO}", latex, fixed = TRUE)),
+    !any(grepl("ESR", latex, fixed = TRUE)),
+    any(grepl(paste0("*{", length(heterogeneity), "}{"), latex, fixed = TRUE)),
     any(grepl(paste0("\\multicolumn{", length(heterogeneity), "}{c}{Genuine heterogeneity}"), latex, fixed = TRUE)),
     any(grepl(paste0("\\cmidrule(lr){3-", length(heterogeneity) + 2L, "}"), latex, fixed = TRUE)),
     any(grepl(paste0("Subfield & Measure & ", paste(paste0(100 * sort(heterogeneity), "\\%"), collapse = " & ")),

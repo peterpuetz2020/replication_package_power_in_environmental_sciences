@@ -678,7 +678,7 @@ esr_plot <- ggplot(
     )
   ) +
   labs(
-    x = "Share of genuine heterogeneity", y = expression(ESR[0.05]^sig),
+    x = "Share of genuine heterogeneity", y = expression(ESO[0.05]^sig),
     color = "Estimator",
     caption = "Fixed-effects and WAAP-WLS are shown only for zero genuine heterogeneity."
   ) +
@@ -695,15 +695,15 @@ library(officer)
 
 
 write_word_table <- function(x, number, alignment = NULL, title = NULL, note = NULL,
-                             latex_data = x) {
+                             word_data = x) {
   if (is.null(alignment)) alignment <- c("left", rep("center", ncol(x) - 1))
   doc <- officer::read_docx()
   if (!is.null(title)) doc <- officer::body_add_par(doc, title, style = "heading 1")
-  doc <- officer::body_add_table(doc, x, style = NULL, header = TRUE,
+  doc <- officer::body_add_table(doc, word_data, style = NULL, header = TRUE,
     alignment = alignment, align_table = "center")
   if (!is.null(note)) doc <- officer::body_add_par(doc, note)
   print(doc, target = file.path(supplement_dir, paste0("Table_S", number, ".docx")))
-  write_latex_table(latex_data, file.path(supplement_dir, paste0("Table_S", number, ".tex")))
+  write_latex_table(x, file.path(supplement_dir, paste0("Table_S", number, ".tex")))
 }
 
 write_subfield_esr_table <- function(x, number, alignment = NULL) {
@@ -724,11 +724,13 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
     alignment <- c("left", rep("center", ncol(x) - 1))
   }
 
+  word_data <- x
+  word_data$Measure <- sub("^ESR", "ESO", word_data$Measure)
   doc <- officer::read_docx()
 
   doc <- officer::body_add_table(
     doc,
-    x,
+    word_data,
     style = NULL,
     header = TRUE,
     alignment = alignment,
@@ -821,12 +823,12 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
     s_latex <- latex_escape(s)
 
 
-    # ESR row
+    # ESO row
     row1 <- paste0(
       "\\multirow[t]{3}{0.13\\textwidth}{\\RaggedRight ",
       s_latex,
       "} & ",
-      "$\\mathrm{ESR}_{0.05}^{\\mathrm{sig}}$",
+      "$\\mathrm{ESO}_{0.05}^{\\mathrm{sig}}$",
       " & ", paste(unlist(esr[heterogeneity_columns], use.names = FALSE), collapse = " & "),
       " \\\\"
     )
@@ -1038,10 +1040,10 @@ table_s6 <- table_s6_all_data %>% distinct(cID, etype, subfd) %>%
   mutate(
     etype = dplyr::recode(
       etype,
-      "cohen's d"              = "Cohen’s d",
-      "hedge's g"              = "Hedges’s g",
-      "correlation"            = "Correlation coefficient (r)",
-      "fisher's z"             = "Fisher’s z",
+      "cohen's d"              = "Cohen's $d$",
+      "hedge's g"              = "Hedges's $g$",
+      "correlation"            = "Correlation coefficient ($r$)",
+      "fisher's z"             = "Fisher's $z$",
       "lnRR"                   = "Log-response ratio (lnRR)",
       "log-mean ratio"         = "Log-response ratio (lnRR)",
       "logOR"                  = "Log-odds ratio (logOR)",
@@ -1051,7 +1053,7 @@ table_s6 <- table_s6_all_data %>% distinct(cID, etype, subfd) %>%
       "mean difference"        = "Raw mean or mean difference",
       "percentage change"      = "Percentage change",
       "excess risk"            = "Excess risk",
-      "regression coefficient" = "Regression coefficient (β)",
+      "regression coefficient" = "Regression coefficient ($\\beta$)",
       "ratio"                  = "Log-response ratio (lnRR)"
     )
   ) %>%
@@ -1082,14 +1084,14 @@ write_word_table(
     "HTM = Health, Toxicology and Mutagenesis; MPL = Management, Monitoring, Policy and Law;",
     "NLC = Nature and Landscape Conservation; WST = Water Science and Technology."
   ),
-  latex_data = table_s6 %>% mutate(
+  word_data = table_s6 %>% mutate(
     `Effect size` = dplyr::recode(
       `Effect size`,
-      "Cohen’s d" = "Cohen's $d$",
-      "Correlation coefficient (r)" = "Correlation coefficient ($r$)",
-      "Fisher’s z" = "Fisher's $z$",
-      "Hedges’s g" = "Hedges's $g$",
-      "Regression coefficient (β)" = "Regression coefficient ($\\beta$)"
+      "Cohen's $d$" = "Cohen’s d",
+      "Correlation coefficient ($r$)" = "Correlation coefficient (r)",
+      "Fisher's $z$" = "Fisher’s z",
+      "Hedges's $g$" = "Hedges’s g",
+      "Regression coefficient ($\\beta$)" = "Regression coefficient (β)"
     )
   )
 )
