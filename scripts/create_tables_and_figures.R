@@ -597,7 +597,7 @@ saveRDS(
 )
 
 ## Calculate only the subfield counterfactuals needed for supplementary Table
-## S1: half the meta-average, the four heterogeneity specifications, and the
+## S1: half the meta-average, the configured heterogeneity specifications, and the
 ## primary multilevel random-effects estimator. These use distinct cache names,
 ## so no full-sample counterfactual can be reused.
 subfield_levels <- c(

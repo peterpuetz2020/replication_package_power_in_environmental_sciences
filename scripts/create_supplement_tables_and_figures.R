@@ -686,6 +686,14 @@ write_word_table <- function(x, number, alignment = NULL, title = NULL, note = N
 }
 
 write_subfield_esr_table <- function(x, number, alignment = NULL) {
+  if (!all(c("Subfield", "Measure") %in% names(x))) {
+    stop("Subfield ESR tables require Subfield and Measure columns.")
+  }
+  heterogeneity_columns <- setdiff(names(x), c("Subfield", "Measure"))
+  n_heterogeneity <- length(heterogeneity_columns)
+  if (n_heterogeneity == 0L) {
+    stop("Subfield ESR tables require at least one heterogeneity specification.")
+  }
 
   # ============================================================
   # 1. WORD VERSION
@@ -731,13 +739,13 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
     "  @{}",
     "  >{\\RaggedRight\\arraybackslash}p{0.13\\textwidth}",
     "  >{\\RaggedRight\\arraybackslash}p{0.145\\textwidth}",
-    "  *{4}{>{\\centering\\arraybackslash}X}",
+    paste0("  *{", n_heterogeneity, "}{>{\\centering\\arraybackslash}X}"),
     "  @{}",
     "}",
     "\\toprule",
-    "& & \\multicolumn{4}{c}{Genuine heterogeneity} \\\\",
-    "\\cmidrule(lr){3-6}",
-    "Subfield & Measure & 0\\% & 25\\% & 50\\% & 75\\% \\\\",
+    paste0("& & \\multicolumn{", n_heterogeneity, "}{c}{Genuine heterogeneity} \\\\"),
+    paste0("\\cmidrule(lr){3-", n_heterogeneity + 2L, "}"),
+    paste0("Subfield & Measure & ", paste(latex_escape(heterogeneity_columns), collapse = " & "), " \\\\"),
     "\\midrule"
   )
 
@@ -798,10 +806,7 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
       s_latex,
       "} & ",
       "$\\mathrm{ESR}_{0.05}^{\\mathrm{sig}}$",
-      " & ", esr[[3]],
-      " & ", esr[[4]],
-      " & ", esr[[5]],
-      " & ", esr[[6]],
+      " & ", paste(unlist(esr[heterogeneity_columns], use.names = FALSE), collapse = " & "),
       " \\\\"
     )
 
@@ -809,10 +814,7 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
     # Number of meta-analyses
     row2 <- paste0(
       "& No. of meta-anal.",
-      " & ", ma[[3]],
-      " & ", ma[[4]],
-      " & ", ma[[5]],
-      " & ", ma[[6]],
+      " & ", paste(unlist(ma[heterogeneity_columns], use.names = FALSE), collapse = " & "),
       " \\\\"
     )
 
@@ -820,10 +822,7 @@ write_subfield_esr_table <- function(x, number, alignment = NULL) {
     # Number of tests
     row3 <- paste0(
       "& No. of tests",
-      " & ", tests[[3]],
-      " & ", tests[[4]],
-      " & ", tests[[5]],
-      " & ", tests[[6]],
+      " & ", paste(unlist(tests[heterogeneity_columns], use.names = FALSE), collapse = " & "),
       " \\\\"
     )
 
@@ -941,8 +940,8 @@ table_s8 <- bind_rows(
   mutate(`Small-study effects (%)` = sprintf("%.1f", `Small-study effects (%)`))
 
 ## Table S1: excess-significance results by subfield at half the meta-average
-## and four degrees of genuine heterogeneity. Unlike Table 2, omit all p-value
-## interval rows and retain only ESR_0.05^sig and the two sample-size rows.
+## and the available genuine-heterogeneity specifications. Unlike Table 2, omit
+## p-value interval rows and retain ESR_0.05^sig and the two sample-size rows.
 subfield_esr_path <- here(
   "data", "derived_data", "Table_S1_subfield_inputs.rds"
 )
@@ -976,12 +975,7 @@ table_s1_columns <- subfield_esr_results %>%
     ),
     heterogeneity_multiplier = factor(
       heterogeneity_multiplier,
-      levels = c(
-        0,
-        0.25,
-        0.5,
-        0.75
-      )
+      levels = sort(unique(heterogeneity_multiplier))
     )
   ) %>%
   dplyr::select(
@@ -992,7 +986,8 @@ table_s1_columns <- subfield_esr_results %>%
   ) %>%
   pivot_wider(
     names_from = heterogeneity_multiplier,
-    values_from = value
+    values_from = value,
+    names_sort = TRUE
   ) %>%
   arrange(
     factor(
@@ -1010,14 +1005,9 @@ table_s1_columns <- subfield_esr_results %>%
   )
 
 
-names(table_s1_columns) <- c(
-  "Subfield",
-  "Measure",
-  "0%",
-  "25%",
-  "50%",
-  "75%"
-)
+heterogeneity_columns <- setdiff(names(table_s1_columns), c("Subfield", "Measure"))
+names(table_s1_columns)[match(heterogeneity_columns, names(table_s1_columns))] <-
+  paste0(100 * as.numeric(heterogeneity_columns), "%")
 
 ## Table S6: compare two simulated counterfactual distributions directly.
 ## Use identical effects and article clusters for both multipliers. cf.ci.cluster
