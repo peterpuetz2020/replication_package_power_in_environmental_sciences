@@ -147,6 +147,4 @@ scalable PDF files. PDF, DOCX and XLSX manuscript outputs are versioned.
 LaTeX exports are recreated by the scripts.
 
 Setup-specific intermediate filenames contain their multiplier choices, for
-example `meta_0p5_heterogeneity_0p25`. Cache keys include the data, grid,
-settings, bootstrap clusters, and iteration count, so incompatible cached
-counterfactual results are rebuilt automatically.
+example `meta_0p5_heterogeneity_0p25`. Each cached counterfactual file also stores an internal fingerprint of its inputs, including the data, simulation grid, bootstrap cluster assignments and iteration count. Cached results are reused only when this fingerprint matches the current inputs; otherwise, they are recalculated.
