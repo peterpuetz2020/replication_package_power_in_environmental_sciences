@@ -130,7 +130,7 @@ Numerical results are saved only in `data/derived_data/caliper_analysis.rds`:
 
 No caliper XLSX workbooks are written.
 
-Figure S5 is saved as PDF and SVG under `results/supplement/`. Its two columns
+Figure S5 is saved as PDF under `results/supplement/`. Its two columns
 are **Full empirical sample** and **Kranz–Pütz adjustment**, with one title per
 column. Histograms are above the corresponding caliper estimates. Both
 histograms use the same bins and x/y scales within the largest caliper.

@@ -99,7 +99,8 @@ heterogeneity_multiplier <- c(0, 0.5)
 source("scripts/main.R")
 ```
 
-Counterfactual and caliper intervals use 1,000 bootstrap replicates by default.
+Counterfactual and caliper intervals use 1,000 bootstrap replicates by default,
+as used for the manuscript results.
 Both multiplier options accept vectors; the data-creation workflow evaluates
 every combination.
 
@@ -142,31 +143,10 @@ other derived files are ignored and recreated as needed.
 Main outputs are written to `results/main/` and Supporting Information outputs
 to `results/supplement/`. Tables are produced in editable manuscript formats
 (including DOCX, TeX, or XLSX as applicable), and figures are rendered as
-scalable PDF and SVG files. PDF, DOCX and XLSX manuscript outputs are versioned.
-SVG and LaTeX exports are recreated by the scripts; Figure S5's SVG is also
-versioned.
+scalable PDF files. PDF, DOCX and XLSX manuscript outputs are versioned.
+LaTeX exports are recreated by the scripts.
 
 Setup-specific intermediate filenames contain their multiplier choices, for
 example `meta_0p5_heterogeneity_0p25`. Cache keys include the data, grid,
 settings, bootstrap clusters, and iteration count, so incompatible cached
 counterfactual results are rebuilt automatically.
-
-Main outputs are Tables 1–3 and Figures 1–2. The supplement contains Tables
-S1–S7 and Figures S1–S6. Tables S2–S4 and Figures S2–S4 show sensitivities at
-meta-average multipliers 0.25, 0.75 and 1. Table S6 reports the number of
-meta-analyses by effect-size type and subfield. Table S7 reports the share of
-meta-analyses with an indication of small-study effects, tested using multilevel
-Egger regression.
-
-Figure S5 shows full-sample and Kranz–Pütz-adjusted calipers at half-widths
-0.05, 0.10, 0.15 and 0.20, with 1,000 article-cluster bootstrap resamples.
-Caliper results and audit data are saved only in
-`data/derived_data/caliper_analysis.rds`, without XLSX exports. See
-[caliper methods](docs/caliper_tests.md).
-
-Figure S6 compares significance overrepresentation (ESO) estimates from all four
-estimators at meta-average multipliers 0.25, 0.5, 0.75 and 1, including when
-a smaller multiplier grid is configured for the other outputs.
-Fixed-effects and WAAP-WLS are shown only at zero genuine heterogeneity.
-WAAP-WLS uses the same primary-study clustering and CR2/Satterthwaite inference
-as fixed effects. See [WAAP-WLS methods](docs/waap_wls.md).

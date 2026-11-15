@@ -28,17 +28,16 @@ stopifnot(identical(power[[1]]$cID, power[[2]]$cID),
 required <- c(
   paste0("results/main/Table_", 1:3, ".docx"),
   paste0("results/supplement/Table_S", 1:7, ".docx"),
-  paste0("results/supplement/Figure_S", 1:6, ".pdf"),
-  paste0("results/supplement/Figure_S", 1:6, ".svg")
+  paste0("results/supplement/Figure_S", 1:6, ".pdf")
 )
 obsolete <- c("results/main/Table_4.docx", "results/main/Table_4.tex",
               paste0("results/supplement/Table_S", rep(8:9, each = 2), c(".docx", ".tex")),
               "data/derived_data/counterfactual_comparison_0p5_vs_1.csv",
               paste0("results/supplement/Figure_S", 7:8, ".pdf"),
-              paste0("results/supplement/Figure_S", 7:8, ".svg"),
               "data/derived_data/regression_data")
 stopifnot(all(file.exists(required)), all(file.info(required)$size > 0),
-          !any(file.exists(obsolete)))
+          !any(file.exists(obsolete)),
+          length(list.files("results", pattern = "[.]svg$", recursive = TRUE)) == 0L)
 read_word_table <- function(path) {
   doc_dir <- tempfile("analysis-docx-")
   dir.create(doc_dir)

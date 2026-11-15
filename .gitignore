@@ -14,8 +14,6 @@ data/derived_data/*
 !data/derived_data/multilevel_random_all_data/
 !data/derived_data/multilevel_random_all_data/*.rds
 
-# Manuscript figures are reproducible build artifacts. Keep generated svg files
-# or tex files, but do not commit or move them through Git.
+# Generated LaTeX exports and obsolete SVG figures are not versioned.
 results/**/*.svg
 results/**/*.tex
-!results/supplement/Figure_S5.svg

@@ -92,19 +92,12 @@ main_figure_theme <- function() {
     )
 }
 
-## Publication figures are distributed only in scalable PDF and SVG formats.
+## Publication figures are saved as scalable PDF files.
 save_plot <- function(filename_stem, width, height, draw) {
   pdf(paste0(filename_stem, ".pdf"), width = width, height = height)
   draw()
   dev.off()
-
-  svg(
-    paste0(filename_stem, ".svg"),
-    width = width,
-    height = height
-  )
-  draw()
-  dev.off()
+  unlink(paste0(filename_stem, ".svg"))
 }
 
 load_estimator_data <- function(estimator, setup_label_value = setup_label,

@@ -52,32 +52,27 @@ supplement_figure_theme <- function() {
 }
 
 save_supplement_plot <- function(filename_stem, width, height, draw) {
-  save_with_device <- function(extension, open_device) {
-    output_path <- paste0(filename_stem, extension)
-    temporary_path <- tempfile(
-      pattern = paste0(basename(filename_stem), "_"),
-      tmpdir = dirname(filename_stem),
-      fileext = extension
-    )
-    on.exit(unlink(temporary_path), add = TRUE)
+  output_path <- paste0(filename_stem, ".pdf")
+  temporary_path <- tempfile(
+    pattern = paste0(basename(filename_stem), "_"),
+    tmpdir = dirname(filename_stem),
+    fileext = ".pdf"
+  )
+  on.exit(unlink(temporary_path), add = TRUE)
 
-    open_device(temporary_path)
-    device <- dev.cur()
-    on.exit({
-      if (device %in% dev.list()) dev.off(device)
-    }, add = TRUE)
-    draw()
-    dev.off(device)
+  pdf(temporary_path, width = width, height = height)
+  device <- dev.cur()
+  on.exit({
+    if (device %in% dev.list()) dev.off(device)
+  }, add = TRUE)
+  draw()
+  dev.off(device)
 
-    if (!file.rename(temporary_path, output_path)) {
-      stop("Could not move completed plot to ", output_path)
-    }
+  ## Replace the published PDF only after drawing completes successfully.
+  if (!file.rename(temporary_path, output_path)) {
+    stop("Could not move completed plot to ", output_path)
   }
-
-  ## Write each scalable format to a temporary file first. If drawing fails,
-  ## this keeps a truncated device output from masquerading as a valid figure.
-  save_with_device(".pdf", function(path) pdf(path, width = width, height = height))
-  save_with_device(".svg", function(path) svg(path, width = width, height = height))
+  unlink(paste0(filename_stem, ".svg"))
 }
 
 load_multilevel_data <- function(setup_label) {
