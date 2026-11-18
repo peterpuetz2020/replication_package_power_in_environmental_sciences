@@ -37,6 +37,8 @@ estimator_input_dirs <- c(
   here::here("data", "derived_data", "pet_peese_all_data"),
   here::here("data", "derived_data", "fixed_effect"),
   here::here("data", "derived_data", "fixed_effect_all_data"),
+  here::here("data", "derived_data", "waap_wls"),
+  here::here("data", "derived_data", "waap_wls_all_data"),
   here::here("data", "derived_data", "multilevel_random"),
   here::here("data", "derived_data", "multilevel_random_all_data")
 )
@@ -58,13 +60,6 @@ if (length(missing_estimator_inputs) > 0 && !run_meta_analysis_fitting) {
 
 if (run_meta_analysis_fitting || length(missing_estimator_inputs) > 0) {
   source(here::here("scripts", "compute_meta_estimates.R"))
-} else {
-  ## Keep WAAP's cached-input path in the common fitting script. Other
-  ## estimators reuse their existing files without unnecessary model refits.
-  local({
-    waap_only <- TRUE
-    source(here::here("scripts", "compute_meta_estimates.R"), local = TRUE)
-  })
 }
 ## Build setup-specific datasets and any missing counterfactual simulations before
 ## rendering. Existing counterfactual files are reused unless explicitly rebuilt.

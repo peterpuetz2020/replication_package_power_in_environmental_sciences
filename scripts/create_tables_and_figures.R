@@ -546,9 +546,8 @@ table_2_parameters <- tidyr::crossing(
   estimator = meta_analysis_estimators,
   outlier_variant = "outliers_removed"
 )
-## Fixed effects and WAAP-WLS do not estimate genuine heterogeneity. Include
-## both at zero for each meta-average, even when the RE sensitivity
-## grid does not include zero heterogeneity.
+## Fixed effects and WAAP-WLS assume zero genuine heterogeneity. Include
+## both at zero for each meta-average.
 figure_s6_zero_heterogeneity_parameters <- tidyr::crossing(
   bind_rows(analysis_setups, figure_s6_setups) %>% distinct(meta_average_multiplier) %>%
     mutate(

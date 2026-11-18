@@ -229,8 +229,8 @@ cf.ci.cluster <- function(dat, z.grid, iters, cluster,
 }
 
 
-## Use only with genuinely reported character strings, not numeric-to-text
-## conversions of transformed estimates. Preserves zeros in "0.0400".
+## Use only with genuinely reported character strings.
+##  Preserves zeros in "0.0400".
 reported_decimal_places <- function(x) {
   if (!is.character(x)) stop("Use original reported strings to preserve trailing zeros.")
   vapply(trimws(x), function(text) {

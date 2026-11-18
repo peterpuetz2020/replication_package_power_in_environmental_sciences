@@ -2,141 +2,6 @@
 ## without outliers. Outliers are identified once, from the random-effects
 ## model, so every estimator uses the same screened sample.
 
-## WAAP-WLS is part of the common fitting stage. These helpers are also used
-## by the cached-input path in main.R; no separate WAAP script is required.
-## WAAP-WLS point estimation with the same sID clustering, CR2 correction and
-## Satterthwaite inference as the project's fixed-effect estimator.
-fit_waap_wls <- function(dat, alpha = .05, adequate_power = .8) {
-  if (!all(c("yi", "vi", "sID") %in% names(dat)) || nrow(dat) < 2L ||
-      any(!is.finite(dat$yi) | !is.finite(dat$vi) | dat$vi <= 0) || anyNA(dat$sID)) {
-    stop("WAAP-WLS requires at least two valid estimates, positive variances and study IDs.")
-  }
-  if (length(alpha) != 1 || !is.finite(alpha) || alpha <= 0 || alpha >= 1 ||
-      length(adequate_power) != 1 || !is.finite(adequate_power) || adequate_power <= 0 || adequate_power >= 1) {
-    stop("Invalid alpha or adequate-power threshold.")
-  }
-  wls_mean <- weighted.mean(dat$yi, 1 / dat$vi)
-  lambda <- abs(wls_mean) / sqrt(dat$vi)
-  power <- pnorm(-qnorm(1 - alpha / 2) - lambda) +
-    pnorm(lambda - qnorm(1 - alpha / 2))
-  adequate <- power >= adequate_power
-  use_waap <- sum(adequate) >= 2L
-  selected <- if (use_waap) dat[adequate, , drop = FALSE] else dat
-  model <- suppressWarnings(metafor::rma.mv(yi, vi, mods = ~1,
-    method = "FE", test = "t", data = selected))
-  result <- list(method = if (use_waap) "WAAP" else "WLS fallback",
-    estimate = unname(coef(model)[1]), standard_error = NA_real_, p_value = NA_real_,
-    df = NA_real_, ci_lower = NA_real_, ci_upper = NA_real_,
-    n_adequate = sum(adequate), n_fit = nrow(selected),
-    n_studies_fit = length(unique(selected$sID)), wls_mean = wls_mean,
-    adequate = adequate, power = power, fallback = !use_waap,
-    inference_status = "fewer_than_two_primary_study_clusters")
-  if (result$n_studies_fit < 2L) return(result)
-  test <- tryCatch(clubSandwich::coef_test(model, vcov = clubSandwich::vcovCR(
-    model, cluster = droplevels(factor(selected$sID)), type = "CR2")), error = function(e) e)
-  if (inherits(test, "error")) {
-    result$inference_status <- paste0("CR2 unavailable: ", conditionMessage(test))
-    return(result)
-  }
-  result$standard_error <- as.numeric(test$SE[1])
-  result$p_value <- as.numeric(test$p_Satt[1])
-  result$df <- as.numeric(test$df_Satt[1])
-  if (is.finite(result$standard_error) && is.finite(result$df) && result$df > 0) {
-    margin <- qt(.975, result$df) * result$standard_error
-    result$ci_lower <- result$estimate - margin
-    result$ci_upper <- result$estimate + margin
-    result$inference_status <- "ok_CR2_Satterthwaite"
-  } else result$inference_status <- "unavailable_CR2_Satterthwaite"
-  result
-}
-
-compute_waap_wls <- function(root = ".", recreate = FALSE) {
-  summaries <- list()
-  for (variant in c("outliers_removed", "all_data")) {
-    input_dir <- file.path(root, "data", "derived_data",
-      if (variant == "all_data") "multilevel_random_all_data" else "multilevel_random")
-    files <- list.files(input_dir, pattern = "\\.rds$", full.names = TRUE)
-    if (!length(files)) stop("Fit the shared random-effects samples before WAAP-WLS: ", input_dir)
-    output_dir <- file.path(root, "data", "derived_data",
-      if (variant == "all_data") "waap_wls_all_data" else "waap_wls")
-    dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-    stale <- setdiff(list.files(output_dir, pattern = "\\.rds$"), basename(files))
-    if (length(stale)) unlink(file.path(output_dir, stale))
-    for (i in seq_along(files)) {
-      dat <- readRDS(files[i])
-      key <- list(version = 2L, source_md5 = unname(tools::md5sum(files[i])),
-                  alpha = .05, adequate_power = .8)
-      output <- file.path(output_dir, basename(files[i]))
-      cached <- if (!recreate && file.exists(output)) readRDS(output) else NULL
-      # Version 2 changes only heterogeneity storage, not WAAP fits or inference.
-      previous_key <- key; previous_key$version <- 1L
-      if (!recreate && !is.null(cached) && (identical(attr(cached, "waap_cache_key"), key) ||
-          identical(attr(cached, "waap_cache_key"), previous_key))) {
-        summary <- attr(cached, "waap_summary")
-        if (!identical(attr(cached, "waap_cache_key"), key)) {
-          cached$tau2 <- 0; cached$isq <- 0
-          cached$heterogeneity_source <- "not_estimated_zero_assumed"
-          summary$tau2_for_counterfactual <- 0
-          summary$heterogeneity_source <- "not_estimated_zero_assumed"
-          attr(cached, "waap_cache_key") <- key
-          attr(cached, "waap_summary") <- summary
-          saveRDS(cached, output)
-        }
-      } else {
-        if (nrow(dat) < 2 || any(!is.finite(dat$yi) | !is.finite(dat$vi) | dat$vi <= 0) ||
-            length(unique(dat$sID)) < 5L) {
-          if (file.exists(output)) unlink(output)
-          next
-        }
-        fit <- fit_waap_wls(dat)
-        dat$GE <- fit$estimate
-        dat$sig_overall <- fit$p_value
-        # WAAP does not estimate variance components. Its counterfactuals use
-        # zero genuine heterogeneity; no RE components are borrowed.
-        dat$tau2 <- 0; dat$isq <- 0
-        dat$heterogeneity_source <- "not_estimated_zero_assumed"
-        dat$waap_selected_method <- fit$method
-        dat$waap_n_adequate <- fit$n_adequate
-        dat$waap_n_fit <- fit$n_fit
-        dat$waap_n_studies_fit <- fit$n_studies_fit
-        dat$waap_inference_status <- fit$inference_status
-        summary <- data.frame(cID = as.character(dat$cID[1]), variant = variant,
-          selected_method = fit$method, estimate = fit$estimate,
-          standard_error = fit$standard_error, df = fit$df, p_value = fit$p_value,
-          ci_lower = fit$ci_lower, ci_upper = fit$ci_upper,
-          wls_reference_mean = fit$wls_mean, n_input = nrow(dat),
-          n_adequate = fit$n_adequate, n_fit = fit$n_fit,
-          n_studies_fit = fit$n_studies_fit, inference_status = fit$inference_status,
-          tau2_for_counterfactual = unique(dat$tau2)[1],
-          heterogeneity_source = dat$heterogeneity_source[1])
-        attr(dat, "waap_cache_key") <- key
-        attr(dat, "waap_summary") <- summary
-        saveRDS(dat, output)
-      }
-      summaries[[length(summaries) + 1L]] <- summary
-      if (i %% 50L == 0L) message("WAAP-WLS ", variant, ": ", i, "/", length(files))
-    }
-  }
-  summary <- do.call(rbind, summaries)
-  summary_path <- file.path(root, "data", "derived_data", "WAAP_WLS_estimates.xlsx")
-  dir.create(dirname(summary_path), recursive = TRUE, showWarnings = FALSE)
-  openxlsx::write.xlsx(list(Estimates = summary, Methods = data.frame(note = c(
-    "Initial inverse-variance WLS mean; select estimates with exact normal two-sided power >= 0.80 at alpha 0.05.",
-    "Preserve signed means; assess power using the mean's magnitude, before applying meta-average multipliers.",
-    "At least two adequate estimates: WAAP; otherwise full-sample WLS fallback.",
-    "Inference: primary-study sID clusters, CR2 and Satterthwaite, matching fixed effects. Unavailable inference is flagged, not replaced by independent-observation SEs.",
-    "WAAP fits on the adequate subset; all shared-sample empirical effects remain in ESR denominators.",
-    "WAAP does not estimate tau2. Like fixed effects, its counterfactuals are restricted to zero genuine heterogeneity; zero is assumed, not estimated."
-  ))), summary_path, overwrite = TRUE)
-  # Remove the obsolete generated supplement workbook after its replacement exists.
-  legacy_path <- file.path(root, "results", "supplement", "WAAP_WLS_estimates.xlsx")
-  if (file.exists(legacy_path)) unlink(legacy_path)
-  invisible(summary)
-}
-
-## main.R uses this fast path when the other estimator inputs already exist.
-## Directly sourcing this script runs the complete fitting stage by default.
-if (!isTRUE(get0("waap_only", ifnotfound = FALSE))) {
 library(metafor)
 library(clubSandwich)
 library(tidyverse)
@@ -151,7 +16,8 @@ if (!exists("recreate_meta_analysis_estimates")) {
   recreate_meta_analysis_estimates <- FALSE
 }
 minimum_primary_studies <- 5L
-meta_estimate_cache_version <- 3L
+meta_estimate_cache_version <- 4L
+
 if (!exists("new_progress_bar")) {
   new_progress_bar <- function(total, label) {
     message(label)
@@ -186,6 +52,8 @@ output_dirs <- c(
   pet_peese_all_data = here(derived_data_dir, "pet_peese_all_data"),
   fixed_effect_outlier_removed = here(derived_data_dir, "fixed_effect"),
   fixed_effect_all_data = here(derived_data_dir, "fixed_effect_all_data"),
+  waap_wls_outlier_removed = here(derived_data_dir, "waap_wls"),
+  waap_wls_all_data = here(derived_data_dir, "waap_wls_all_data"),
   random_effect_outlier_removed = here(derived_data_dir, "multilevel_random"),
   random_effect_all_data = here(derived_data_dir, "multilevel_random_all_data")
 )
@@ -226,9 +94,6 @@ extract_coefficient_statistic <- function(test, term, statistic) {
 
 coefficient_test <- function(model, dat) {
   study_cluster <- droplevels(factor(dat$sID))
-
-  ## The workflow checks that at least five primary studies remain before any
-  ## final model is fitted, so CR2 always has multiple independent clusters.
   coef_test(
     model,
     vcov = vcovCR(model, cluster = study_cluster, type = "CR2")
@@ -448,10 +313,14 @@ fit_random_effects <- function(dat) {
   )
 }
 
-fit_fixed_effects <- function(dat) {
-  model <- suppressWarnings(rma.mv(
+fit_fixed_effect_model <- function(dat) {
+  suppressWarnings(rma.mv(
     yi, vi, mods = ~ 1, method = "FE", test = "t", data = dat
   ))
+}
+
+fit_fixed_effects <- function(dat) {
+  model <- fit_fixed_effect_model(dat)
   model_test <- coefficient_test(model, dat)
   list(
     estimate = extract_coefficient_statistic(model_test, "intrcpt", "beta"),
@@ -463,6 +332,60 @@ fit_fixed_effects <- function(dat) {
     fallback = FALSE,
     model = model
   )
+}
+
+fit_waap_wls <- function(dat, alpha = .05, adequate_power = .8) {
+  if (nrow(dat) < 2L ||
+      any(!is.finite(dat$yi) | !is.finite(dat$vi) | dat$vi <= 0)) {
+    return(NULL)
+  }
+  if (anyNA(dat$sID)) stop("WAAP-WLS requires primary study IDs.")
+  if (length(alpha) != 1 || !is.finite(alpha) || alpha <= 0 || alpha >= 1 ||
+      length(adequate_power) != 1 || !is.finite(adequate_power) ||
+      adequate_power <= 0 || adequate_power >= 1) {
+    stop("Invalid alpha or adequate-power threshold.")
+  }
+  
+  ## Use the magnitude of the full-sample WLS mean to calculate two-sided
+  ## normal power. Fit WLS on the full sample when fewer than two estimates
+  ## reach the power threshold.
+  wls_mean <- weighted.mean(dat$yi, 1 / dat$vi)
+  lambda <- abs(wls_mean) / sqrt(dat$vi)
+  critical_value <- qnorm(1 - alpha / 2)
+  power <- pnorm(-critical_value - lambda) + pnorm(lambda - critical_value)
+  adequate <- power >= adequate_power
+  use_waap <- sum(adequate) >= 2L
+  selected <- if (use_waap) dat[adequate, , drop = FALSE] else dat
+  model <- fit_fixed_effect_model(selected)
+  result <- list(
+    method = if (use_waap) "WAAP" else "WLS fallback",
+    estimate = unname(coef(model)[1]), standard_error = NA_real_, p_value = NA_real_,
+    df = NA_real_, ci_lower = NA_real_, ci_upper = NA_real_, tau2 = 0, isq = 0,
+    n_adequate = sum(adequate), n_fit = nrow(selected),
+    n_studies_fit = length(unique(selected$sID)), wls_mean = wls_mean,
+    adequate = adequate, power = power, fallback = !use_waap,
+    inference_status = "fewer_than_two_primary_study_clusters"
+  )
+  
+  ## The adequate-power subset can contain only one primary study.
+  if (result$n_studies_fit < 2L) return(result)
+  test <- tryCatch(coefficient_test(model, selected), error = identity)
+  if (inherits(test, "error")) {
+    result$inference_status <- paste0("CR2 unavailable: ", conditionMessage(test))
+    return(result)
+  }
+  result$standard_error <- as.numeric(test$SE[1])
+  result$p_value <- as.numeric(test$p_Satt[1])
+  result$df <- as.numeric(test$df_Satt[1])
+  if (is.finite(result$standard_error) && is.finite(result$df) && result$df > 0) {
+    margin <- qt(.975, result$df) * result$standard_error
+    result$ci_lower <- result$estimate - margin
+    result$ci_upper <- result$estimate + margin
+    result$inference_status <- "ok_CR2_Satterthwaite"
+  } else {
+    result$inference_status <- "unavailable_CR2_Satterthwaite"
+  }
+  result
 }
 
 fit_random_effects_with_outlier_removal <- function(
@@ -522,6 +445,7 @@ fit_one_meta_analysis <- function(dat) {
 
   pet_peese_all_data <- fit_pet_peese(dat)
   fixed_effect_all_data <- fit_fixed_effects(dat)
+  waap_wls_all_data <- fit_waap_wls(dat)
 
   if (screened_studies >= minimum_primary_studies) {
     pet_peese_outlier_removed <- if (data_changed) {
@@ -534,6 +458,11 @@ fit_one_meta_analysis <- function(dat) {
     } else {
       fixed_effect_all_data
     }
+    waap_wls_outlier_removed <- if (data_changed) {
+      fit_waap_wls(screened_data)
+    } else {
+      waap_wls_all_data
+    }
     egger <- fit_egger(screened_data)
   } else {
     pet_peese_outlier_removed <- empty_meta_estimate(
@@ -542,29 +471,28 @@ fit_one_meta_analysis <- function(dat) {
     fixed_effect_outlier_removed <- empty_meta_estimate(
       "Fixed effect not estimable after outlier removal"
     )
+    waap_wls_outlier_removed <- NULL
     egger <- list(slope = NA_real_, standard_error = NA_real_, p_value = NA_real_)
   }
 
   results <- list(
     all_data = list(
+      data = dat,
       pet_peese = pet_peese_all_data,
-      pet_peese_data = dat,
       fixed_effect = fixed_effect_all_data,
-      fixed_effect_data = dat,
-      random_effect = random_effect_all_data,
-      random_effect_data = dat
+      waap_wls = waap_wls_all_data,
+      random_effect = random_effect_all_data
     ),
     outlier_removed = list(
+      data = screened_data,
       pet_peese = pet_peese_outlier_removed,
-      pet_peese_data = screened_data,
       fixed_effect = fixed_effect_outlier_removed,
-      fixed_effect_data = screened_data,
+      waap_wls = waap_wls_outlier_removed,
       random_effect = if (screened_studies >= minimum_primary_studies) {
         random_effect_outlier_removed$result
       } else {
         empty_meta_estimate("Random effects not estimable after outlier removal")
-      },
-      random_effect_data = screened_data
+      }
     )
   )
   results$all_data$random_effect$model <- NULL
@@ -576,11 +504,12 @@ fit_one_meta_analysis <- function(dat) {
     results$outlier_removed$fixed_effect$model <- NULL
   }
 
+  waap_summaries <- list()
   for (variant in names(results)) {
     result <- results[[variant]]
     saveRDS(
       make_effect_data(
-        result$fixed_effect_data, result$fixed_effect
+        result$data, result$fixed_effect
       ),
       file.path(
         output_dirs[[paste0("fixed_effect_", variant)]],
@@ -589,7 +518,7 @@ fit_one_meta_analysis <- function(dat) {
     )
     saveRDS(
       make_effect_data(
-        result$pet_peese_data, result$pet_peese
+        result$data, result$pet_peese
       ),
       file.path(
         output_dirs[[paste0("pet_peese_", variant)]],
@@ -598,13 +527,57 @@ fit_one_meta_analysis <- function(dat) {
     )
     saveRDS(
       make_effect_data(
-        result$random_effect_data, result$random_effect,
+        result$data, result$random_effect,
         if (variant == "outlier_removed") egger$p_value else NA_real_
       ),
       file.path(
         output_dirs[[paste0("random_effect_", variant)]],
         paste0("meta_", dat$cID[[1]], ".rds")
       )
+    )
+    waap_fit <- result$waap_wls
+    waap_path <- file.path(
+      output_dirs[[paste0("waap_wls_", variant)]],
+      paste0("meta_", dat$cID[[1]], ".rds")
+    )
+    if (is.null(waap_fit)) {
+      unlink(waap_path)
+      next
+    }
+
+    ## Retain the shared sample for empirical estimates and use zero genuine
+    ## heterogeneity for the WAAP-WLS counterfactuals.
+    waap_data <- make_effect_data(
+      result$data, waap_fit,
+      if (variant == "outlier_removed") egger$p_value else NA_real_
+    ) %>%
+      mutate(
+        heterogeneity_source = "not_estimated_zero_assumed",
+        waap_selected_method = waap_fit$method,
+        waap_n_adequate = waap_fit$n_adequate,
+        waap_n_fit = waap_fit$n_fit,
+        waap_n_studies_fit = waap_fit$n_studies_fit,
+        waap_inference_status = waap_fit$inference_status
+      )
+    saveRDS(waap_data, waap_path)
+    waap_summaries[[variant]] <- tibble(
+      cID = as.character(dat$cID[[1]]),
+      variant = if (variant == "outlier_removed") "outliers_removed" else variant,
+      selected_method = waap_fit$method,
+      estimate = waap_fit$estimate,
+      standard_error = waap_fit$standard_error,
+      df = waap_fit$df,
+      p_value = waap_fit$p_value,
+      ci_lower = waap_fit$ci_lower,
+      ci_upper = waap_fit$ci_upper,
+      wls_reference_mean = waap_fit$wls_mean,
+      n_input = nrow(waap_data),
+      n_adequate = waap_fit$n_adequate,
+      n_fit = waap_fit$n_fit,
+      n_studies_fit = waap_fit$n_studies_fit,
+      inference_status = waap_fit$inference_status,
+      tau2_for_counterfactual = waap_fit$tau2,
+      heterogeneity_source = waap_data$heterogeneity_source[[1]]
     )
   }
 
@@ -634,7 +607,8 @@ fit_one_meta_analysis <- function(dat) {
     random_effect_between_study_variance_outlier_removed =
       results$outlier_removed$random_effect$tau2,
     random_effect_within_study_effect_size_variance_outlier_removed =
-      results$outlier_removed$random_effect$within_study_tau2
+      results$outlier_removed$random_effect$within_study_tau2,
+    waap_summary = list(waap_summaries)
   )
 }
 
@@ -668,7 +642,16 @@ cached_meta_analysis_is_complete <- function(c_id) {
     return(FALSE)
   }
   is_excluded <- !is.na(summary$exclusion_reason[[1]])
-  is_excluded || all(file.exists(expected_effect_paths(c_id)))
+  if (is_excluded) return(TRUE)
+  if (!"waap_summary" %in% names(summary)) return(FALSE)
+  
+  waap_outputs <- paste0("waap_wls_", names(summary$waap_summary[[1]]))
+  skipped_outputs <- setdiff(
+    c("waap_wls_all_data", "waap_wls_outlier_removed"), waap_outputs
+  )
+  all(file.exists(expected_effect_paths(c_id)[
+    !names(output_dirs) %in% skipped_outputs
+  ]))
 }
 
 fit_and_cache_meta_analysis <- function(dat) {
@@ -711,6 +694,17 @@ all_meta_analysis_summaries <- purrr::map_dfr(
   meta_analysis_ids,
   ~ readRDS(summary_cache_path(.x))
 )
+waap_wls_estimates <- dplyr::bind_rows(unlist(
+  all_meta_analysis_summaries$waap_summary, recursive = FALSE, use.names = FALSE
+))
+if (nrow(waap_wls_estimates) > 0L) {
+  waap_wls_estimates <- dplyr::arrange(
+    waap_wls_estimates, match(variant, c("outliers_removed", "all_data")), cID
+  )
+}
+all_meta_analysis_summaries <- dplyr::select(
+  all_meta_analysis_summaries, -dplyr::any_of("waap_summary")
+)
 excluded_meta_analyses <- all_meta_analysis_summaries %>%
   dplyr::filter(!is.na(exclusion_reason))
 readr::write_csv(
@@ -728,6 +722,22 @@ readr::write_csv(
   file.path(derived_data_dir, "meta_analysis_estimates.csv")
 )
 
+openxlsx::write.xlsx(
+  list(Estimates = waap_wls_estimates, Methods = data.frame(note = c(
+    "Initial inverse-variance WLS mean; select estimates with exact normal two-sided power >= 0.80 at alpha 0.05.",
+    "Preserve signed means; assess power using the mean's magnitude, before applying meta-average multipliers.",
+    "At least two adequate estimates: WAAP; otherwise full-sample WLS fallback.",
+    "Inference: primary-study sID clusters, CR2 and Satterthwaite, matching fixed effects. Unavailable inference is flagged, not replaced by independent-observation SEs.",
+    "WAAP fits on the adequate subset; all shared-sample empirical effects remain in ESR denominators.",
+    "WAAP does not estimate tau2. Like fixed effects, its counterfactuals are restricted to zero genuine heterogeneity; zero is assumed, not estimated."
+  ))),
+  file.path(derived_data_dir, "WAAP_WLS_estimates.xlsx"),
+  overwrite = TRUE
+)
+
+legacy_path <- here("results", "supplement", "WAAP_WLS_estimates.xlsx")
+if (file.exists(legacy_path)) unlink(legacy_path)
+
 report_outlier_removal <- function(estimator, removed_column) {
   removed <- sum(meta_analysis_estimates[[removed_column]], na.rm = TRUE)
   all_estimates <- sum(meta_analysis_estimates$k_all_data, na.rm = TRUE)
@@ -742,9 +752,3 @@ report_outlier_removal <- function(estimator, removed_column) {
 ## The single random-effects screen supplies the data for every estimator.
 report_outlier_removal("Random-effects model", "n_outliers_removed")
 
-
-}
-
-## Reuse the common all-data and outlier-screened samples for WAAP-WLS.
-waap_wls_estimates <- compute_waap_wls(here::here(),
-  recreate = isTRUE(get0("recreate_meta_analysis_estimates", ifnotfound = FALSE)))
