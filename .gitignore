@@ -1,0 +1,19 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+data/derived_data/*
+# Keep the supplied meta-estimate RDS files; all other derived data are rebuilt.
+data/derived_data/*
+!data/derived_data/pet_peese_rstandard/
+!data/derived_data/pet_peese_rstandard/*.rds
+!data/derived_data/pet_peese_all_data/
+!data/derived_data/pet_peese_all_data/*.rds
+!data/derived_data/multilevel_random/
+!data/derived_data/multilevel_random/*.rds
+!data/derived_data/multilevel_random_all_data/
+!data/derived_data/multilevel_random_all_data/*.rds
+
+# Generated LaTeX exports and obsolete SVG figures are not versioned.
+results/**/*.svg
+results/**/*.tex
